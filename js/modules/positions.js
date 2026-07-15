@@ -400,14 +400,23 @@ const positionsModule = (() => {
       }}
     ]);
 
-    // Attach Yahoo Finance fetch button
+    // Attach Yahoo Finance fetch button (via Supabase Edge Function proxy — no CORS issues)
     setTimeout(() => {
       document.getElementById('btn-fetch-price')?.addEventListener('click', async () => {
         const statusEl = document.getElementById('cmp-fetch-status');
         statusEl.textContent = '⏳ Fetching...';
         try {
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(trade.symbol)}.NS?interval=1d&range=1d`;
-          const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          // Use Supabase Edge Function proxy to avoid CORS
+          const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+          const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+          const ticker = `${encodeURIComponent(trade.symbol)}.NS`;
+          const url = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=1d`;
+          const resp = await fetch(url, {
+            headers: {
+              'Authorization': `Bearer ${SUPABASE_KEY}`,
+              'Content-Type': 'application/json'
+            }
+          });
           if (!resp.ok) throw new Error('Network error');
           const data = await resp.json();
           const price = data?.chart?.result?.[0]?.meta?.regularMarketPrice;
@@ -418,7 +427,7 @@ const positionsModule = (() => {
             statusEl.textContent = '❌ Price not found. Enter manually.';
           }
         } catch(e) {
-          statusEl.textContent = '❌ Cannot fetch (CORS). Use NSE link above.';
+          statusEl.textContent = `❌ Fetch failed: ${e.message}. Enter manually.`;
         }
       });
     }, 50);

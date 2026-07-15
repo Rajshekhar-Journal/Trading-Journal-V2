@@ -5,8 +5,8 @@
  */
 
 const auth = (() => {
-  const SUPABASE_URL = 'https://vzwbrhqnhnryytyxwjaa.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_5pVRi-kM6pUBa-0o8wBMBw_X5Ta-GCP';
+  const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
 
   // Supabase client — initialised once
   const _client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
