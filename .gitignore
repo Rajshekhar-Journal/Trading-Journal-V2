@@ -1,0 +1,12 @@
+# Trading Journal — Git Ignore
+node_modules/
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+Thumbs.db
+SRS Documents/
+Observations.txt
+project_handoff_summary.md
+.vercel/

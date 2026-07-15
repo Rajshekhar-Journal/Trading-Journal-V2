@@ -1,0 +1,13 @@
+1.  A document link for Market breadth definition and Importance may be linked.
+2. Daily Net cumulative p&L chart may be with line chart.
+3. Split view on Position module, Trade Details table may be increased in width, approx. half of the screen. One full screen button and functionalities may be added, that will lead the Trade Detail table into full screen.
+4. in Trade Detail table as well as position table, Unrealised P&L may also show R value in bracket).
+5. Realised P&L in Position Table, in trade details cards, and in trade lifecycle also should be added.
+6. Tradingview chart of the trade is not linked properly.
+7. How CMP in trade detail and position table will be updated. In phase 01, it may be updated by manual. But if any free API or Data Available form NSE or any other API, that can provide Live data or Day end Data, can be linked.
+8. as Trade detail is the single source of truth regarding any trade for Position Module and Trades Module, and user may enter wrong information in user input, their should be edit option(including delete, wherever needed) available for user for correction. And Editting any information specially trade data, will trigger recalculate of dependent data.
+9. Cumulative equity chart in Analytics page is actually Cumulative P&L chart. you should rename it as Cumulative P&L, same way it should show in Dashboard module. Alongwith One more chart selection may be added here, Cummulative Equity chart(Which will take data of account value, marked deposit and Withdrawal) may be added.
+10. in playbook analytics, one more chart of Playbook vs avg Holding Days may be added.
+11. Default RPT in Settings module, Trading Defaults should be populated from Risk Management section, as Risk per Trade is set (either dynamic or Fixed as set in the section).
+12. Risk per trade settings in Capital Management module not required, should be removed.
+

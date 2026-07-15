@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "",
+  "outputDirectory": ".",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*\\.(css|js|html|png|ico|svg|jpg|woff2?))", "dest": "/$1" },
+    { "src": "/login", "dest": "/login.html" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}

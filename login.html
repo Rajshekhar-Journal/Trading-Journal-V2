@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — TradeJournal</title>
+  <meta name="description" content="Login to your Advanced Trading Journal">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --primary: #5b6af0;
+      --primary-dark: #4350d4;
+      --navy: #1a1f36;
+      --bg: #f4f6fb;
+      --card: #ffffff;
+      --border: #e8ecf0;
+      --text: #1a1f36;
+      --text-muted: #64748b;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --radius: 12px;
+      --shadow: 0 4px 24px rgba(91,106,240,0.10), 0 1px 4px rgba(0,0,0,0.06);
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .login-wrap {
+      width: 100%;
+      max-width: 420px;
+      animation: fadeUp 0.4s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .brand {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .brand-icon {
+      font-size: 48px;
+      display: block;
+      margin-bottom: 10px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+    }
+    .brand-name {
+      font-size: 26px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+    }
+    .brand-tagline {
+      font-size: 13px;
+      color: rgba(255,255,255,0.75);
+      margin-top: 4px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 36px 32px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--navy);
+      margin-bottom: 6px;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+    .form-group { margin-bottom: 18px; }
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .form-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(91,106,240,0.12);
+      background: #fff;
+    }
+    .btn-login {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+      margin-top: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-login:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(91,106,240,0.35);
+    }
+    .btn-login:active { transform: translateY(0); }
+    .btn-login:disabled { opacity: 0.7; cursor: not-allowed; transform: none; }
+    .btn-login .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-msg {
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 18px;
+      display: none;
+    }
+    .error-msg.visible { display: block; }
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 24px 0;
+    }
+    .footer-note {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .footer-note a { color: var(--primary); text-decoration: none; }
+    .phase-badge {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .phase-badge span {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.8);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.2);
+      backdrop-filter: blur(4px);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-wrap">
+    <div class="brand">
+      <span class="brand-icon">📈</span>
+      <div class="brand-name">TradeJournal</div>
+      <div class="brand-tagline">Professional Trading Journal for Systematic Traders</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Welcome back</div>
+      <div class="card-subtitle">Sign in with your credentials to access your journal.</div>
+
+      <div class="error-msg" id="login-error"></div>
+
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="login-email">User ID (Email)</label>
+          <input class="form-input" type="email" id="login-email" placeholder="e.g. trader@example.com" required autocomplete="email" autofocus>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input class="form-input" type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password">
+        </div>
+        <button class="btn-login" type="submit" id="login-btn">Sign In to Journal</button>
+      </form>
+
+      <hr class="divider">
+      <div class="footer-note">
+        Forgot your password? Contact your <strong>Admin</strong> to reset it.
+      </div>
+    </div>
+
+    <div class="phase-badge">
+      <span>🔐 Secured by Supabase · Phase 2</span>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://vzwbrhqnhnryytyxwjaa.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_5pVRi-kM6pUBa-0o8wBMBw_X5Ta-GCP';
+    const _client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // If already logged in, redirect to journal
+    (async () => {
+      const { data: { session } } = await _client.auth.getSession();
+      if (session) window.location.href = '/index.html';
+    })();
+
+    async function handleLogin(e) {
+      e.preventDefault();
+      const email    = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      const btn      = document.getElementById('login-btn');
+      const errEl    = document.getElementById('login-error');
+
+      errEl.classList.remove('visible');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Signing in…';
+
+      try {
+        const { data, error } = await _client.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        // Success — redirect to journal
+        window.location.href = '/index.html';
+      } catch (err) {
+        let msg = 'Login failed. Please check your credentials.';
+        if (err.message?.includes('Invalid login')) msg = 'Incorrect User ID or Password. Please try again.';
+        if (err.message?.includes('Email not confirmed')) msg = 'Account not confirmed. Contact your admin.';
+        errEl.textContent = '⚠ ' + msg;
+        errEl.classList.add('visible');
+        btn.disabled = false;
+        btn.innerHTML = 'Sign In to Journal';
+      }
+    }
+  </script>
+</body>
+</html>

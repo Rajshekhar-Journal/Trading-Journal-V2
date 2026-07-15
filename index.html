@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TradeJournal — Advanced Trading Journal</title>
+  <meta name="description" content="Professional trading journal for systematic traders. Track positions, analyze performance, manage risk.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/modules.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <!-- Phase 2: Supabase client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+  <!-- TOP NAVIGATION -->
+  <nav class="topnav">
+    <div class="nav-brand">
+      <div class="brand-logo">📈</div>
+      <span class="brand-name">TradeJournal</span>
+    </div>
+    <div class="nav-modules">
+      <button class="nav-btn" data-module="dashboard">Dashboard</button>
+      <button class="nav-btn" data-module="positions">Positions</button>
+      <button class="nav-btn" data-module="trades">Trades</button>
+      <button class="nav-btn" data-module="playbook">Playbook</button>
+      <button class="nav-btn" data-module="analytics">Analytics</button>
+      <button class="nav-btn" data-module="capital">Capital</button>
+      <button class="nav-btn" data-module="settings">Settings</button>
+    </div>
+    <div class="nav-right">
+      <button class="market-health-btn" id="btn-market-health" title="Update Market Health">🌡 Market Health</button>
+      <div class="trader-chip">
+        <div class="trader-avatar" id="trader-avatar">T</div>
+        <span id="trader-name">Trader</span>
+      </div>
+      <button class="btn-logout" id="btn-logout" title="Sign out">⏻ Logout</button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- MODULE 01: DASHBOARD -->
+    <div id="mod-dashboard" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <p class="page-subtitle">Current business health &amp; performance overview</p>
+        </div>
+        <div class="page-actions">
+          <div class="date-filter-group" id="dash-date-filter">
+            <button class="filter-btn" data-range="Weekly">Week</button>
+            <button class="filter-btn" data-range="Monthly">Month</button>
+            <button class="filter-btn" data-range="Quarterly">Quarter</button>
+            <button class="filter-btn active" data-range="YTD">YTD</button>
+            <button class="filter-btn" data-range="All">All</button>
+          </div>
+        </div>
+      </div>
+      <div class="stats-row" id="dash-current-state"></div>
+      <div class="stats-row" id="dash-summary-cards"></div>
+      <div class="charts-row">
+        <div class="card chart-card" style="flex:1.4">
+          <div class="card-header">
+            <span class="card-title">Daily Net Cumulative P&amp;L</span>
+            <span class="card-subtitle">Realized P&amp;L accumulated over trading days</span>
+          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="chart-daily-pnl"></canvas></div>
+        </div>
+        <div class="card chart-card" style="flex:1">
+          <div class="card-header">
+            <span class="card-title">Risk : Reward Plot</span>
+            <span class="card-subtitle">Individual trades — bubble size = |R|</span>
+          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="chart-rr-bubble"></canvas></div>
+        </div>
+      </div>
+      <div class="two-col-row">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Position Snapshot</span>
+            <span class="badge badge-info" id="dash-pos-count">0 open</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Symbol</th><th>Exposure</th><th>Open Risk R</th><th>Days Held</th></tr></thead>
+              <tbody id="dash-position-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Action Centre</span>
+            <span class="badge badge-warning" id="dash-alert-count">0 alerts</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Symbol</th><th>Alert</th><th>Days</th></tr></thead>
+              <tbody id="dash-alert-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 02: POSITIONS -->
+    <div id="mod-positions" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Positions</h1>
+          <p class="page-subtitle">Open position monitoring &amp; risk management</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" id="btn-new-trade">+ New Trade</button>
+        </div>
+      </div>
+      <div class="stats-row" id="pos-overview-cards"></div>
+      <div class="split-view" id="pos-split-view">
+        <div class="split-left" id="pos-table-panel">
+          <div class="card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header"><span class="card-title">Open Positions</span></div>
+            <div class="table-wrap" style="flex:1;overflow-y:auto">
+              <table class="data-table" id="pos-table">
+                <thead><tr>
+                  <th>Symbol</th><th>Type</th><th>Entry Date</th><th>Avg Entry</th>
+                  <th>CMP</th><th>Open Risk R</th><th>Exposure</th><th>Unreal. P&amp;L</th><th>Alerts</th>
+                </tr></thead>
+                <tbody id="pos-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="split-right hidden" id="pos-detail-panel"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 03: TRADES -->
+    <div id="mod-trades" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Trades</h1>
+          <p class="page-subtitle">Closed trade history &amp; performance review</p>
+        </div>
+        <div class="page-actions">
+          <div class="date-filter-group" id="trades-date-filter">
+            <button class="filter-btn" data-range="Monthly">Month</button>
+            <button class="filter-btn" data-range="Quarterly">Quarter</button>
+            <button class="filter-btn active" data-range="YTD">YTD</button>
+            <button class="filter-btn" data-range="All">All</button>
+          </div>
+          <div class="view-toggle">
+            <button class="toggle-btn active" data-view="metrics">Metrics</button>
+            <button class="toggle-btn" data-view="chart">Chart</button>
+          </div>
+        </div>
+      </div>
+      <div class="stats-row" id="trades-summary-cards"></div>
+      <div class="split-view" id="trades-split-view">
+        <div class="split-left" id="trades-table-panel">
+          <div class="card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header">
+              <span class="card-title">Closed Trades</span>
+              <div class="search-filter-row">
+                <input class="form-input search-input" id="trades-search" placeholder="Search symbol..." type="text">
+                <select class="form-select" id="trades-filter-result">
+                  <option value="">All Results</option>
+                  <option value="Win">Win</option>
+                  <option value="Loss">Loss</option>
+                  <option value="Break-even">Break-even</option>
+                </select>
+                <select class="form-select" id="trades-filter-setup"><option value="">All Setups</option></select>
+              </div>
+            </div>
+            <div class="table-wrap" style="flex:1;overflow-y:auto">
+              <table class="data-table" id="trades-table">
+                <thead><tr>
+                  <th data-sort="symbol">Symbol ↕</th>
+                  <th data-sort="entryDate">Entry ↕</th>
+                  <th data-sort="exitDate">Exit ↕</th>
+                  <th data-sort="holdingDays">Days ↕</th>
+                  <th>Setup</th>
+                  <th data-sort="pnl">P&amp;L ↕</th>
+                  <th data-sort="profitR">R ↕</th>
+                  <th>Result</th>
+                  <th>Rules</th>
+                  <th>Review</th>
+                </tr></thead>
+                <tbody id="trades-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="split-right hidden" id="trades-detail-panel"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 04: PLAYBOOK -->
+    <div id="mod-playbook" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Playbook</h1>
+          <p class="page-subtitle">Trading setup library &amp; performance analytics</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" id="btn-new-playbook">+ New Playbook</button>
+        </div>
+      </div>
+      <div class="stats-row" id="pb-summary-cards"></div>
+      <div class="split-view" id="pb-split-view">
+        <div class="split-left" id="pb-table-panel">
+          <div class="card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header">
+              <span class="card-title">Playbooks</span>
+              <div class="search-filter-row">
+                <input class="form-input search-input" id="pb-search" placeholder="Search playbook...">
+                <select class="form-select" id="pb-filter-status">
+                  <option value="">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Archived">Archived</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap" style="flex:1;overflow-y:auto">
+              <table class="data-table" id="pb-table">
+                <thead><tr>
+                  <th>Name</th><th>Version</th><th>Status</th><th>Category</th>
+                  <th>Trades</th><th>Win Rate</th><th>Avg R</th><th>Expectancy</th>
+                </tr></thead>
+                <tbody id="pb-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="split-right hidden" id="pb-detail-panel"></div>
+      </div>
+    </div>
+
+    <!-- MODULE 05: ANALYTICS -->
+    <div id="mod-analytics" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Analytics</h1>
+          <p class="page-subtitle">Performance intelligence &amp; trading insights</p>
+        </div>
+        <div class="page-actions">
+          <div class="date-filter-group" id="anl-date-filter">
+            <button class="filter-btn" data-range="Last 20">Last 20</button>
+            <button class="filter-btn" data-range="Monthly">Month</button>
+            <button class="filter-btn" data-range="Quarterly">Quarter</button>
+            <button class="filter-btn active" data-range="YTD">YTD</button>
+            <button class="filter-btn" data-range="All">All</button>
+          </div>
+        </div>
+      </div>
+      <div class="tab-bar" id="anl-tab-bar">
+        <button class="tab-btn active" data-tab="performance">Performance</button>
+        <button class="tab-btn" data-tab="trade-analytics">Trade Analytics</button>
+        <button class="tab-btn" data-tab="playbook-analytics">Playbook Analytics</button>
+        <button class="tab-btn" data-tab="risk">Risk Analytics</button>
+        <button class="tab-btn" data-tab="discipline">Discipline</button>
+        <button class="tab-btn" data-tab="simulator">Growth Simulator</button>
+      </div>
+      <div id="anl-content"></div>
+    </div>
+
+    <!-- MODULE 06: CAPITAL -->
+    <div id="mod-capital" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Capital Management</h1>
+          <p class="page-subtitle">Account equity, deposits, withdrawals &amp; risk configuration</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" id="btn-add-capital">+ Add Transaction</button>
+        </div>
+      </div>
+      <div class="stats-row" id="cap-summary-cards"></div>
+      <div class="charts-row">
+        <div class="card chart-card" style="flex:1.5">
+          <div class="card-header">
+            <span class="card-title">Equity Curve</span>
+            <span class="card-subtitle">Realized equity growth over time</span>
+          </div>
+          <div class="chart-wrap" style="height:220px"><canvas id="chart-equity-curve"></canvas></div>
+        </div>
+        <div class="card" style="flex:1">
+          <div class="card-header"><span class="card-title">Risk Configuration</span></div>
+          <div class="card-body" id="cap-risk-config"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Capital Ledger</span></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Date</th><th>Type</th><th>Amount (₹)</th><th>Balance (₹)</th><th>Account</th><th>Remarks</th><th></th></tr></thead>
+            <tbody id="cap-ledger-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODULE 07: SETTINGS -->
+    <div id="mod-settings" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Settings</h1>
+          <p class="page-subtitle">Application configuration center</p>
+        </div>
+      </div>
+      <div class="settings-layout">
+        <div class="settings-sidebar">
+          <input class="form-input" id="settings-search" placeholder="🔍 Search settings..." style="margin-bottom:12px;width:100%">
+          <nav id="settings-nav-list"></nav>
+        </div>
+        <div class="settings-content" id="settings-content"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- GLOBAL MODAL -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-container" class="modal-container"></div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- SCRIPTS — Phase 2 load order -->
+  <!-- 1. Auth (must load before db-cloud) -->
+  <script src="js/auth.js"></script>
+  <!-- 2. Cloud DB layer (replaces db.js) -->
+  <script src="js/db-cloud.js"></script>
+  <!-- 3. Core logic -->
+  <script src="js/calculations.js"></script>
+  <script src="js/alerts.js"></script>
+  <script src="js/charts.js"></script>
+  <!-- 4. Module view-controllers -->
+  <script src="js/modules/dashboard.js"></script>
+  <script src="js/modules/positions.js"></script>
+  <script src="js/modules/trades.js"></script>
+  <script src="js/modules/playbook.js"></script>
+  <script src="js/modules/analytics.js"></script>
+  <script src="js/modules/capital.js"></script>
+  <script src="js/modules/settings.js"></script>
+  <!-- 5. App router (last — kicks off auth check then init) -->
+  <script src="js/app.js"></script>
+</body>
+</html>
