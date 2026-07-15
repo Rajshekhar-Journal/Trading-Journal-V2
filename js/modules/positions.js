@@ -603,8 +603,13 @@ const positionsModule = (() => {
         markers.sort((a, b) => a.time.localeCompare(b.time));
         if (markers.length) candleSeries.setMarkers(markers);
 
-        chart.timeScale().fitContent();
-        if (statusEl) statusEl.textContent = `✅ ${rawCandles.length} candles loaded`;
+        // Default visible window = last 3 months; full 2y available on scroll
+        const lastDate  = rawCandles[rawCandles.length - 1]?.time;
+        const fromDate  = new Date(lastDate);
+        fromDate.setMonth(fromDate.getMonth() - 3);
+        const fromStr   = fromDate.toISOString().split('T')[0];
+        chart.timeScale().setVisibleRange({ from: fromStr, to: lastDate });
+        if (statusEl) statusEl.textContent = `✅ ${rawCandles.length} candles loaded (3m view, scroll for 2y)`;
       } else {
         if (statusEl) statusEl.textContent = '❌ No data. Try TradingView link.';
       }
