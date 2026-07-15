@@ -16,19 +16,32 @@ const positionsModule = (() => {
   const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
   const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
 
-  async function _fetchLiveCmp(symbol) {
+  async function _fetchLiveCmp(symbol, fullOhlc = false) {
     try {
       const ticker = `${encodeURIComponent(symbol)}.NS`;
-      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=1d`;
+      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=${fullOhlc ? '3mo' : '1d'}`;
       const resp   = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
       const data   = await resp.json();
-      return data?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+      const result = data?.chart?.result?.[0];
+      if (!result) return null;
+      if (fullOhlc) {
+        const timestamps = result.timestamp;
+        const ohlcv      = result.indicators.quote[0];
+        const candles    = timestamps.map((ts, i) => ({
+          time:  ts,
+          open:  parseFloat(ohlcv.open[i]?.toFixed(2)  || 0),
+          high:  parseFloat(ohlcv.high[i]?.toFixed(2)  || 0),
+          low:   parseFloat(ohlcv.low[i]?.toFixed(2)   || 0),
+          close: parseFloat(ohlcv.close[i]?.toFixed(2) || 0),
+        })).filter(c => c.open && c.high && c.low && c.close);
+        return { price: result.meta?.regularMarketPrice || candles[candles.length-1]?.close, candles };
+      }
+      return result.meta?.regularMarketPrice || null;
     } catch { return null; }
   }
 
   async function init() {
-    // Auto-run alert engine on every load
-    try { alertEngine.checkAllAlerts(await db.getOpenTrades()); } catch(e) {}
+    // Auto-refresh handles alert engine internally now
     await _renderOverviewCards();
     await _renderTable();
     _setupNewTradeBtn();
@@ -46,16 +59,29 @@ const positionsModule = (() => {
     const openTrades = await db.getOpenTrades();
     if (!openTrades.length) return;
     let updated = false;
+    const ohlcMap = {}; // { 'RELIANCE': [{open,high,low,close}, ...] }
+
+    // Fetch live price + historical candles for alerts
     await Promise.all(openTrades.map(async trade => {
-      const price = await _fetchLiveCmp(trade.symbol);
+      const res = await _fetchLiveCmp(trade.symbol, true); // true = get full OHLC
+      if (!res) return;
+      const { price, candles } = res;
+      ohlcMap[trade.symbol] = candles;
+      
       if (price && Math.abs(price - (trade.cmp || 0)) > 0.01) {
         await db.saveTrade({ ...trade, cmp: price });
         updated = true;
-        // Live-update the CMP cell in the table without full re-render
         const cell = document.querySelector(`[data-cmp-cell="${trade.id}"]`);
         if (cell) cell.textContent = `₹${calc.formatNumber(price)}`;
       }
     }));
+
+    // Re-fetch trades in case cmp was updated, then run advanced alert engine
+    const currentTrades = await db.getOpenTrades();
+    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, null, ohlcMap);
+    if (alertsUpdated?.length) updated = true;
+
+    // Refresh UI if necessary
     // If detail panel is open, refresh it to show new CMP
     if (updated && _selectedTradeId) {
       await _renderOverviewCards();
@@ -194,7 +220,7 @@ const positionsModule = (() => {
     const unrealR   = m.initialRPT > 0 ? (unrealPnl / m.initialRPT) : 0;
     const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
-    const alertHtml = alerts.map(a => `<div class="alert-banner warning">⚠ ${a.type}</div>`).join('');
+    const alertHtml = alerts.map(a => `<div class="alert-banner warning" style="display:flex;flex-direction:column;align-items:flex-start"><strong>⚠ ${a.type}</strong><span style="font-size:12px;margin-top:4px">${a.message || ''}</span></div>`).join('');
     const playbook  = await db.getPlaybookById(trade.playbookId);
 
     panel.innerHTML = `
