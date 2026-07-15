@@ -455,18 +455,99 @@ const positionsModule = (() => {
 
   function _renderChartTab(trade) {
     const symbol = trade.symbol;
-    const tvSym  = encodeURIComponent(`NSE:${symbol}`);
-    return `<div class="tv-chart-wrap">
-      <iframe
-        src="https://www.tradingview.com/widgetembed/?frameElementId=tv_pos_${symbol}&symbol=${tvSym}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en"
-        width="100%" height="360" allowtransparency="true" scrolling="no" allowfullscreen>
-      </iframe>
-      <div style="margin-top:6px;display:flex;gap:8px;">
-        <a href="https://www.tradingview.com/chart/?symbol=NSE:${symbol}" target="_blank" class="btn btn-secondary btn-sm">🔗 Open Full Chart</a>
-        <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE Quote</a>
-      </div>
-    </div>`;
+    const m      = calc.getTradeMetrics(trade);
+    const cmp    = trade.cmp || m.avgEntryPrice;
+
+    // Render the container HTML first; chart is drawn after DOM is ready
+    setTimeout(() => _drawLightweightChart(trade, symbol, m, cmp), 80);
+
+    return `
+      <div style="background:#0f172a;border-radius:12px;padding:12px;margin-top:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="color:#e2e8f0;font-weight:600;font-size:14px;">📈 ${symbol} — Daily Chart</div>
+          <div style="display:flex;gap:6px;">
+            <span id="chart-status-${symbol}" style="font-size:11px;color:#64748b;">⏳ Loading data...</span>
+          </div>
+        </div>
+        <div id="lw-chart-${symbol}" style="width:100%;height:320px;border-radius:8px;overflow:hidden;"></div>
+        <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+          <span style="font-size:11px;color:#22c55e;">━ Entry ₹${calc.formatNumber(m.avgEntryPrice)}</span>
+          <span style="font-size:11px;color:#ef4444;">━ Stop ₹${calc.formatNumber(m.currentStop)}</span>
+          <span style="font-size:11px;color:#f59e0b;">━ CMP ₹${calc.formatNumber(cmp)}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            <a href="https://www.tradingview.com/chart/?symbol=NSE:${symbol}" target="_blank" class="btn btn-secondary btn-sm">🔗 TradingView</a>
+            <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE</a>
+          </div>
+        </div>
+      </div>`;
   }
+
+  async function _drawLightweightChart(trade, symbol, m, cmp) {
+    const container = document.getElementById(`lw-chart-${symbol}`);
+    const statusEl  = document.getElementById(`chart-status-${symbol}`);
+    if (!container || typeof LightweightCharts === 'undefined') return;
+
+    // Create chart
+    const chart = LightweightCharts.createChart(container, {
+      width:  container.clientWidth,
+      height: 320,
+      layout: { background: { color: '#0f172a' }, textColor: '#94a3b8' },
+      grid:   { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#1e293b' },
+      timeScale: { borderColor: '#1e293b', timeVisible: true },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#22c55e', downColor: '#ef4444',
+      borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+      wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+    });
+
+    // Fetch OHLC data from Supabase Edge Function
+    try {
+      const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+      const ticker = `${encodeURIComponent(symbol)}.NS`;
+      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=3mo`;
+      const resp   = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
+      const data   = await resp.json();
+      const result = data?.chart?.result?.[0];
+
+      if (result) {
+        const timestamps = result.timestamp;
+        const ohlcv      = result.indicators.quote[0];
+        const candles    = timestamps.map((ts, i) => ({
+          time:  ts,
+          open:  parseFloat(ohlcv.open[i]?.toFixed(2)  || 0),
+          high:  parseFloat(ohlcv.high[i]?.toFixed(2)  || 0),
+          low:   parseFloat(ohlcv.low[i]?.toFixed(2)   || 0),
+          close: parseFloat(ohlcv.close[i]?.toFixed(2) || 0),
+        })).filter(c => c.open && c.high && c.low && c.close);
+
+        candleSeries.setData(candles);
+
+        // Overlay price lines
+        candleSeries.createPriceLine({ price: m.avgEntryPrice, color: '#22c55e', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Entry' });
+        candleSeries.createPriceLine({ price: m.currentStop,   color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Stop' });
+        if (cmp !== m.avgEntryPrice) {
+          candleSeries.createPriceLine({ price: cmp, color: '#f59e0b', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, title: 'CMP' });
+        }
+
+        chart.timeScale().fitContent();
+        if (statusEl) statusEl.textContent = '✅ Live data loaded';
+      } else {
+        if (statusEl) statusEl.textContent = '❌ No data. Try TradingView link.';
+      }
+    } catch(e) {
+      if (statusEl) statusEl.textContent = `❌ ${e.message}`;
+    }
+
+    // Responsive resize
+    const ro = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }));
+    ro.observe(container);
+  }
+
 
   // ── Close Panel — hides detail, restores table-only view ──────────────────
   function _closePanel() {
