@@ -495,21 +495,25 @@ const positionsModule = (() => {
       grid:   { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       rightPriceScale: { borderColor: '#1e293b' },
-      timeScale: { borderColor: '#1e293b', timeVisible: true },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
     });
 
+    // Hollow candle series — body color driven by close vs prev close
     const candleSeries = chart.addCandlestickSeries({
-      upColor: '#22c55e', downColor: '#ef4444',
-      borderUpColor: '#22c55e', borderDownColor: '#ef4444',
-      wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+      upColor:        'rgba(0,0,0,0)', // hollow body for up candles
+      downColor:      '#ef4444',       // filled body for down candles
+      borderUpColor:  '#22c55e',
+      borderDownColor:'#ef4444',
+      wickUpColor:    '#22c55e',
+      wickDownColor:  '#ef4444',
     });
 
-    // Fetch OHLC data from Supabase Edge Function
+    // Fetch OHLC data from Supabase Edge Function — 2 years
     try {
       const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
       const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
       const ticker = `${encodeURIComponent(symbol)}.NS`;
-      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=3mo`;
+      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=2y`;
       const resp   = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
       const data   = await resp.json();
       const result = data?.chart?.result?.[0];
@@ -517,25 +521,90 @@ const positionsModule = (() => {
       if (result) {
         const timestamps = result.timestamp;
         const ohlcv      = result.indicators.quote[0];
-        const candles    = timestamps.map((ts, i) => ({
-          time:  ts,
-          open:  parseFloat(ohlcv.open[i]?.toFixed(2)  || 0),
-          high:  parseFloat(ohlcv.high[i]?.toFixed(2)  || 0),
-          low:   parseFloat(ohlcv.low[i]?.toFixed(2)   || 0),
-          close: parseFloat(ohlcv.close[i]?.toFixed(2) || 0),
-        })).filter(c => c.open && c.high && c.low && c.close);
 
-        candleSeries.setData(candles);
+        // Build hollow candles: color = close vs PREVIOUS close (not open)
+        const rawCandles = timestamps.map((ts, i) => {
+          const o = ohlcv.open[i],  h = ohlcv.high[i];
+          const l = ohlcv.low[i],   c = ohlcv.close[i];
+          if (!o || !h || !l || !c) return null;
+          const prevClose = i > 0 ? ohlcv.close[i - 1] : c;
+          const isUp      = c >= prevClose;
+          return {
+            time:        new Date(ts * 1000).toISOString().split('T')[0],
+            open:        parseFloat(o.toFixed(2)),
+            high:        parseFloat(h.toFixed(2)),
+            low:         parseFloat(l.toFixed(2)),
+            close:       parseFloat(c.toFixed(2)),
+            // Hollow (transparent body) if up, filled if down
+            color:       isUp ? 'rgba(0,0,0,0)' : '#ef4444',
+            borderColor: isUp ? '#22c55e'        : '#ef4444',
+            wickColor:   isUp ? '#22c55e'        : '#ef4444',
+          };
+        }).filter(Boolean);
 
-        // Overlay price lines
-        candleSeries.createPriceLine({ price: m.avgEntryPrice, color: '#22c55e', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Entry' });
-        candleSeries.createPriceLine({ price: m.currentStop,   color: '#ef4444', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: 'Stop' });
-        if (cmp !== m.avgEntryPrice) {
-          candleSeries.createPriceLine({ price: cmp, color: '#f59e0b', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Solid, title: 'CMP' });
+        candleSeries.setData(rawCandles);
+
+        // ── Stop Loss — horizontal dashed price line ──────────────
+        candleSeries.createPriceLine({
+          price: m.currentStop, color: '#ef4444',
+          lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
+          title: `SL ₹${calc.formatNumber(m.currentStop)}`
+        });
+
+        // ── Entry & Exit markers on actual candles ────────────────
+        const markers = [];
+
+        // Entry markers (one per entry leg — pyramids included)
+        const allEntries = [...(trade.entries || []), ...(trade.pyramids || [])];
+        allEntries.forEach((entry, idx) => {
+          if (!entry?.date) return;
+          const d = entry.date.split('T')[0];
+          if (rawCandles.find(c => c.time === d)) {
+            markers.push({
+              time:     d,
+              position: 'belowBar',
+              color:    '#22c55e',
+              shape:    'arrowUp',
+              text:     idx === 0 ? `Entry ₹${calc.formatNumber(entry.price)}` : `Add ₹${calc.formatNumber(entry.price)}`,
+            });
+          }
+        });
+
+        // Partial exit markers
+        (trade.partialExits || []).forEach(exit => {
+          if (!exit?.date) return;
+          const d = exit.date.split('T')[0];
+          if (rawCandles.find(c => c.time === d)) {
+            markers.push({
+              time:     d,
+              position: 'aboveBar',
+              color:    '#f59e0b',
+              shape:    'arrowDown',
+              text:     `Exit ₹${calc.formatNumber(exit.price)}`,
+            });
+          }
+        });
+
+        // Final exit marker
+        if (trade.finalExit?.date) {
+          const d = trade.finalExit.date.split('T')[0];
+          if (rawCandles.find(c => c.time === d)) {
+            markers.push({
+              time:     d,
+              position: 'aboveBar',
+              color:    '#ef4444',
+              shape:    'arrowDown',
+              text:     `Final Exit ₹${calc.formatNumber(trade.finalExit.price)}`,
+            });
+          }
         }
 
+        // Sort markers by time (required by LightweightCharts)
+        markers.sort((a, b) => a.time.localeCompare(b.time));
+        if (markers.length) candleSeries.setMarkers(markers);
+
         chart.timeScale().fitContent();
-        if (statusEl) statusEl.textContent = '✅ Live data loaded';
+        if (statusEl) statusEl.textContent = `✅ ${rawCandles.length} candles loaded`;
       } else {
         if (statusEl) statusEl.textContent = '❌ No data. Try TradingView link.';
       }
@@ -547,6 +616,7 @@ const positionsModule = (() => {
     const ro = new ResizeObserver(() => chart.applyOptions({ width: container.clientWidth }));
     ro.observe(container);
   }
+
 
 
   // ── Close Panel — hides detail, restores table-only view ──────────────────
