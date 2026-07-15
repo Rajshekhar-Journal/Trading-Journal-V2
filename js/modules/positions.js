@@ -10,6 +10,21 @@ const positionsModule = (() => {
   let _isFullscreen = false;
   let _cachedSettings = null;
   let _cachedDefRPT = 0;
+  let _cmpRefreshTimer = null;
+
+  // ── Shared CMP fetch helper (uses Supabase Edge Function proxy) ──────────
+  const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+
+  async function _fetchLiveCmp(symbol) {
+    try {
+      const ticker = `${encodeURIComponent(symbol)}.NS`;
+      const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=1d`;
+      const resp   = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
+      const data   = await resp.json();
+      return data?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+    } catch { return null; }
+  }
 
   async function init() {
     // Auto-run alert engine on every load
@@ -17,6 +32,38 @@ const positionsModule = (() => {
     await _renderOverviewCards();
     await _renderTable();
     _setupNewTradeBtn();
+    _startAutoCmpRefresh();
+  }
+
+  // ── Auto-refresh CMP for all open positions every 3 minutes ─────────────
+  function _startAutoCmpRefresh() {
+    if (_cmpRefreshTimer) clearInterval(_cmpRefreshTimer);
+    _autoRefreshAllCmps(); // run once immediately
+    _cmpRefreshTimer = setInterval(_autoRefreshAllCmps, 3 * 60 * 1000);
+  }
+
+  async function _autoRefreshAllCmps() {
+    const openTrades = await db.getOpenTrades();
+    if (!openTrades.length) return;
+    let updated = false;
+    await Promise.all(openTrades.map(async trade => {
+      const price = await _fetchLiveCmp(trade.symbol);
+      if (price && Math.abs(price - (trade.cmp || 0)) > 0.01) {
+        await db.saveTrade({ ...trade, cmp: price });
+        updated = true;
+        // Live-update the CMP cell in the table without full re-render
+        const cell = document.querySelector(`[data-cmp-cell="${trade.id}"]`);
+        if (cell) cell.textContent = `₹${calc.formatNumber(price)}`;
+      }
+    }));
+    // If detail panel is open, refresh it to show new CMP
+    if (updated && _selectedTradeId) {
+      await _renderOverviewCards();
+      await _renderDetailPanel(_selectedTradeId);
+    } else if (updated) {
+      await _renderOverviewCards();
+      await _renderTable();
+    }
   }
 
   // ── Overview Cards ─────────────────────────────────────────────────────────
@@ -107,7 +154,7 @@ const positionsModule = (() => {
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}</td>
         <td class="font-mono">₹${calc.formatNumber(m.currentStop)}</td>
-        <td class="font-mono" style="cursor:pointer" onclick="event.stopPropagation();positionsModule._showCmpModal('${trade.id}')" title="Click to update CMP">
+        <td class="font-mono" data-cmp-cell="${trade.id}" style="cursor:pointer" onclick="event.stopPropagation();positionsModule._showCmpModal('${trade.id}')" title="Click to update CMP manually">
           ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span></td>
         <td class="${chgCls} font-mono">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(1)}%</td>
         <td class="${riskRCls} font-mono">${calc.formatR(m.currentRiskR)}</td>
@@ -785,7 +832,7 @@ const positionsModule = (() => {
     const today = new Date().toISOString().split('T')[0];
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="stop-date" value="${today}"></div>
-      <div class="form-group"><label class="form-label">Old Stop</label><input class="form-input" type="number" id="stop-old" value="${trade.currentStop}" readonly></div>
+      <div class="form-group"><label class="form-label">Old Stop (₹) <span style="font-size:10px;color:var(--text-muted)">(auto-filled)</span></label><input class="form-input" type="number" id="stop-old" value="${calc.getTradeMetrics(trade).currentStop}" readonly style="background:var(--surface-2);color:var(--text-muted)"></div>
       <div class="form-group"><label class="form-label">New Stop (₹)</label><input class="form-input" type="number" id="stop-new" step="0.05"></div>
       <div class="form-group"><label class="form-label">Source</label><select class="form-select" id="stop-source"><option>Manual</option><option>Trail</option><option>System</option></select></div>
       <div class="form-group form-full"><label class="form-label">Notes</label><input class="form-input" id="stop-notes" placeholder="Reason for revision..."></div>
@@ -876,7 +923,7 @@ const positionsModule = (() => {
       <div class="form-group"><label class="form-label">Qty *</label><input class="form-input" type="number" id="nt-qty" min="1" oninput="positionsModule._autoCalcTrade('qty')"></div>
       <div class="form-group"><label class="form-label">RPT (₹) <span style="color:var(--text-muted);font-weight:400">(auto / default: ${calc.formatCurrency(defRPT)})</span></label><input class="form-input" type="number" id="nt-rpt" placeholder="${defRPT.toFixed(0)}" oninput="positionsModule._autoCalcTrade('rpt')"></div>
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="nt-charges" value="0"></div>
-      <div class="form-group"><label class="form-label">CMP (for P&L tracking)</label><input class="form-input" type="number" id="nt-cmp" step="0.05"></div>
+      <div class="form-group"><label class="form-label">CMP <span id="nt-cmp-status" style="font-size:11px;color:var(--text-muted);font-weight:400">— auto-fetched on symbol entry</span></label><input class="form-input" type="number" id="nt-cmp" step="0.05" placeholder="Auto-fetching..."></div>
     </div>`;
     app.openModal('New Trade', content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
@@ -912,6 +959,30 @@ const positionsModule = (() => {
         await init();
       }}
     ]);
+
+    // ── Auto-fetch CMP when symbol is entered (800ms debounce) ────────────
+    setTimeout(() => {
+      const symbolEl = document.getElementById('nt-symbol');
+      const cmpEl    = document.getElementById('nt-cmp');
+      const statusEl = document.getElementById('nt-cmp-status');
+      if (!symbolEl) return;
+      let _debounce;
+      symbolEl.addEventListener('input', () => {
+        clearTimeout(_debounce);
+        const sym = symbolEl.value.trim().toUpperCase();
+        if (sym.length < 2) return;
+        _debounce = setTimeout(async () => {
+          if (statusEl) statusEl.textContent = '⏳ Fetching...';
+          const price = await _fetchLiveCmp(sym);
+          if (price) {
+            if (cmpEl) cmpEl.value = price.toFixed(2);
+            if (statusEl) statusEl.textContent = `✅ ₹${calc.formatNumber(price)}`;
+          } else {
+            if (statusEl) statusEl.textContent = '❌ Not found — enter manually';
+          }
+        }, 800);
+      });
+    }, 80);
   }
 
   function _autoCalcTrade(source) {
