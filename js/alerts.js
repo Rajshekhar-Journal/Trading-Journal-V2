@@ -15,11 +15,21 @@ const alertEngine = (() => {
 
   const ALERT_STATUS = { PENDING: 'Pending', TRIGGERED: 'Triggered', COMPLETED: 'Completed', DISMISSED: 'Dismissed' };
 
-  // ── Technical Indicator Math ───────────────────────────────────────────────
-  
+  // ── NSE/BSE Tick Size ───────────────────────────────────────────────
+
+  function _getTickSize(price) {
+    if (price <= 250)   return 0.05;
+    if (price <= 1000)  return 0.10;
+    if (price <= 5000)  return 0.50;
+    if (price <= 18000) return 1.00; // covers ₹5,001–₹18,000
+    return 5.00;
+  }
+
+  // Round a GTT price to the correct NSE tick based on the price itself
   function _roundTick(price) {
-    if (!price) return '0.00';
-    return (Math.round(price * 20) / 20).toFixed(2);
+    if (!price || price <= 0) return '0.00';
+    const tick = _getTickSize(price);
+    return (Math.round(price / tick) * tick).toFixed(tick < 1 ? 2 : 0);
   }
 
   function calculateEMA(closes, period) {
