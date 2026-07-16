@@ -68,14 +68,10 @@ const alertEngine = (() => {
         if (tradingDays >= 5) _upsertAlert(alerts, ALERT_TYPES.DAY5_EXIT, 'Trade has been held for 5+ days without hitting target.', dirty);
       }
 
-      if (alertConfig.stopLossBreach?.enabled !== false && trade.cmp) {
-        const breached = trade.direction === 'Long'
-          ? trade.cmp <= m.currentStop
-          : trade.cmp >= m.currentStop;
-        if (breached) _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty);
-      }
-
       // ── Dynamic Trailing Exit Alerts (Long Only for now) ─────────────────
+      let activeDynamicAlert = null;
+      let dynamicAlertMessage = '';
+
       if (trade.direction === 'Long' && ohlcMap[trade.symbol]) {
         const candles = ohlcMap[trade.symbol];
         if (candles.length >= 20) {
@@ -98,32 +94,64 @@ const alertEngine = (() => {
             const target3ATR = entry + (3 * atr14);
             const target5ATR = entry + (5 * atr14);
             
-            // Phase 3: 5x ATR Reached
-            if (cmp >= target5ATR) {
-               let instruction = `Trail 20% at ₹${ema10.toFixed(2)} (EMA10). Trail 40% aggressively at Prev Low (₹${prevLow.toFixed(2)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
-               _upsertAlert(alerts, ALERT_TYPES.PHASE3, instruction, dirty);
-            } 
-            // Phase 2: 3x ATR Reached
-            else if (cmp >= target3ATR) {
-               let instruction = `Trail 60% at ₹${ema10.toFixed(2)} (EMA10). Trail 20% (or 40%) at Prev Low (₹${prevLow.toFixed(2)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
-               _upsertAlert(alerts, ALERT_TYPES.PHASE2, instruction, dirty);
-            }
-            // Phase 1: 2R Reached
-            else if (cmp >= target2R) {
-               const coreGtt = Math.max(entry, ema20);
-               const trancheGtt = Math.max(target2R * 0.98, prevLow);
-               let instruction = `Trail 80% at ₹${coreGtt.toFixed(2)} [MAX(Breakeven, EMA20)]. Trail 20% at ₹${trancheGtt.toFixed(2)} [MAX(2R-2%, PrevLow)].`;
-               _upsertAlert(alerts, ALERT_TYPES.PHASE1, instruction, dirty);
-            }
-            
-            // Trend Broken (Phase 4 / Runner Exit)
+            // Priority 2.0: Trend Broken (Exit Runner)
             if (ema10 && cmp < ema10 && cmp >= target3ATR) {
-               _upsertAlert(alerts, ALERT_TYPES.TREND_BROKEN, `CMP < EMA10 (₹${ema10.toFixed(2)}). Sell remaining runner position.`, dirty);
+               activeDynamicAlert = ALERT_TYPES.TREND_BROKEN;
+               dynamicAlertMessage = `CMP < EMA10 (₹${ema10.toFixed(2)}). Sell remaining runner position.`;
+            }
+            // Priority 2.1: Phase 3 (5x ATR)
+            else if (cmp >= target5ATR) {
+               activeDynamicAlert = ALERT_TYPES.PHASE3;
+               const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
+               let instruction = `Trail 20% at ₹${ema10.toFixed(2)} (EMA10). Trail 40% aggressively at Prev Low (₹${trancheGtt.toFixed(2)})`;
+               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
+               dynamicAlertMessage = instruction;
+            } 
+            // Priority 2.2: Phase 2 (3x ATR)
+            else if (cmp >= target3ATR) {
+               activeDynamicAlert = ALERT_TYPES.PHASE2;
+               const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
+               let instruction = `Trail 60% at ₹${ema10.toFixed(2)} (EMA10). Trail 20% (or 40%) at Prev Low (₹${trancheGtt.toFixed(2)})`;
+               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
+               dynamicAlertMessage = instruction;
+            }
+            // Priority 2.3: Phase 1 (2R)
+            else if (cmp >= target2R) {
+               activeDynamicAlert = ALERT_TYPES.PHASE1;
+               const coreGtt = Math.max(entry, ema20);
+               const trancheGtt = Math.max(target2R * 0.98, prevLow, coreGtt); // bound by core stop
+               let instruction = `Trail 80% at ₹${coreGtt.toFixed(2)} [MAX(Breakeven, EMA20)]. Trail 20% at ₹${trancheGtt.toFixed(2)} [MAX(2R-2%, PrevLow)].`;
+               dynamicAlertMessage = instruction;
             }
           }
         }
+      }
+
+      // ── Resolve Priorities & Cleanup ──────────────────────────────────────
+      const isStopBreached = alertConfig.stopLossBreach?.enabled !== false && trade.cmp && 
+         (trade.direction === 'Long' ? trade.cmp <= m.currentStop : trade.cmp >= m.currentStop);
+
+      // Priority 1: Stop Loss Breach overrides EVERYTHING
+      if (isStopBreached) {
+         _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty);
+         activeDynamicAlert = null; // Suppress all dynamic exit phases
+      } else {
+         const stopIdx = alerts.findIndex(a => a.type === ALERT_TYPES.STOP_BREACH);
+         if (stopIdx !== -1) { alerts.splice(stopIdx, 1); dirty.changed = true; }
+      }
+
+      // Enforce mutual exclusivity for dynamic alerts
+      const dynamicTypes = [ALERT_TYPES.PHASE1, ALERT_TYPES.PHASE2, ALERT_TYPES.PHASE3, ALERT_TYPES.TREND_BROKEN];
+      dynamicTypes.forEach(t => {
+         if (t !== activeDynamicAlert) {
+            const idx = alerts.findIndex(a => a.type === t);
+            if (idx !== -1) { alerts.splice(idx, 1); dirty.changed = true; }
+         }
+      });
+
+      // Upsert the single winning dynamic alert (if any)
+      if (activeDynamicAlert) {
+         _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty);
       }
 
       if (dirty.changed) {
