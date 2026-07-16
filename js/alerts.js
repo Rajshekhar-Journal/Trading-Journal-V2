@@ -18,11 +18,10 @@ const alertEngine = (() => {
   // ── NSE/BSE Tick Size ───────────────────────────────────────────────
 
   function _getTickSize(price) {
-    if (price < 250)    return 0.01;
-    if (price < 1000)   return 0.05;
-    if (price < 5000)   return 0.10;
-    if (price < 10000)  return 0.50;
-    if (price < 20000)  return 1.00;
+    if (price <= 250)   return 0.05;
+    if (price <= 1000)  return 0.10;
+    if (price <= 5000)  return 0.50;
+    if (price <= 18000) return 1.00; 
     return 5.00;
   }
 
