@@ -181,16 +181,51 @@ const alertEngine = (() => {
 
   function _upsertAlert(alerts, type, message, dirty) {
     const existing = alerts.find(a => a.type === type);
+    const today = new Date().toISOString().split('T')[0];
+
     if (!existing) {
-      alerts.push({ type, status: ALERT_STATUS.TRIGGERED, message, triggeredAt: new Date().toISOString() });
+      alerts.push({ 
+        type, 
+        status: ALERT_STATUS.TRIGGERED, 
+        message, 
+        triggeredAt: new Date().toISOString(),
+        lastNotifiedDate: today
+      });
       dirty.changed = true;
       return true;
     } else if (existing.status === ALERT_STATUS.PENDING || existing.message !== message) {
-      existing.status = ALERT_STATUS.TRIGGERED;
+      
+      const oldMsg = existing.message || '';
       existing.message = message;
-      existing.triggeredAt = new Date().toISOString();
       dirty.changed = true;
-      return true;
+      
+      let shouldNotify = false;
+      
+      // Rule B: End of day update (Calendar day changed)
+      if (existing.lastNotifiedDate !== today) {
+         shouldNotify = true;
+      } else {
+         // Rule C: Intraday 1% move on any price mentioned in the alert
+         const oldPrices = (oldMsg.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
+         const newPrices = (message.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
+         
+         for (let i=0; i < Math.min(oldPrices.length, newPrices.length); i++) {
+            if (oldPrices[i] > 0) {
+               const pctMove = (newPrices[i] - oldPrices[i]) / oldPrices[i];
+               if (pctMove >= 0.01) { // 1% upward move
+                  shouldNotify = true;
+                  break;
+               }
+            }
+         }
+      }
+      
+      if (shouldNotify || existing.status === ALERT_STATUS.PENDING) {
+         existing.status = ALERT_STATUS.TRIGGERED;
+         existing.triggeredAt = new Date().toISOString();
+         existing.lastNotifiedDate = today;
+         return true; // Send telegram
+      }
     }
     return false;
   }
