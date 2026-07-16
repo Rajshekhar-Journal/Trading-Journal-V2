@@ -288,6 +288,7 @@ const positionsModule = (() => {
               <span class="detail-symbol">${trade.symbol}</span>
               ${dirBadge}
               <span class="badge badge-muted">${trade.tradeType}</span>
+              <span class="badge badge-muted" style="font-size:10px;">${trade.exchange || 'NSE'}</span>
             </div>
             <div class="detail-sub">${m.holdingDays} days held (trading days: ${m.tradingDays}) · Entry: ${calc.formatDate(trade.entries?.[0]?.date)} · Playbook: ${playbook?.name || '—'}</div>
           </div>
@@ -587,6 +588,11 @@ const positionsModule = (() => {
     const symbol = trade.symbol;
     const m      = calc.getTradeMetrics(trade);
     const cmp    = trade.cmp || m.avgEntryPrice;
+    
+    // Build TradingView symbol — prefer BSE for BSE-listed stocks, else NSE
+    const exchange = trade.exchange === 'BSE' ? 'BSE' : 'NSE';
+    const tvSymbol = `${exchange}:${symbol}`;
+    const nseUrl   = `https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}`;
 
     // Render the container HTML first; chart is drawn after DOM is ready
     setTimeout(() => _drawLightweightChart(trade, symbol, m, cmp), 80);
@@ -605,8 +611,8 @@ const positionsModule = (() => {
           <span style="font-size:11px;color:#ef4444;">━ Stop ₹${calc.formatNumber(m.currentStop)}</span>
           <span style="font-size:11px;color:#f59e0b;">━ CMP ₹${calc.formatNumber(cmp)}</span>
           <div style="margin-left:auto;display:flex;gap:6px;">
-            <a href="https://www.tradingview.com/chart/?symbol=NSE:${symbol}" target="_blank" class="btn btn-secondary btn-sm">🔗 TradingView</a>
-            <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE</a>
+            <a href="https://www.tradingview.com/chart/?symbol=${tvSymbol}" target="_blank" class="btn btn-secondary btn-sm">🔗 TradingView (${exchange})</a>
+            <a href="${nseUrl}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE</a>
           </div>
         </div>
       </div>`;
@@ -638,15 +644,21 @@ const positionsModule = (() => {
       wickDownColor:  '#ef4444',
     });
 
-    // Fetch OHLC data from Supabase Edge Function — 2 years
-    try {
-      const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
-      const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
-      const ticker = `${encodeURIComponent(symbol)}.NS`;
+    // Fetch OHLC data — try NSE (.NS) first, fallback to BSE (.BO)
+    const tryFetch = async (suffix) => {
+      const ticker = `${encodeURIComponent(symbol)}${suffix}`;
       const url    = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=2y`;
       const resp   = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
       const data   = await resp.json();
-      const result = data?.chart?.result?.[0];
+      return data?.chart?.result?.[0] || null;
+    };
+
+    try {
+      let result = await tryFetch('.NS');
+      if (!result) {
+        if (statusEl) statusEl.textContent = '⏳ NSE data empty — trying BSE...';
+        result = await tryFetch('.BO');
+      }
 
       if (result) {
         const timestamps = result.timestamp;
@@ -994,6 +1006,9 @@ const positionsModule = (() => {
       <div class="form-group"><label class="form-label">Direction</label>
         <select class="form-select" id="nt-direction"><option>Long</option><option>Short</option></select>
       </div>
+      <div class="form-group"><label class="form-label">Exchange</label>
+        <select class="form-select" id="nt-exchange"><option value="NSE" selected>NSE</option><option value="BSE">BSE</option></select>
+      </div>
       <div class="form-group"><label class="form-label">Playbook</label>
         <select class="form-select" id="nt-playbook">
           <option value="">— None —</option>
@@ -1023,17 +1038,18 @@ const positionsModule = (() => {
         const rpt       = parseFloat(document.getElementById('nt-rpt').value) || Math.abs((price - stop) * qty) || defRPT;
         const charges   = parseFloat(document.getElementById('nt-charges').value) || 0;
         const cmp       = parseFloat(document.getElementById('nt-cmp').value) || price;
+        const exchange   = document.getElementById('nt-exchange')?.value || 'NSE';
         if (!symbol || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
         const pb = playbookId ? await db.getPlaybookById(playbookId) : null;
         const trade = {
-          id: db.generateId('tr'), symbol, sector, tradeType, direction,
+          id: db.generateId('tr'), symbol, sector, tradeType, direction, exchange,
           playbookId, playbookVersion: playbookId ? pb?.currentVersion || '1.0' : '',
           initialStop: stop, currentStop: stop, rpt,
           entries: [{ id: db.generateId('en'), date, price, qty, charges, notes:'' }],
           pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource:'Manual', notes:'Initial stop' }],
           partialExits: [], finalExit: null, notes: [], alerts: [],
           ruleFollowed: true, reviewStatus: 'Pending', rating: 0,
-          chartLink: `https://www.tradingview.com/chart/?symbol=NSE:${symbol}`, tags: [sector],
+          chartLink: `https://www.tradingview.com/chart/?symbol=${exchange}:${symbol}`, tags: [sector],
           cmp, createdAt: date, closedAt: null
         };
         await db.saveTrade(trade);
