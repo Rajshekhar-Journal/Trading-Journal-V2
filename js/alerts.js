@@ -49,12 +49,14 @@ const alertEngine = (() => {
   }
 
   // Phase 2: async — receives openTrades array, settings, and historical ohlc map
-  async function checkAllAlerts(openTrades, settings, ohlcMap = {}) {
-    if (!settings) settings = await db.getSettings();
-    const alertConfig = settings.alerts || {};
+  async function checkAllAlerts(trades, customSettings = null, customOhlcMap = null, isEndOfDay = false) {
+    if (!trades || !trades.length) return false;
+    const settings = customSettings || await db.getSettings();
+    const alertConfig = settings?.alerts || {};
+    const ohlcMap = customOhlcMap || {};
     const updated = [];
 
-    for (const trade of openTrades) {
+    for (const trade of trades) {
       const alerts = [...(trade.alerts || [])];
       const m = calc.getTradeMetrics(trade);
       const dirty = { changed: false };
@@ -146,7 +148,7 @@ const alertEngine = (() => {
 
       // Priority 1: Stop Loss Breach overrides EVERYTHING
       if (isStopBreached) {
-         const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty);
+         const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty, isEndOfDay);
          if (wasNew) _sendTelegram(settings, trade.symbol, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`);
          activeDynamicAlert = null; // Suppress all dynamic exit phases
       } else {
@@ -165,7 +167,7 @@ const alertEngine = (() => {
 
       // Upsert the single winning dynamic alert (if any)
       if (activeDynamicAlert) {
-         const wasNew = _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty);
+         const wasNew = _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty, isEndOfDay);
          if (wasNew) _sendTelegram(settings, trade.symbol, activeDynamicAlert, dynamicAlertMessage);
       }
 
@@ -179,7 +181,7 @@ const alertEngine = (() => {
     return updated;
   }
 
-  function _upsertAlert(alerts, type, message, dirty) {
+  function _upsertAlert(alerts, type, message, dirty, isEndOfDay) {
     const existing = alerts.find(a => a.type === type);
     const today = new Date().toISOString().split('T')[0];
 
@@ -189,7 +191,8 @@ const alertEngine = (() => {
         status: ALERT_STATUS.TRIGGERED, 
         message, 
         triggeredAt: new Date().toISOString(),
-        lastNotifiedDate: today
+        lastNotifiedDate: today,
+        lastEodDate: isEndOfDay ? today : null
       });
       dirty.changed = true;
       return true;
@@ -201,9 +204,10 @@ const alertEngine = (() => {
       
       let shouldNotify = false;
       
-      // Rule B: End of day update (Calendar day changed)
-      if (existing.lastNotifiedDate !== today) {
+      // Rule B: End of day update (4:00 PM final fetch)
+      if (isEndOfDay && existing.lastEodDate !== today) {
          shouldNotify = true;
+         existing.lastEodDate = today;
       } else {
          // Rule C: Intraday 1% move on any price mentioned in the alert
          const oldPrices = (oldMsg.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));

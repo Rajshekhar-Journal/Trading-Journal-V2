@@ -55,7 +55,36 @@ const positionsModule = (() => {
     _cmpRefreshTimer = setInterval(_autoRefreshAllCmps, 3 * 60 * 1000);
   }
 
-  async function _autoRefreshAllCmps() {
+  async function _autoRefreshAllCmps(isManual = false) {
+    const settings = await db.getSettings();
+    const holidaysStr = settings?.marketHolidays || '';
+    
+    if (!isManual) {
+      // Calculate IST time
+      const now = new Date();
+      const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      const day = istTime.getDay(); // 0 = Sunday, 1 = Monday... 6 = Saturday
+      const isWeekday = day >= 1 && day <= 5;
+      
+      const timeFloat = istTime.getHours() + (istTime.getMinutes() / 60);
+      const isMarketHours = timeFloat >= 8.75 && timeFloat <= 16.05; // 8:45 AM to 4:03 PM
+      
+      const todayStr = String(istTime.getDate()).padStart(2, '0') + '-' + String(istTime.getMonth() + 1).padStart(2, '0') + '-' + istTime.getFullYear();
+      const isHoliday = holidaysStr.includes(todayStr);
+
+      if (!isWeekday || !isMarketHours || isHoliday) {
+         return; // Skip background processing outside market hours or on holidays
+      }
+    }
+    
+    // Determine End Of Day for Telegram Rule B
+    let isEndOfDay = false;
+    if (!isManual) {
+       const istTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+       const timeFloat = istTime.getHours() + (istTime.getMinutes() / 60);
+       if (timeFloat >= 15.95 && timeFloat <= 16.05) isEndOfDay = true;
+    }
+
     const openTrades = await db.getOpenTrades();
     if (!openTrades.length) return;
     let updated = false;
@@ -78,7 +107,7 @@ const positionsModule = (() => {
 
     // Re-fetch trades in case cmp was updated, then run advanced alert engine
     const currentTrades = await db.getOpenTrades();
-    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, null, ohlcMap);
+    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, settings, ohlcMap, isEndOfDay);
     if (alertsUpdated?.length) updated = true;
 
     // Refresh UI if necessary
@@ -1091,5 +1120,5 @@ const positionsModule = (() => {
     await init();
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _deleteTrade };
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _deleteTrade, forceRefresh: () => _autoRefreshAllCmps(true) };
 })();
