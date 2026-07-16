@@ -361,33 +361,49 @@ const dashboardModule = (() => {
       return 'badge-info';
     }
 
-    tbody.innerHTML = alerts.map((alert, idx) => `
-      <tr>
-        <td>
-          <strong style="color:#1a1f36;">${alert.symbol}</strong>
-          ${alert.entryDate
-            ? `<div style="font-size:11px;color:#94a3b8;">${calc.formatDate(alert.entryDate)}</div>`
-            : ''}
-        </td>
-        <td><span class="badge ${_severity(alert.type)}">${alert.type}</span></td>
-        <td class="text-right">
-          <button
-            class="btn btn-secondary btn-sm"
-            style="font-size:11px;"
-            data-alert-idx="${idx}"
-          >Dismiss</button>
-        </td>
-      </tr>
-    `).join('');
+    const phaseColors = {
+      'Stop Loss Breach':               { icon: '🚨', color: '#f85149', label: 'STOP BREACH' },
+      'Dynamic Exit: Trend Broken':     { icon: '⚠️', color: '#ff9500', label: 'TREND BROKEN' },
+      'Dynamic Exit: Phase 3 (5 ATR)':  { icon: '🟣', color: '#bf91f3', label: 'PHASE 3 (5×ATR)' },
+      'Dynamic Exit: Phase 2 (3 ATR)':  { icon: '🟠', color: '#ffa657', label: 'PHASE 2 (3×ATR)' },
+      'Dynamic Exit: Phase 1 (2R)':     { icon: '🟢', color: '#3fb950', label: 'PHASE 1 (2R)' },
+      'Day-5 Exit Due':                 { icon: '📅', color: '#8b949e', label: 'DAY-5 EXIT' },
+    };
 
-    // Attach dismiss handlers separately to avoid inline eval
+    tbody.innerHTML = alerts.map((alert, idx) => {
+      const cfg = phaseColors[alert.type] || { icon: '🔔', color: '#8b949e', label: alert.type };
+      const msgPreview = (alert.message || '').slice(0, 120) + ((alert.message || '').length > 120 ? '...' : '');
+      return `
+      <tr>
+        <td style="padding:10px 8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:14px">${cfg.icon}</span>
+            <strong style="color:var(--text);">${alert.symbol}</strong>
+            <span style="font-size:11px;font-weight:600;color:${cfg.color};padding:2px 7px;border-radius:10px;background:${cfg.color}22;">${cfg.label}</span>
+          </div>
+        </td>
+        <td style="padding:10px 8px;font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;max-width:320px;">${msgPreview}</td>
+        <td style="padding:10px 8px;white-space:nowrap;">
+          <button data-alert-idx="${idx}" data-action="done" style="padding:4px 10px;font-size:11px;font-weight:600;background:#238636;color:white;border:none;border-radius:5px;cursor:pointer;margin-right:4px;">✓ Done</button>
+          <button data-alert-idx="${idx}" data-action="dismiss" style="padding:4px 10px;font-size:11px;color:var(--text-muted);background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;">Dismiss</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    // Attach handlers
     tbody.querySelectorAll('[data-alert-idx]').forEach(btn => {
       const idx   = parseInt(btn.dataset.alertIdx, 10);
       const alert = alerts[idx];
+      const action = btn.dataset.action;
       if (!alert) return;
-      btn.addEventListener('click', () => {
-        alertEngine.dismissAlert(alert.tradeId, alert.type);
-        app.toast(`Alert dismissed for ${alert.symbol}`, 'info');
+      btn.addEventListener('click', async () => {
+        if (action === 'done') {
+          await alertEngine.completeAlert(alert.tradeId, alert.type);
+          app.toast(`✓ Alert marked done for ${alert.symbol}`, 'success');
+        } else {
+          await alertEngine.dismissAlert(alert.tradeId, alert.type);
+          app.toast(`Alert dismissed for ${alert.symbol}`, 'info');
+        }
         dashboardModule.init();
       });
     });

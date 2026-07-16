@@ -249,7 +249,35 @@ const positionsModule = (() => {
     const unrealR   = m.initialRPT > 0 ? (unrealPnl / m.initialRPT) : 0;
     const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
-    const alertHtml = alerts.map(a => `<div class="alert-banner warning" style="display:flex;flex-direction:column;align-items:flex-start"><strong>⚠ ${a.type}</strong><span style="font-size:12px;margin-top:4px">${a.message || ''}</span></div>`).join('');
+    
+    const phaseColors = {
+      'Stop Loss Breach':           { icon: '🚨', color: '#f85149', label: 'STOP LOSS BREACH' },
+      'Dynamic Exit: Trend Broken': { icon: '⚠️', color: '#ff9500', label: 'TREND BROKEN — EXIT RUNNER' },
+      'Dynamic Exit: Phase 3 (5 ATR)': { icon: '🟣', color: '#bf91f3', label: 'PHASE 3 — 5×ATR HIT' },
+      'Dynamic Exit: Phase 2 (3 ATR)': { icon: '🟠', color: '#ffa657', label: 'PHASE 2 — 3×ATR HIT' },
+      'Dynamic Exit: Phase 1 (2R)':    { icon: '🟢', color: '#3fb950', label: 'PHASE 1 — 2R HIT' },
+      'Day-5 Exit Due':                { icon: '📅', color: '#8b949e', label: 'DAY-5 EXIT DUE' },
+    };
+
+    const alertHtml = alerts.map(a => {
+      const cfg = phaseColors[a.type] || { icon: '🔔', color: '#8b949e', label: a.type };
+      const triggered = a.triggeredAt ? new Date(a.triggeredAt).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+      return `
+        <div style="border:1px solid ${cfg.color}44;border-left:4px solid ${cfg.color};background:${cfg.color}11;border-radius:10px;padding:14px 16px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:16px">${cfg.icon}</span>
+              <span style="font-weight:700;font-size:13px;color:${cfg.color};letter-spacing:0.3px">${cfg.label}</span>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted)">${triggered}</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);line-height:1.6;background:rgba(0,0,0,0.2);border-radius:6px;padding:10px 12px;margin-bottom:10px;white-space:pre-wrap;">${a.message || ''}</div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="alertEngine.completeAlert('${tradeId}','${a.type}').then(()=>positionsModule._onRowClick('${tradeId}'))" style="padding:5px 12px;font-size:12px;font-weight:600;background:#238636;color:white;border:none;border-radius:6px;cursor:pointer;">✓ Done (GTT Set)</button>
+            <button onclick="alertEngine.dismissAlert('${tradeId}','${a.type}').then(()=>positionsModule._onRowClick('${tradeId}'))" style="padding:5px 12px;font-size:12px;color:var(--text-muted);background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;">Dismiss</button>
+          </div>
+        </div>`;
+    }).join('');
     const playbook  = await db.getPlaybookById(trade.playbookId);
 
     panel.innerHTML = `
