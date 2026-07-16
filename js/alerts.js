@@ -17,6 +17,11 @@ const alertEngine = (() => {
 
   // ── Technical Indicator Math ───────────────────────────────────────────────
   
+  function _roundTick(price) {
+    if (!price) return '0.00';
+    return (Math.round(price * 20) / 20).toFixed(2);
+  }
+
   function calculateEMA(closes, period) {
     if (!closes || closes.length < period) return null;
     const k = 2 / (period + 1);
@@ -103,7 +108,7 @@ const alertEngine = (() => {
             // Priority 2.0: Trend Broken (Exit Runner)
             if (ema10 && cmp < ema10 && cmp >= target3ATR) {
                activeDynamicAlert = ALERT_TYPES.TREND_BROKEN;
-               dynamicAlertMessage = `CMP < EMA10 (₹${ema10.toFixed(2)}). Sell remaining runner position (${openQty} Qty).`;
+               dynamicAlertMessage = `CMP < EMA10 (₹${_roundTick(ema10)}). Sell remaining runner position (${openQty} Qty).`;
             }
             // Priority 2.1: Phase 3 (5x ATR)
             else if (cmp >= target5ATR) {
@@ -112,8 +117,8 @@ const alertEngine = (() => {
                const trancheQty = openQty - coreQty;
                
                const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${ema10.toFixed(2)} (EMA10). Trail ${trancheQty} Qty aggressively at Prev Low (₹${trancheGtt.toFixed(2)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(ema10)} (EMA10). Trail ${trancheQty} Qty aggressively at Prev Low (₹${_roundTick(trancheGtt)})`;
+               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${_roundTick(atr14/2)})`;
                dynamicAlertMessage = instruction;
             } 
             // Priority 2.2: Phase 2 (3x ATR)
@@ -123,8 +128,8 @@ const alertEngine = (() => {
                const trancheQty = openQty - coreQty;
                
                const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${ema10.toFixed(2)} (EMA10). Trail ${trancheQty} Qty at Prev Low (₹${trancheGtt.toFixed(2)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(ema10)} (EMA10). Trail ${trancheQty} Qty at Prev Low (₹${_roundTick(trancheGtt)})`;
+               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${_roundTick(atr14/2)})`;
                dynamicAlertMessage = instruction;
             }
             // Priority 2.3: Phase 1 (2R)
@@ -135,7 +140,7 @@ const alertEngine = (() => {
                
                const coreGtt = Math.max(entry, ema20);
                const trancheGtt = Math.max(target2R * 0.98, prevLow, coreGtt); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${coreGtt.toFixed(2)} [MAX(Breakeven, EMA20)]. Trail ${trancheQty} Qty at ₹${trancheGtt.toFixed(2)} [MAX(2R-2%, PrevLow)].`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(coreGtt)} [MAX(Breakeven, EMA20)]. Trail ${trancheQty} Qty at ₹${_roundTick(trancheGtt)} [MAX(2R-2%, PrevLow)].`;
                dynamicAlertMessage = instruction;
             }
           }
