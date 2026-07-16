@@ -89,7 +89,11 @@ const alertEngine = (() => {
           const entry = m.avgEntryPrice;
           const risk = Math.abs(entry - trade.initialStop);
           
-          if (risk > 0 && atr14 > 0) {
+          const initialSize = (trade.entries || []).reduce((sum, e) => sum + Number(e.qty || 0), 0);
+          const exitedSize = (trade.partialExits || []).reduce((sum, e) => sum + Number(e.qty || 0), 0);
+          const openQty = initialSize - exitedSize;
+          
+          if (risk > 0 && atr14 > 0 && openQty > 0) {
             const target2R = entry + (2 * risk);
             const target3ATR = entry + (3 * atr14);
             const target5ATR = entry + (5 * atr14);
@@ -97,30 +101,39 @@ const alertEngine = (() => {
             // Priority 2.0: Trend Broken (Exit Runner)
             if (ema10 && cmp < ema10 && cmp >= target3ATR) {
                activeDynamicAlert = ALERT_TYPES.TREND_BROKEN;
-               dynamicAlertMessage = `CMP < EMA10 (₹${ema10.toFixed(2)}). Sell remaining runner position.`;
+               dynamicAlertMessage = `CMP < EMA10 (₹${ema10.toFixed(2)}). Sell remaining runner position (${openQty} Qty).`;
             }
             // Priority 2.1: Phase 3 (5x ATR)
             else if (cmp >= target5ATR) {
                activeDynamicAlert = ALERT_TYPES.PHASE3;
+               const coreQty = Math.floor(initialSize * 0.40);
+               const trancheQty = openQty - coreQty;
+               
                const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Trail 20% at ₹${ema10.toFixed(2)} (EMA10). Trail 40% aggressively at Prev Low (₹${trancheGtt.toFixed(2)})`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${ema10.toFixed(2)} (EMA10). Trail ${trancheQty} Qty aggressively at Prev Low (₹${trancheGtt.toFixed(2)})`;
                if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
                dynamicAlertMessage = instruction;
             } 
             // Priority 2.2: Phase 2 (3x ATR)
             else if (cmp >= target3ATR) {
                activeDynamicAlert = ALERT_TYPES.PHASE2;
+               const coreQty = Math.floor(initialSize * 0.60);
+               const trancheQty = openQty - coreQty;
+               
                const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Trail 60% at ₹${ema10.toFixed(2)} (EMA10). Trail 20% (or 40%) at Prev Low (₹${trancheGtt.toFixed(2)})`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${ema10.toFixed(2)} (EMA10). Trail ${trancheQty} Qty at Prev Low (₹${trancheGtt.toFixed(2)})`;
                if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${(atr14/2).toFixed(2)})`;
                dynamicAlertMessage = instruction;
             }
             // Priority 2.3: Phase 1 (2R)
             else if (cmp >= target2R) {
                activeDynamicAlert = ALERT_TYPES.PHASE1;
+               const coreQty = Math.floor(initialSize * 0.80);
+               const trancheQty = openQty - coreQty;
+               
                const coreGtt = Math.max(entry, ema20);
                const trancheGtt = Math.max(target2R * 0.98, prevLow, coreGtt); // bound by core stop
-               let instruction = `Trail 80% at ₹${coreGtt.toFixed(2)} [MAX(Breakeven, EMA20)]. Trail 20% at ₹${trancheGtt.toFixed(2)} [MAX(2R-2%, PrevLow)].`;
+               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${coreGtt.toFixed(2)} [MAX(Breakeven, EMA20)]. Trail ${trancheQty} Qty at ₹${trancheGtt.toFixed(2)} [MAX(2R-2%, PrevLow)].`;
                dynamicAlertMessage = instruction;
             }
           }
@@ -133,7 +146,8 @@ const alertEngine = (() => {
 
       // Priority 1: Stop Loss Breach overrides EVERYTHING
       if (isStopBreached) {
-         _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty);
+         const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty);
+         if (wasNew) _sendTelegram(settings, trade.symbol, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`);
          activeDynamicAlert = null; // Suppress all dynamic exit phases
       } else {
          const stopIdx = alerts.findIndex(a => a.type === ALERT_TYPES.STOP_BREACH);
@@ -151,7 +165,8 @@ const alertEngine = (() => {
 
       // Upsert the single winning dynamic alert (if any)
       if (activeDynamicAlert) {
-         _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty);
+         const wasNew = _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty);
+         if (wasNew) _sendTelegram(settings, trade.symbol, activeDynamicAlert, dynamicAlertMessage);
       }
 
       if (dirty.changed) {
@@ -169,12 +184,34 @@ const alertEngine = (() => {
     if (!existing) {
       alerts.push({ type, status: ALERT_STATUS.TRIGGERED, message, triggeredAt: new Date().toISOString() });
       dirty.changed = true;
+      return true;
     } else if (existing.status === ALERT_STATUS.PENDING || existing.message !== message) {
       existing.status = ALERT_STATUS.TRIGGERED;
       existing.message = message;
       existing.triggeredAt = new Date().toISOString();
       dirty.changed = true;
+      return true;
     }
+    return false;
+  }
+
+  async function _sendTelegram(settings, symbol, phase, instruction) {
+     if (!settings.telegramBotToken || !settings.telegramChatId) return;
+     try {
+       const url = `https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`;
+       const text = `🚨 *DYNAMIC EXIT ALERT* 🚨\n\n*Symbol:* ${symbol}\n*Phase:* ${phase}\n\n*Action Required:*\n${instruction}`;
+       await fetch(url, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           chat_id: settings.telegramChatId,
+           text: text,
+           parse_mode: 'Markdown'
+         })
+       });
+     } catch (e) {
+       console.error('Failed to send Telegram alert', e);
+     }
   }
 
   function getActiveAlerts(trades) {

@@ -468,6 +468,20 @@ const settingsModule = (() => {
       <div class="form-group">
         <input class="form-input" type="text" id="al-holidays" value="${settings.marketHolidays || ''}" placeholder="e.g. 26-01-2026, 15-08-2026, 02-10-2026">
       </div>
+      
+      <div class="settings-section-header" style="margin-top:24px;">Telegram Integration (Dynamic Exits)</div>
+      <div class="settings-grid">
+        <div class="form-group">
+          <label class="form-label">Telegram Bot Token</label>
+          <input type="password" class="form-input" id="al-telegram-token" value="${settings?.telegramBotToken || ''}" placeholder="e.g. 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Get this from @BotFather on Telegram.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Telegram Chat ID</label>
+          <input type="text" class="form-input" id="al-telegram-chat" value="${settings?.telegramChatId || ''}" placeholder="e.g. 123456789">
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Get this from @userinfobot or similar.</div>
+        </div>
+      </div>
 
       ${_saveBtn('saveAlerts')}
     </div>`;
@@ -481,10 +495,12 @@ const settingsModule = (() => {
       settings.alerts[id] = { enabled: document.getElementById(`al-${id}-on`)?.checked ?? true, severity: document.getElementById(`al-${id}-sev`)?.value || 'Warning', dashboard: document.getElementById(`al-${id}-dash`)?.checked ?? true, popup: document.getElementById(`al-${id}-pop`)?.checked ?? true };
     });
     settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
+    settings.telegramBotToken = document.getElementById('al-telegram-token')?.value || '';
+    settings.telegramChatId = document.getElementById('al-telegram-chat')?.value || '';
     
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Alert settings & holidays saved', 'success');
+    app.toast('Alert settings & Telegram config saved', 'success');
   }
 
   // ── PAGE: Data Management ──────────────────────────────────────────────────
