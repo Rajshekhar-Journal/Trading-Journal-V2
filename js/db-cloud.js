@@ -59,8 +59,19 @@ const db = (() => {
   async function saveTrade(trade) {
     const uid = _uid();
     const row = _tradeToRow(trade, uid);
-    const { error } = await _sb().from('trades').upsert(row, { onConflict: 'id' });
-    if (error) { console.error('saveTrade:', error); return; }
+
+    // Extended fields (require migration 002)
+    const extendedFields = ['sector','exchange','current_stop','rpt','chart_link','playbook_version','closed_at'];
+
+    // Try full row first (works after migration 002)
+    let { error } = await _sb().from('trades').upsert(row, { onConflict: 'id' });
+    if (error) {
+      // Fall back to core columns only (original 001 schema)
+      console.warn('saveTrade extended failed, using core payload:', error.message);
+      const coreRow = Object.fromEntries(Object.entries(row).filter(([k]) => !extendedFields.includes(k)));
+      const res = await _sb().from('trades').upsert(coreRow, { onConflict: 'id' });
+      if (res.error) { console.error('saveTrade core also failed:', res.error); return; }
+    }
     _notifyChange('trades');
   }
 
@@ -284,27 +295,42 @@ const db = (() => {
 
   async function savePlaybook(pb) {
     const uid = _uid();
-    const { error } = await _sb().from('playbooks').upsert({
-      id:                  pb.id || _generateId('pb'),
-      user_id:             uid,
-      name:                pb.name,
-      version:             pb.version || '1.0',
-      status:              pb.status  || 'Draft',
-      category:            pb.category            || null,
-      description:         pb.description         || null,
-      objective:           pb.objective           || null,
-      market_type:         pb.marketType          || null,
-      suitable_trend:      pb.suitableTrend       || null,
-      risk_category:       pb.riskCategory        || null,
-      ideal_holding_period: pb.idealHoldingPeriod || null,
-      entry_rules:         pb.entryRules     || pb.entry_rules     || [],
-      exit_rules:          pb.exitRules      || pb.exit_rules      || [],
-      risk_rules:          pb.riskRules      || pb.risk_rules      || [],
-      checklist:           pb.checklist      || [],
-      version_history:     pb.versionHistory || pb.version_history || [],
-      updated_at:          new Date().toISOString(),
-    }, { onConflict: 'id' });
-    if (error) { console.error('savePlaybook:', error); return; }
+    const id = pb.id || _generateId('pb');
+
+    // Core payload — always works (matches 001_initial_schema.sql)
+    const corePayload = {
+      id,
+      user_id:         uid,
+      name:            pb.name,
+      version:         pb.version || pb.currentVersion || '1.0',
+      status:          pb.status  || 'Draft',
+      category:        pb.category        || null,
+      description:     pb.description     || null,
+      entry_rules:     pb.entryRules  || pb.entry_rules  || [],
+      exit_rules:      pb.exitRules   || pb.exit_rules   || [],
+      risk_rules:      pb.riskRules   || pb.risk_rules   || [],
+      checklist:       pb.checklist   || [],
+      version_history: pb.versionHistory || pb.version_history || [],
+      updated_at:      new Date().toISOString(),
+    };
+
+    // Extended payload — works after migration 002
+    const extendedPayload = {
+      ...corePayload,
+      objective:            pb.objective           || null,
+      market_type:          pb.marketType          || null,
+      suitable_trend:       pb.suitableTrend       || null,
+      risk_category:        pb.riskCategory        || null,
+      ideal_holding_period: pb.idealHoldingPeriod  || null,
+    };
+
+    // Try extended first, fall back to core if columns don't exist yet
+    let { error } = await _sb().from('playbooks').upsert(extendedPayload, { onConflict: 'id' });
+    if (error) {
+      console.warn('savePlaybook extended failed, trying core payload:', error.message);
+      const res = await _sb().from('playbooks').upsert(corePayload, { onConflict: 'id' });
+      if (res.error) { console.error('savePlaybook core also failed:', res.error); return; }
+    }
     _notifyChange('playbooks');
   }
 
