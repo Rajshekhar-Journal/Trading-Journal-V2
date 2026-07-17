@@ -128,7 +128,11 @@ const app = (() => {
       </div>`;
     openModal('Update Market Health', content, [
       { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: closeModal },
-      { id: 'save', label: 'Save', class: 'btn-primary', onClick: async () => {
+      { id: 'auto', label: 'Auto Fetch (Nifty 500)', class: 'btn-success', onClick: async () => {
+        closeModal();
+        await updateMarketHealthAuto();
+      }},
+      { id: 'save', label: 'Save Manual', class: 'btn-primary', onClick: async () => {
         const trend = document.getElementById('mh-trend').value;
         const breadthValue = parseFloat(document.getElementById('mh-breadth').value) || 0;
         let breadthClassification, guidance;
@@ -138,7 +142,7 @@ const app = (() => {
         else { breadthClassification = 'Strong'; guidance = 'Breakouts Favoured'; }
         await db.saveMarketHealth({ trend, breadthValue, breadthClassification, guidance });
         closeModal();
-        toast('Market Health updated', 'success');
+        toast('Market Health updated manually', 'success');
         if (_currentModule === 'dashboard') dashboardModule.init();
       }}
     ]);
@@ -154,10 +158,35 @@ const app = (() => {
     });
   }
 
+  async function updateMarketHealthAuto() {
+    toast('Fetching Nifty 500 data (takes ~5s)...', 'info');
+    try {
+      const res = await fetch('https://zopskuwqlbteyiypwnid.supabase.co/functions/v1/market-health', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText);
+      }
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      // Save to local db
+      await db.saveMarketHealth(data);
+      toast('Automated Market Health sync complete!', 'success');
+      
+      if (_currentModule === 'dashboard') dashboardModule.init();
+    } catch (e) {
+      console.error(e);
+      toast('Auto Fetch failed: ' + e.message, 'error');
+    }
+  }
+
   function getCurrentModule() { return _currentModule; }
   function refreshCurrentModule() { navigate(_currentModule); }
 
-  return { init, navigate, toast, openModal, closeModal, showMarketHealthModal, getCurrentModule, refreshCurrentModule };
+  return { init, navigate, toast, openModal, closeModal, showMarketHealthModal, updateMarketHealthAuto, getCurrentModule, refreshCurrentModule };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());
