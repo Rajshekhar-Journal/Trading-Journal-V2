@@ -188,6 +188,14 @@ const positionsModule = (() => {
       tbody.innerHTML = `<tr><td colspan="14"><div class="no-data"><div class="no-data-icon">📭</div>No open positions. Click "+ New Trade" to add one.</div></td></tr>`;
       return;
     }
+
+    // Sort: most recent entry date first; tie-break by createdAt
+    openTrades.sort((a, b) => {
+      const da = a.entries?.[0]?.date || a.createdAt || '';
+      const db_ = b.entries?.[0]?.date || b.createdAt || '';
+      return db_.localeCompare(da);
+    });
+
     tbody.innerHTML = openTrades.map(trade => {
       const m         = calc.getTradeMetrics(trade);
       const cmp       = trade.cmp || m.avgEntryPrice;

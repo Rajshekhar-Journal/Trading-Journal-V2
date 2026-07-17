@@ -394,8 +394,25 @@ const playbookModule = (() => {
           const objective = document.getElementById('np-objective')?.value.trim();
           if (!name) { app.toast('Enter a playbook name', 'error'); return; }
           const today = new Date().toISOString().split('T')[0];
-          const pb = { id: db.generateId('pb'), name, currentVersion: '1.0', status: 'Draft', category, createdAt: today,
-            versions: [{ version: '1.0', status: 'Draft', createdAt: today, objective, description: '', marketType: '', suitableTrend: 'Uptrend', riskCategory: 'Medium', idealHoldingPeriod: '', entryRules: [], exitRules: { day5Rule: true, atrExtension: true, ema20Exit: true, customRules: [] }, riskRules: { maxInitialRisk: 1, maxPyramid: 1, portfolioHeatGuideline: 4 }, checklist: [], improvements: '' }]
+          const pb = {
+            id: db.generateId('pb'),
+            name,
+            version: '1.0',
+            currentVersion: '1.0',
+            status: 'Draft',
+            category,
+            objective,
+            description: '',
+            marketType: '',
+            suitableTrend: 'Uptrend',
+            riskCategory: 'Medium',
+            idealHoldingPeriod: '',
+            entryRules: [],
+            exitRules: { day5Rule: true, atrExtension: true, ema20Exit: true, customRules: [] },
+            riskRules: { maxInitialRisk: 1, maxPyramid: 1, portfolioHeatGuideline: 4 },
+            checklist: [],
+            versionHistory: [],
+            createdAt: today,
           };
           await db.savePlaybook(pb);
           app.closeModal();
