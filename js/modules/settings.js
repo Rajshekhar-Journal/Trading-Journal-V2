@@ -101,6 +101,32 @@ const settingsModule = (() => {
           <select class="form-select" id="s-defrange">${['YTD','Monthly','Quarterly','All'].map(r => `<option ${s.defaultDateRange===r?'selected':''}>${r}</option>`).join('')}</select>
         </div>
       </div>
+
+      <div class="settings-section-header" style="margin-top:24px;">Market Health Thresholds</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:12px;">These control the Overbought/Oversold zones displayed in the Market Health dashboard charts.</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">RSI — Overbought Level</label>
+          <input class="form-input" type="number" id="s-mh-rsi-ob" value="${settings?.marketHealthThresholds?.rsiOB ?? 70}" min="50" max="95">
+          <span class="form-hint">Default: 70. RSI above this = Overbought signal.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">RSI — Oversold Level</label>
+          <input class="form-input" type="number" id="s-mh-rsi-os" value="${settings?.marketHealthThresholds?.rsiOS ?? 30}" min="5" max="50">
+          <span class="form-hint">Default: 30. RSI below this = Oversold signal.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Breadth % — Overbought Level</label>
+          <input class="form-input" type="number" id="s-mh-breadth-ob" value="${settings?.marketHealthThresholds?.breadthOB ?? 80}" min="50" max="100">
+          <span class="form-hint">Default: 80. When &gt;80% of Nifty 500 stocks are above their 20 EMA.</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Breadth % — Oversold Level</label>
+          <input class="form-input" type="number" id="s-mh-breadth-os" value="${settings?.marketHealthThresholds?.breadthOS ?? 25}" min="0" max="50">
+          <span class="form-hint">Default: 25. When &lt;25% of Nifty 500 stocks are above their 20 EMA.</span>
+        </div>
+      </div>
+
       ${_saveBtn('saveGeneral')}
       ${_renderUserManual()}
     </div>`;
@@ -108,7 +134,22 @@ const settingsModule = (() => {
 
   async function _saveGeneral() {
     const settings = await db.getSettings();
-    settings.general = { ...settings.general, traderName: document.getElementById('s-name')?.value, currency: document.getElementById('s-currency')?.value, timezone: document.getElementById('s-tz')?.value, dateFormat: document.getElementById('s-datefmt')?.value, fyStart: document.getElementById('s-fyr')?.value, defaultStartupModule: document.getElementById('s-startup')?.value, defaultDateRange: document.getElementById('s-defrange')?.value };
+    settings.general = { ...settings.general,
+      traderName:           document.getElementById('s-name')?.value,
+      currency:             document.getElementById('s-currency')?.value,
+      timezone:             document.getElementById('s-tz')?.value,
+      dateFormat:           document.getElementById('s-datefmt')?.value,
+      fyStart:              document.getElementById('s-fyr')?.value,
+      defaultStartupModule: document.getElementById('s-startup')?.value,
+      defaultDateRange:     document.getElementById('s-defrange')?.value,
+    };
+    // Save Market Health thresholds
+    settings.marketHealthThresholds = {
+      rsiOB:     parseInt(document.getElementById('s-mh-rsi-ob')?.value)     || 70,
+      rsiOS:     parseInt(document.getElementById('s-mh-rsi-os')?.value)     || 30,
+      breadthOB: parseInt(document.getElementById('s-mh-breadth-ob')?.value) || 80,
+      breadthOS: parseInt(document.getElementById('s-mh-breadth-os')?.value) || 25,
+    };
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('General settings saved', 'success');
