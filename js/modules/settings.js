@@ -102,6 +102,7 @@ const settingsModule = (() => {
         </div>
       </div>
       ${_saveBtn('saveGeneral')}
+      ${_renderUserManual()}
     </div>`;
   }
 
@@ -113,6 +114,206 @@ const settingsModule = (() => {
     app.toast('General settings saved', 'success');
     const name = settings.general.traderName;
     if (name) { document.getElementById('trader-name').textContent = name; document.getElementById('trader-avatar').textContent = name.charAt(0).toUpperCase(); }
+  }
+
+  // ── User Manual Accordion ───────────────────────────────────────────────────
+  function _renderUserManual() {
+    const S = (id, icon, title, body) => `
+      <div class="um-section">
+        <button class="um-toggle" onclick="settingsModule._umToggle('${id}')" id="${id}-btn">
+          <span>${icon}&nbsp; ${title}</span>
+          <span class="um-chev" id="${id}-chev">&#9658;</span>
+        </button>
+        <div class="um-body" id="${id}-body" style="display:none"><div class="um-content">${body}</div></div>
+      </div>`;
+
+    return `
+      <div style="margin-top:28px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <div style="font-size:15px;font-weight:700;color:var(--navy);">&#128218; User Manual &amp; Help</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="settingsModule._umExpandAll()">Expand All</button>
+            <button class="btn btn-secondary btn-sm" onclick="settingsModule._umCollapseAll()">Collapse All</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0 0 14px;">Complete guide to all features. Click any section to expand.</p>
+        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+
+          ${S('um1','&#128202;','Module 01 &mdash; Dashboard',`
+            <p>Your real-time command centre. Shows account health, open positions, and pending alerts at a glance.</p>
+            <h4>Current State Row</h4><ul>
+              <li><strong>Account Value:</strong> Net Deposits + Realized P&L. Shows % gain vs deposits.</li>
+              <li><strong>Portfolio Heat:</strong> Total &apos;at-risk&apos; money &divide; Equity &times; 100. Green = Safe, Yellow = Warning, Red = Max.</li>
+              <li><strong>Remaining Capacity:</strong> How much more risk you can add before hitting the heat limit.</li>
+              <li><strong>Market Health:</strong> Click &#9998; update to revise trend &amp; breadth. Click &#9432; for Market Breadth explanation.</li>
+            </ul>
+            <h4>Summary Cards</h4><p>Realized P&L, Total R, Win Rate, Avg Win/Loss R, Expectancy, Max Drawdown for the selected date period (Week/Month/Quarter/YTD/All).</p>
+            <h4>Charts</h4><ul>
+              <li><strong>Daily Net Cumulative P&L (Line):</strong> Accumulated realized P&L day by day.</li>
+              <li><strong>Risk:Reward Bubble Chart:</strong> Each bubble = one trade. Size = |R|.</li>
+            </ul>
+            <h4>Action Centre</h4><p>All active alerts shown with phase colour, GTT instruction preview, and &checkmark; Done / Dismiss buttons.</p>`)}
+
+          ${S('um2','&#128200;','Module 02 &mdash; Positions',`
+            <p>The heart of the journal. Tracks every open trade in real time with live CMP, metrics, and alert cards.</p>
+            <h4>Position Table Columns</h4><p>Symbol, Type, Entry Date, Avg Entry, CMP, Open Risk R, Exposure, Unrealized P&L (+R), Alert badge.</p>
+            <h4>Adding a New Trade</h4><ol>
+              <li>Click <strong>+ New Trade</strong>.</li>
+              <li>Fill: Symbol, Sector, Type, Direction, <strong>Exchange (NSE/BSE)</strong>, Playbook, Date, Price, Stop Loss, Qty, RPT, Charges, CMP.</li>
+              <li>CMP auto-fetched from Yahoo Finance on symbol entry. Qty auto-suggested from RPT &divide; risk.</li>
+            </ol>
+            <h4>Quick Actions in Detail Panel</h4><ul>
+              <li><strong>Partial Exit</strong> &mdash; reduce position size, record date/price/qty/charges.</li>
+              <li><strong>Final Exit</strong> &mdash; close full remaining position. Trade moves to Closed History.</li>
+              <li><strong>Pyramid</strong> &mdash; add to position. Avg Entry updates automatically.</li>
+              <li><strong>Revise Stop</strong> &mdash; update trailing stop. Full history tracked.</li>
+              <li><strong>Add Note</strong> &mdash; attach observations or reminders.</li>
+              <li><strong>Update CMP</strong> &mdash; manual or auto-fetch from Yahoo Finance.</li>
+            </ul>
+            <h4>Detail Panel Tabs</h4><ul>
+              <li><strong>Lifecycle:</strong> All entries, pyramids, partial exits, final exit in order.</li>
+              <li><strong>Stop History:</strong> Every revision with old/new stop and reason.</li>
+              <li><strong>Notes:</strong> All notes in date order.</li>
+              <li><strong>Chart:</strong> 2-year daily candlestick with entry/exit markers. NSE first, BSE fallback. TradingView link uses correct exchange prefix.</li>
+            </ul>
+            <h4>Alert Cards</h4><p>Appear at top of detail panel when engine fires. Show phase, timestamp, exact GTT instruction. Buttons: <strong>&checkmark; Done (GTT Set)</strong> and <strong>Dismiss</strong>.</p>
+            <h4>&#128260; Sync Live Data</h4><p>Top-right button. Runs live CMP fetch + alert engine immediately, bypassing all market-hours and holiday restrictions.</p>`)}
+
+          ${S('um3','&#128203;','Module 03 &mdash; Trades (Closed History)',`
+            <p>Full history of all closed trades with rich filtering and performance metrics.</p>
+            <h4>Summary Cards</h4><p>Total Trades, Win Rate, Net P&L, Net R, Expectancy, Max Drawdown for selected filters and date range.</p>
+            <h4>Closed Trades Table</h4><ul>
+              <li>Columns: Symbol, Entry, Exit, Days, Setup, P&L, R, Result, Rule Followed, Review Status.</li>
+              <li>Click column headers to sort. Filter by Result, Setup, or Symbol search box.</li>
+              <li>Click any row to open full Trade Detail Panel (lifecycle, stops, notes, chart).</li>
+            </ul>
+            <h4>Views</h4><p><strong>Metrics View:</strong> table. <strong>Chart View:</strong> P&L visual over time.</p>`)}
+
+          ${S('um4','&#128219;','Module 04 &mdash; Playbook',`
+            <p>Your personal trading strategy library. Each playbook defines a specific setup with entry/exit rules and risk parameters.</p>
+            <h4>Creating a Playbook</h4><ol><li>Click <strong>+ New Playbook</strong>.</li><li>Fill: Name, Version, Status, Category, Description, Entry Rules, Exit Rules, Risk Parameters.</li></ol>
+            <h4>Linking to a Trade</h4><p>Select the Playbook in the New Trade modal. The version at time of entry is stored permanently.</p>
+            <h4>Playbook Table Columns</h4><p>Name, Version, Status, Category, Trades, Win Rate, Avg R, Expectancy &mdash; all auto-computed from your trade history.</p>`)}
+
+          ${S('um5','&#128201;','Module 05 &mdash; Analytics (6 Tabs)',`
+            <h4>Tab 1: Performance</h4><ul>
+              <li>Summary cards: Total Trades, Win Rate, Net P&L, Net R, Expectancy, Max Drawdown, Trading Score.</li>
+              <li><strong>Cumulative P&L Chart:</strong> toggle to <strong>Cumulative Equity</strong> for account value with deposits.</li>
+              <li>Trade P&L Sequence, Drawdown Curve, Monthly P&L Heatmap, Rolling 10-Trade Win Rate.</li>
+            </ul>
+            <h4>Tab 2: Trade Analytics</h4><p>R-multiple distribution, Holding Period vs R scatter, statistical breakdown.</p>
+            <h4>Tab 3: Playbook Analytics</h4><p>Per-playbook: Win Rate, Avg Win/Loss R, Expectancy, Net R, Avg Days. Expectancy chart, Win Rate chart, <strong>Playbook vs Avg Holding Days chart</strong>.</p>
+            <h4>Tab 4: Risk Analytics</h4><p>Current Portfolio Heat, Rule Violations count, table of trades where Rule Followed = No.</p>
+            <h4>Tab 5: Discipline</h4><p>Rule-following rate, review completion %, review status breakdown.</p>
+            <h4>Tab 6: Growth Simulator</h4><p>Monte Carlo compound growth simulator using your historical expectancy and trade frequency.</p>`)}
+
+          ${S('um6','&#128176;','Module 06 &mdash; Capital Management',`
+            <h4>Summary Cards</h4><p>Starting Capital, Current Equity, Net Deposits, Current RPT, Available Cash, Drawdown (Peak), CAGR, Absolute Return.</p>
+            <h4>Equity Curve Chart</h4><p>Account value from first deposit through all transactions and realized P&L.</p>
+            <h4>Risk Config Panel</h4><p>Read-only display of Risk Mode, Current RPT, Heat %. Edit in Settings &rarr; Risk Management.</p>
+            <h4>Capital Ledger</h4><p>All Deposits, Withdrawals, Adjustments with running balance. Click <strong>+ Add Transaction</strong> to record new entries.</p>`)}
+
+          ${S('um7','&#9881;','Module 07 &mdash; Settings (8 Sub-Pages)',`
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Page</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">What you configure</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#9881; General</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trader name, currency, timezone, date format, FY start, default startup page and date range. This User Manual.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128202; Trading Defaults</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Default trade type, direction, max open positions, review status. RPT shown read-only (auto-computed from Risk Mgmt).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128737; Risk Management</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Max Portfolio Heat %, Warning Heat %, Max RPT cap, Risk Mode (Dynamic % or Fixed &#8377;). Market Breadth &rarr; RPT guidance table.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128179; Charges &amp; Brokerage</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Broker, STT, brokerage, stamp duty, GST, SEBI charges. Auto-used in trade entry/exit calculations.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128276; Alerts &amp; Notifications</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Telegram Bot Token, Chat ID, alert type toggles. Paste credentials here to receive live GTT alerts on your phone.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128452; Data Management</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Export JSON backup, import from backup, clear all data. Manage NSE market holidays for alert engine exclusions.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128241; Application</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Theme (Light/Dark), font size, local storage usage.</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:600;">&#119891; Formula Manager</td><td style="padding:6px 10px;">View all calculation formulas: Avg Entry, Risk R, Expectancy, Portfolio Heat, RPT, ATR, EMA, CAGR, etc.</td></tr>
+            </tbody></table>`)}
+
+          ${S('um8','&#128276;','Alert Engine &mdash; How It Works',`
+            <p>Runs every <strong>3 minutes</strong>, 8:45 AM&ndash;4:03 PM IST, weekdays, excluding NSE public holidays. A 4:00 PM End-of-Day fetch also runs daily.</p>
+            <h4>Priority Waterfall</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Priority</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Condition</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; current stop</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">EXIT entire position immediately.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ff9500;">&#9888; Trend Broken</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &lt; EMA10 while in &ge;3&times;ATR profit</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Sell remaining runner.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">Phase 3 (5&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 5&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 40% at EMA10, Tranche 60% at Prev Low.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">Phase 2 (3&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 3&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 60% at EMA10, Tranche 40% at Prev Low.</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:700;color:#3fb950;">Phase 1 (2R)</td><td style="padding:6px 10px;">CMP &ge; Entry + 2&times;Risk</td><td style="padding:6px 10px;">Core 80% at MAX(BE, EMA20). Tranche 20% at MAX(2R-2%, PrevLow).</td></tr>
+            </tbody></table>
+            <h4 style="margin-top:12px;">NSE Tick Size Rounding</h4>
+            <p>All GTT prices rounded to broker-compatible tick: &le;&#8377;250&rarr;0.05 | &le;&#8377;1k&rarr;0.10 | &le;&#8377;5k&rarr;0.50 | &le;&#8377;18k&rarr;1.00 | above&rarr;5.00</p>
+            <h4>Telegram Notification Rules</h4><ul>
+              <li><strong>Rule A:</strong> Instant alert on each new phase cross per day.</li>
+              <li><strong>Rule B:</strong> 4:00 PM IST final GTT summary, once daily.</li>
+              <li><strong>Rule C:</strong> Re-alert if trailing stop moves &ge;1% higher intraday.</li>
+              <li><strong>Spam Guard:</strong> No duplicate if alert type, qty, and stop price unchanged.</li>
+            </ul>`)}
+
+          ${S('um9','&#128172;','Telegram Bot Setup',`
+            <h4>Step 1 &mdash; Create Your Bot</h4><ol>
+              <li>Open Telegram &rarr; search <strong>@BotFather</strong> (blue tick) &rarr; send <code>/newbot</code>.</li>
+              <li>Enter display name (e.g., &quot;My Trading Alerts&quot;).</li>
+              <li>Enter username ending in <code>bot</code> (e.g., <code>RajTradingJournalBot</code>).</li>
+              <li>Copy the <strong>HTTP API Token</strong> provided.</li>
+            </ol>
+            <h4>Step 2 &mdash; Get Your Chat ID</h4><ol>
+              <li>Open your new bot &rarr; press <strong>Start</strong>.</li>
+              <li>Search <strong>@getmyid_bot</strong> &rarr; press Start.</li>
+              <li>Copy your numeric <strong>User ID</strong> (e.g., <code>521989682</code>).</li>
+            </ol>
+            <h4>Step 3 &mdash; Connect &amp; Test</h4><ol>
+              <li>Go to <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
+              <li>Paste Bot Token and Chat ID &rarr; Save Changes.</li>
+              <li>Go to Positions &rarr; click <strong>&#128260; Sync Live Data</strong>. If an alert condition is met, your phone will notify within seconds.</li>
+            </ol>`)}
+
+          ${S('um10','&#119891;','Key Calculations Reference',`
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Metric</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Formula</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Avg Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(Price &times; Qty) &divide; &Sigma;(Qty)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk R</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Stop) &divide; (Avg Entry &minus; Initial Stop)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Initial RPT (&#8377;)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">|Avg Entry &minus; Initial Stop| &times; Open Qty</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Unrealized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Avg Entry) &times; Open Qty &minus; Charges</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Realized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Exit &minus; Avg Entry) &times; Exited Qty &minus; Charges</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Portfolio Heat (%)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(|Entry &minus; Stop| &times; Qty) &divide; Equity &times; 100</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Expectancy (R)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(WinRate &times; AvgWinR) + ((1 &minus; WinRate) &times; AvgLossR)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">EMA (n-period)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">k = 2/(n+1); EMA = Close &times; k + EMA_prev &times; (1&minus;k)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">ATR-14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">14-day EMA of: MAX(H&minus;L, |H&minus;PrevC|, |L&minus;PrevC|)</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:600;">CAGR</td><td style="padding:6px 10px;">(Equity &divide; Starting Capital)^(1/Years) &minus; 1</td></tr>
+            </tbody></table>`)}
+
+        </div>
+      </div>
+      <style>
+        .um-section{border-bottom:1px solid var(--border-light)}.um-section:last-child{border-bottom:none}
+        .um-toggle{width:100%;display:flex;justify-content:space-between;align-items:center;padding:13px 16px;background:var(--surface);border:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);text-align:left;transition:background 0.15s}
+        .um-toggle:hover{background:var(--bg)}.um-toggle.open{background:var(--primary-light);color:var(--primary)}
+        .um-chev{font-size:11px;color:var(--text-muted);transition:transform 0.2s}.um-chev.open{transform:rotate(90deg);color:var(--primary)}
+        .um-body{background:var(--bg);border-top:1px solid var(--border-light)}
+        .um-content{padding:16px 20px;font-size:12.5px;line-height:1.7;color:var(--text)}
+        .um-content h4{font-size:11px;font-weight:700;color:var(--navy);margin:14px 0 5px;text-transform:uppercase;letter-spacing:0.5px}
+        .um-content h4:first-child{margin-top:0}.um-content p{margin:0 0 10px}
+        .um-content ul,.um-content ol{margin:0 0 10px;padding-left:20px}.um-content li{margin-bottom:4px}
+        .um-content code{background:rgba(91,106,240,0.12);color:var(--primary);padding:1px 5px;border-radius:3px;font-size:11px}
+        .um-content table td,.um-content table th{vertical-align:top}
+      </style>`;
+  }
+
+  function _umToggle(id) {
+    const body = document.getElementById(`${id}-body`);
+    const btn  = document.getElementById(`${id}-btn`);
+    const chev = document.getElementById(`${id}-chev`);
+    if (!body) return;
+    const open = body.style.display !== 'none';
+    body.style.display = open ? 'none' : 'block';
+    btn.classList.toggle('open', !open);
+    chev.classList.toggle('open', !open);
+  }
+
+  function _umExpandAll() {
+    document.querySelectorAll('.um-body').forEach(b => b.style.display='block');
+    document.querySelectorAll('.um-toggle').forEach(b => b.classList.add('open'));
+    document.querySelectorAll('.um-chev').forEach(c => c.classList.add('open'));
+  }
+
+  function _umCollapseAll() {
+    document.querySelectorAll('.um-body').forEach(b => b.style.display='none');
+    document.querySelectorAll('.um-toggle').forEach(b => b.classList.remove('open'));
+    document.querySelectorAll('.um-chev').forEach(c => c.classList.remove('open'));
   }
 
   // ── PAGE: Trading Defaults ─────────────────────────────────────────────────
@@ -708,5 +909,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange };
+  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();
