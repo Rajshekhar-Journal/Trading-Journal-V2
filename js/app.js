@@ -113,8 +113,8 @@ const app = (() => {
     const bPct    = mh.breadthPct ?? null;
     const rsiStatus  = rsiVal == null ? 'No data' : rsiVal > thr.rsiOB ? 'Overbought' : rsiVal < thr.rsiOS ? 'Oversold' : 'Neutral';
     const bStatus    = bPct  == null ? 'No data' : bPct  > thr.breadthOB ? 'Overbought' : bPct < thr.breadthOS ? 'Oversold' : 'Neutral';
-    const rsiColor   = rsiVal == null ? '#f8fafc' : rsiVal > thr.rsiOB ? '#ef4444' : rsiVal < thr.rsiOS ? '#22c55e' : '#f8fafc';
-    const bColor     = bPct  == null ? '#f8fafc' : bPct  > thr.breadthOB ? '#ef4444' : bPct  < thr.breadthOS ? '#22c55e' : '#f8fafc';
+    const rsiColor   = rsiVal == null ? 'var(--text-muted,#64748b)' : rsiVal > thr.rsiOB ? '#ef4444' : rsiVal < thr.rsiOS ? '#22c55e' : 'var(--text,#1e293b)';
+    const bColor     = bPct  == null ? 'var(--text-muted,#64748b)' : bPct  > thr.breadthOB ? '#ef4444' : bPct  < thr.breadthOS ? '#22c55e' : 'var(--text,#1e293b)';
     const trendE     = mh.trend === 'Uptrend' ? '\u{1F7E2}' : mh.trend === 'Downtrend' ? '\u{1F534}' : '\u{1F7E1}';
 
     const noRsiData     = (mh.rsiHistory?.length     ?? 0) === 0;
@@ -125,23 +125,42 @@ const app = (() => {
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Market Trend</div>
           <div style="font-size:17px;font-weight:700;">${trendE} ${mh.trend || 'Unknown'}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">EMA20 vs EMA50</div>
+          <div style="font-size:10px;color:#64748b;margin-top:3px;line-height:1.4;">
+            ${mh.trend === 'Uptrend' ? 'Price > EMA20 > EMA50' : mh.trend === 'Downtrend' ? 'Price < EMA20 < EMA50' : 'Mixed EMA signals'}
+          </div>
+          <div style="font-size:10px;margin-top:3px;font-weight:600;color:${mh.trend === 'Uptrend' ? '#22c55e' : mh.trend === 'Downtrend' ? '#ef4444' : '#f59e0b'};">
+            ${mh.trend === 'Uptrend' ? '→ Add exposure' : mh.trend === 'Downtrend' ? '→ Reduce exposure' : '→ Wait for clarity'}
+          </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Breadth</div>
           <div style="font-size:17px;font-weight:700;color:#5b6af0;">${mh.breadthClassification || 'Unknown'}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">${mh.guidance || 'Run Auto Fetch'}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">Ratio: ${mh.breadthValue ? mh.breadthValue + 'x' : '—'} (above÷below EMA20)</div>
+          <div style="font-size:10px;margin-top:3px;color:#64748b;">${mh.guidance || 'Run Auto Fetch'}</div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">RSI (14)</div>
           <div style="font-size:17px;font-weight:700;color:${rsiColor};">${rsiVal != null ? rsiVal.toFixed(1) : '—'}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">${rsiStatus}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${rsiStatus}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;line-height:1.3;">
+            ${rsiVal == null ? 'Run Auto Fetch' : rsiVal > thr.rsiOB ? 'Correction risk — avoid new longs' : rsiVal < thr.rsiOS ? 'Bounce likely — watch reversals' : 'Momentum balanced'}
+          </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Breadth %</div>
           <div style="font-size:17px;font-weight:700;color:${bColor};">${bPct != null ? bPct.toFixed(1) + '%' : '—'}</div>
-          <div style="font-size:11px;color:#64748b;margin-top:2px;">${bStatus}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">${bStatus}</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;line-height:1.3;">
+            ${bPct == null ? 'Run Auto Fetch' : bPct > thr.breadthOB ? 'Market overextended — reversal risk' : bPct < thr.breadthOS ? 'Market washed out — watch for bounce' : 'Healthy broad participation'}
+          </div>
         </div>
+      </div>
+
+      <div style="font-size:11px;color:#5b6af0;margin-bottom:14px;margin-top:-6px;">
+        <a href="#" onclick="app.closeModal();app.navigate('settings');event.preventDefault();" style="color:#5b6af0;text-decoration:none;">
+          ℹ Learn how to read these metrics →
+        </a>
+        <span style="color:#64748b;margin-left:8px;">(Settings → General → User Manual → Market Health)</span>
       </div>
 
       <div style="margin-bottom:16px;">

@@ -105,22 +105,30 @@ serve(async (req) => {
       }
     }
 
-    // Build breadth history array (sorted by date)
-    const breadthHistory = Object.entries(breadthByTs)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([ts, d]) => ({
-        date:  new Date(Number(ts) * 1000).toISOString().split('T')[0],
+    // Build breadth history — aggregate by CALENDAR DATE first to avoid
+    // duplicate-date issues caused by intra-day timestamp variation in Yahoo Finance
+    const breadthByDate = {};
+    for (const [ts, d] of Object.entries(breadthByTs)) {
+      const date = new Date(Number(ts) * 1000).toISOString().split('T')[0];
+      if (!breadthByDate[date]) breadthByDate[date] = { above: 0, total: 0 };
+      breadthByDate[date].above += d.above;
+      breadthByDate[date].total += d.total;
+    }
+
+    const breadthHistory = Object.entries(breadthByDate)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, d]) => ({
+        date,
         value: parseFloat(((d.above / d.total) * 100).toFixed(1))
       }));
 
-    const latestBreadth = breadthHistory[breadthHistory.length - 1];
-    const breadthPct    = latestBreadth?.value ?? null;
+    const latestBreadth  = breadthHistory[breadthHistory.length - 1];
+    const breadthPct     = latestBreadth?.value ?? null;
 
-    // Legacy breadthValue (above/below ratio, used in DB)
-    const latestTs = Object.keys(breadthByTs).sort((a, b) => Number(b) - Number(a))[0];
-    const latestD  = latestTs ? breadthByTs[Number(latestTs)] : null;
-    const above    = latestD?.above ?? 0;
-    const below    = latestD ? (latestD.total - latestD.above) : 0;
+    // Legacy breadthValue (above/below ratio)
+    const latestDateData = latestBreadth ? breadthByDate[latestBreadth.date] : null;
+    const above    = latestDateData?.above ?? 0;
+    const below    = latestDateData ? (latestDateData.total - latestDateData.above) : 0;
     const breadthValue = below === 0 ? 999 : parseFloat((above / below).toFixed(2));
 
     let breadthClassification, guidance;

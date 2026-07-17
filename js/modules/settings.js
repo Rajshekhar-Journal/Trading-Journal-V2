@@ -195,6 +195,50 @@ const settingsModule = (() => {
             </ul>
             <h4>Action Centre</h4><p>All active alerts shown with phase colour, GTT instruction preview, and &checkmark; Done / Dismiss buttons.</p>`)}
 
+          ${S('um-mh','&#128736;','Market Health &mdash; How to Read the Metrics',`
+            <p>The <strong>Market Health Dashboard</strong> gives you a live macro view of the Nifty 500. Open it by clicking the <strong>Market Health</strong> button in the top bar. Hit <strong>Auto Fetch</strong> to refresh all values from Yahoo Finance.</p>
+
+            <h4>&#128316; Market Trend (EMA-based)</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Signal</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Condition</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Guidance</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#22c55e;font-weight:600;">&#x1F7E2; Uptrend</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Price &gt; EMA20 &gt; EMA50</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Add exposure, buy breakouts</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#ef4444;font-weight:600;">&#x1F534; Downtrend</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Price &lt; EMA20 &lt; EMA50</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Reduce longs, tighten stops</td></tr>
+              <tr><td style="padding:5px 8px;color:#f59e0b;font-weight:600;">&#x1F7E1; Sideways</td><td style="padding:5px 8px;">Neither condition met</td><td style="padding:5px 8px;">Selective entries only, wait for clarity</td></tr>
+            </tbody></table>
+
+            <h4>&#128308; Breadth Matrix (Above/Below EMA20 Ratio)</h4>
+            <p>Counts all Nifty 500 stocks. Ratio = Stocks above EMA20 &divide; Stocks below EMA20.</p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Classification</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Ratio</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">What it means</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#22c55e;font-weight:600;">Strong</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">&ge; 1.5x</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Broad participation. Breakouts likely to follow through.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#f59e0b;font-weight:600;">Selective</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">1.0 &ndash; 1.49x</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Mixed market. Only take A-grade setups.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#ef4444;font-weight:600;">Weak</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">0.5 &ndash; 0.99x</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Sellers in control. Capital preservation mode.</td></tr>
+              <tr><td style="padding:5px 8px;color:#ef4444;font-weight:600;">Extreme Weakness</td><td style="padding:5px 8px;">&lt; 0.5x</td><td style="padding:5px 8px;">Capitulation zone. Watch for reversal setups only.</td></tr>
+            </tbody></table>
+
+            <h4>&#128200; RSI (14) &mdash; Nifty 500 Index</h4>
+            <p>Measures momentum overbought/oversold on the Nifty 500 index price. Default thresholds: OB = 70, OS = 30 (set in Settings &rarr; General).</p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Zone</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">RSI</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Interpretation</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#ef4444;font-weight:600;">&#x1F534; Overbought</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">&gt; 70</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Correction risk. Avoid adding longs, trail stops.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">&#x26AA; Neutral</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">30 &ndash; 70</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Balanced momentum. Follow trend and breadth signals.</td></tr>
+              <tr><td style="padding:5px 8px;color:#22c55e;font-weight:600;">&#x1F7E2; Oversold</td><td style="padding:5px 8px;">&lt; 30</td><td style="padding:5px 8px;">Market washed out. Watch for reversal setups.</td></tr>
+            </tbody></table>
+
+            <h4>&#128200; Breadth % &mdash; % of Nifty 500 Stocks Above 20 EMA</h4>
+            <p>A breadth extreme indicator. Default thresholds: OB = 80%, OS = 25% (set in Settings &rarr; General).</p>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Zone</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">%</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Interpretation</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);color:#ef4444;font-weight:600;">&#x1F534; Overbought</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">&gt; 80%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Market overextended. Tighten trailing stops.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">&#x26AA; Neutral</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">25% &ndash; 80%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Healthy broad participation. Normal conditions.</td></tr>
+              <tr><td style="padding:5px 8px;color:#22c55e;font-weight:600;">&#x1F7E2; Oversold</td><td style="padding:5px 8px;">&lt; 25%</td><td style="padding:5px 8px;">Mass selling. Watch for bounce / reversal setups.</td></tr>
+            </tbody></table>
+
+            <h4>Combined Signal Cheatsheet</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Trend</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">RSI</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Breadth %</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
+              <tr style="background:rgba(34,197,94,0.08);"><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Uptrend</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Neutral</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Neutral</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;color:#22c55e;">BEST &mdash; Full deployment, pursue breakouts</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Uptrend</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Overbought</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Overbought</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Trail stops, avoid new longs, take partial profits</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Sideways</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Any</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Any</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Only A+ setups, reduce position sizing</td></tr>
+              <tr style="background:rgba(239,68,68,0.08);"><td style="padding:5px 8px;">Downtrend</td><td style="padding:5px 8px;">Oversold</td><td style="padding:5px 8px;">Oversold</td><td style="padding:5px 8px;font-weight:600;color:#f59e0b;">Watch for reversal &mdash; do not add longs yet</td></tr>
+            </tbody></table>
+          `)}
+
           ${S('um2','&#128200;','Module 02 &mdash; Positions',`
             <p>The heart of the journal. Tracks every open trade in real time with live CMP, metrics, and alert cards.</p>
             <h4>Position Table Columns</h4><p>Symbol, Type, Entry Date, Avg Entry, CMP, Open Risk R, Exposure, Unrealized P&L (+R), Alert badge.</p>
