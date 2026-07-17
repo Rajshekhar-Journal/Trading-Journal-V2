@@ -161,9 +161,14 @@ const app = (() => {
   async function updateMarketHealthAuto() {
     toast('Fetching Nifty 500 data (takes ~5s)...', 'info');
     try {
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
       const res = await fetch('https://zopskuwqlbteyiypwnid.supabase.co/functions/v1/market-health', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'apikey': SUPABASE_ANON_KEY
+        }
       });
       if (!res.ok) {
         const errText = await res.text();
