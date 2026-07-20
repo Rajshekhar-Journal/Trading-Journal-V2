@@ -81,7 +81,7 @@ serve(async (req) => {
 
     for (let i = 0; i < NIFTY_500.length; i += chunkSize) {
       const chunk = NIFTY_500.slice(i, i + chunkSize);
-      const sparkUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${chunk.join(',')}&range=3mo&interval=1d`;
+      const sparkUrl = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${chunk.join(',')}&range=6mo&interval=1d`;
       const res  = await fetch(sparkUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
       const data = await res.json();
 

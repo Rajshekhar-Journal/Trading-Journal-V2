@@ -245,31 +245,63 @@ const app = (() => {
     const baseOpts = {
       layout:     { background: { color: bg }, textColor: textCol, fontSize: 11 },
       grid:       { vertLines: { color: grid }, horzLines: { color: grid } },
-      timeScale:  { borderColor: grid },
+      timeScale:  { borderColor: grid, rightOffset: 5 },
       rightPriceScale: { borderColor: grid, scaleMargins: { top: 0.1, bottom: 0.1 } },
       handleScroll: true, handleScale: true,
     };
 
+    // Default visible range: last 8 months (or all available data if shorter)
+    const today   = new Date();
+    const toDate  = today.toISOString().split('T')[0];
+    const from8   = new Date(today);
+    from8.setMonth(from8.getMonth() - 8);
+    const fromDate = from8.toISOString().split('T')[0];
+
+    let rsiChart = null, bChart = null;
+
+    // ── RSI Chart ──────────────────────────────────────────────────────────
     const rsiEl = document.getElementById('mh-rsi-chart');
     if (rsiEl && (mh.rsiHistory?.length ?? 0) > 0) {
-      const c = LightweightCharts.createChart(rsiEl, { ...baseOpts, height: 195, width: rsiEl.offsetWidth || 800 });
-      const s = c.addLineSeries({ color: '#f59e0b', lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
+      rsiChart = LightweightCharts.createChart(rsiEl, { ...baseOpts, height: 195, width: rsiEl.offsetWidth || 800 });
+      const s = rsiChart.addLineSeries({ color: '#f59e0b', lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
       s.setData(mh.rsiHistory.map(d => ({ time: d.date, value: d.value })));
       s.createPriceLine({ price: thr.rsiOB, color: '#ef4444', lineWidth: 1, lineStyle: 2, title: 'OB' });
       s.createPriceLine({ price: thr.rsiOS, color: '#22c55e', lineWidth: 1, lineStyle: 2, title: 'OS' });
-      c.timeScale().fitContent();
-      _mhCharts.push(c);
+      // Set 8-month default range
+      try { rsiChart.timeScale().setVisibleRange({ from: fromDate, to: toDate }); }
+      catch(e) { rsiChart.timeScale().fitContent(); }
+      _mhCharts.push(rsiChart);
     }
 
+    // ── Breadth % Chart ────────────────────────────────────────────────────
     const bEl = document.getElementById('mh-breadth-chart');
     if (bEl && (mh.breadthHistory?.length ?? 0) > 0) {
-      const c = LightweightCharts.createChart(bEl, { ...baseOpts, height: 195, width: bEl.offsetWidth || 800 });
-      const s = c.addLineSeries({ color: '#22c55e', lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
+      bChart = LightweightCharts.createChart(bEl, { ...baseOpts, height: 195, width: bEl.offsetWidth || 800 });
+      const s = bChart.addLineSeries({ color: '#22c55e', lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
       s.setData(mh.breadthHistory.map(d => ({ time: d.date, value: d.value })));
       s.createPriceLine({ price: thr.breadthOB, color: '#ef4444', lineWidth: 1, lineStyle: 2, title: 'OB' });
       s.createPriceLine({ price: thr.breadthOS, color: '#22c55e', lineWidth: 1, lineStyle: 2, title: 'OS' });
-      c.timeScale().fitContent();
-      _mhCharts.push(c);
+      // Set 8-month default range
+      try { bChart.timeScale().setVisibleRange({ from: fromDate, to: toDate }); }
+      catch(e) { bChart.timeScale().fitContent(); }
+      _mhCharts.push(bChart);
+    }
+
+    // ── Bidirectional time-scale sync (scroll/zoom one → other follows) ────
+    if (rsiChart && bChart) {
+      let _syncing = false;
+      rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (_syncing || range === null) return;
+        _syncing = true;
+        try { bChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
+        _syncing = false;
+      });
+      bChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+        if (_syncing || range === null) return;
+        _syncing = true;
+        try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
+        _syncing = false;
+      });
     }
   }
 
