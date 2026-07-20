@@ -287,19 +287,21 @@ const app = (() => {
       _mhCharts.push(bChart);
     }
 
-    // ── Bidirectional time-scale sync (scroll/zoom one → other follows) ────
+    // ── Bidirectional time-scale sync (calendar-date based, not bar-index) ────
+    // Using subscribeVisibleTimeRangeChange + setVisibleRange so both charts
+    // always show the same calendar window regardless of data density differences.
     if (rsiChart && bChart) {
       let _syncing = false;
-      rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
-        if (_syncing || range === null) return;
+      rsiChart.timeScale().subscribeVisibleTimeRangeChange(range => {
+        if (_syncing || !range) return;
         _syncing = true;
-        try { bChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
+        try { bChart.timeScale().setVisibleRange(range); } catch(e) {}
         _syncing = false;
       });
-      bChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
-        if (_syncing || range === null) return;
+      bChart.timeScale().subscribeVisibleTimeRangeChange(range => {
+        if (_syncing || !range) return;
         _syncing = true;
-        try { rsiChart.timeScale().setVisibleLogicalRange(range); } catch(e) {}
+        try { rsiChart.timeScale().setVisibleRange(range); } catch(e) {}
         _syncing = false;
       });
     }
