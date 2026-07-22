@@ -578,14 +578,101 @@ const positionsModule = (() => {
   function _renderStopsTab(trade) {
     const stops = trade.stopRevisions || [];
     if (!stops.length) return `<div class="no-data">No stop revisions recorded.</div>`;
-    return `<div>${stops.map((s, i) => `<div class="stop-item">
-      <span class="badge badge-muted">Rev ${i+1}</span>
-      <span>${calc.formatDate(s.date)}</span>
-      <span class="font-mono">₹${calc.formatNumber(s.oldStop)}</span>
-      <span class="stop-arrow">→</span>
-      <span class="font-mono fw-600">₹${calc.formatNumber(s.newStop)}</span>
-      <span class="badge badge-muted">${s.actionSource}</span>
-    </div>`).join('')}</div>`;
+    return `<div>
+      <table class="lc-table" style="width:100%">
+        <thead><tr>
+          <th>Rev</th><th>Date</th><th>From</th><th></th><th>To</th><th>Source</th><th>Notes</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+        ${stops.map((s, i) => `<tr>
+          <td><span class="badge badge-muted">Rev ${i+1}</span></td>
+          <td>${calc.formatDate(s.date)}</td>
+          <td class="font-mono">₹${calc.formatNumber(s.oldStop)}</td>
+          <td><span class="stop-arrow">→</span></td>
+          <td class="font-mono fw-600">₹${calc.formatNumber(s.newStop)}</td>
+          <td><span class="badge badge-muted">${s.actionSource || '—'}</span></td>
+          <td style="font-size:11px;color:var(--text-muted);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.notes||''}">${
+            s.notes ? s.notes : '—'
+          }</td>
+          <td>
+            <button class="btn btn-secondary btn-xs" title="Edit" onclick="positionsModule._editStopRow('${trade.id}','${s.id || i}')">✏</button>
+            <button class="btn btn-danger btn-xs" title="Delete" onclick="positionsModule._deleteStopRow('${trade.id}','${s.id || i}')">🗑</button>
+          </td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // ── Edit Stop Revision ────────────────────────────────────────────────────
+  async function _editStopRow(tradeId, recordId) {
+    const trade = await db.getTradeById(tradeId);
+    if (!trade) return;
+    const stops = trade.stopRevisions || [];
+    // Find by id or index fallback
+    const idx = stops.findIndex(s => s.id === recordId || String(stops.indexOf(s)) === String(recordId));
+    if (idx === -1) { app.toast('Stop record not found', 'error'); return; }
+    const s = stops[idx];
+
+    const content = `<div class="form-grid">
+      <div class="form-group"><label class="form-label">Date</label>
+        <input class="form-input" type="date" id="sr-date" value="${s.date || ''}"></div>
+      <div class="form-group"><label class="form-label">From Stop (₹)</label>
+        <input class="form-input" type="number" id="sr-old" step="0.05" value="${s.oldStop || 0}"></div>
+      <div class="form-group"><label class="form-label">To Stop (₹) *</label>
+        <input class="form-input" type="number" id="sr-new" step="0.05" value="${s.newStop || 0}"></div>
+      <div class="form-group"><label class="form-label">Source</label>
+        <select class="form-select" id="sr-source">
+          <option ${(s.actionSource||'Manual')==='Manual'?'selected':''}>Manual</option>
+          <option ${s.actionSource==='System'?'selected':''}>System</option>
+          <option ${s.actionSource==='ATR'?'selected':''}>ATR</option>
+          <option ${s.actionSource==='Breakeven'?'selected':''}>Breakeven</option>
+          <option ${s.actionSource==='Trailing'?'selected':''}>Trailing</option>
+        </select></div>
+      <div class="form-group form-full"><label class="form-label">Notes</label>
+        <input class="form-input" id="sr-notes" value="${s.notes || ''}"></div>
+    </div>`;
+
+    app.openModal(`Edit Stop Revision — ${trade.symbol}`, content, [
+      { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
+      { id:'save',   label:'Save Changes', class:'btn-primary', onClick: async () => {
+        const date    = document.getElementById('sr-date').value;
+        const oldStop = parseFloat(document.getElementById('sr-old').value) || 0;
+        const newStop = parseFloat(document.getElementById('sr-new').value);
+        const source  = document.getElementById('sr-source').value;
+        const notes   = document.getElementById('sr-notes').value.trim();
+        if (!date || !newStop) { app.toast('Date and New Stop are required', 'error'); return; }
+        const updatedStop = { ...s, date, oldStop, newStop, actionSource: source, notes };
+        const updatedStops = stops.map((sr, i2) => i2 === idx ? updatedStop : sr);
+        // If this is the last revision, also update trade.currentStop
+        const isLast = idx === stops.length - 1;
+        const updated = { ...trade, stopRevisions: updatedStops };
+        if (isLast) updated.currentStop = newStop;
+        await db.saveTrade(updated);
+        app.closeModal();
+        app.toast('Stop revision updated', 'success');
+        await init();
+        await _renderDetailPanel(tradeId);
+      }}
+    ]);
+  }
+
+  // ── Delete Stop Revision ──────────────────────────────────────────────────
+  async function _deleteStopRow(tradeId, recordId) {
+    const trade = await db.getTradeById(tradeId);
+    if (!trade) return;
+    const stops = trade.stopRevisions || [];
+    const idx = stops.findIndex(s => s.id === recordId || String(stops.indexOf(s)) === String(recordId));
+    if (idx === -1) { app.toast('Stop record not found', 'error'); return; }
+    if (stops.length <= 1) { app.toast('Cannot delete the initial stop. Edit it instead.', 'error'); return; }
+    if (!confirm('Delete this stop revision? currentStop will revert to the previous revision.')) return;
+    const updatedStops = stops.filter((_, i2) => i2 !== idx);
+    const newCurrentStop = updatedStops[updatedStops.length - 1]?.newStop || trade.initialStop || 0;
+    const updated = { ...trade, stopRevisions: updatedStops, currentStop: newCurrentStop };
+    await db.saveTrade(updated);
+    app.toast('Stop revision deleted. Current stop reverted.', 'success');
+    await init();
+    await _renderDetailPanel(tradeId);
   }
 
   function _renderNotesTab(trade) {
@@ -1175,5 +1262,8 @@ const positionsModule = (() => {
     await init();
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _deleteTrade, forceRefresh: () => _autoRefreshAllCmps(true) };
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal,
+    _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges,
+    _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _editStopRow, _deleteStopRow,
+    _deleteTrade, forceRefresh: () => _autoRefreshAllCmps(true) };
 })();
