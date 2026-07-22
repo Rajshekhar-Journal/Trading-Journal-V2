@@ -241,7 +241,7 @@ const settingsModule = (() => {
 
           ${S('um2','&#128200;','Module 02 &mdash; Positions',`
             <p>The heart of the journal. Tracks every open trade in real time with live CMP, metrics, and alert cards.</p>
-            <h4>Position Table Columns</h4><p>Symbol, Type, Entry Date, Avg Entry, CMP, Open Risk R, Exposure, Unrealized P&L (+R), Alert badge.</p>
+            <h4>Position Table Columns</h4><p>Symbol, Type, Entry Date, Avg Entry, CMP, Open Risk ₹, Exposure, Unrealized P&L (+R), Alert badge.</p>
             <h4>Adding a New Trade</h4><ol>
               <li>Click <strong>+ New Trade</strong>.</li>
               <li>Fill: Symbol, Sector, Type, Direction, <strong>Exchange (NSE/BSE)</strong>, Playbook, Date, Price, Stop Loss, Qty, RPT, Charges, CMP.</li>
@@ -350,7 +350,7 @@ const settingsModule = (() => {
           ${S('um10','&#119891;','Key Calculations Reference',`
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Metric</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Formula</th></tr></thead><tbody>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Avg Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(Price &times; Qty) &divide; &Sigma;(Qty)</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk R</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Stop) &divide; (Avg Entry &minus; Initial Stop)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk ₹</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Entry &minus; Current Stop) &times; Open Qty &mdash; rupees at risk if stop is hit now</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Initial RPT (&#8377;)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">|Avg Entry &minus; Initial Stop| &times; Open Qty</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Unrealized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Avg Entry) &times; Open Qty &minus; Charges</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Realized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Exit &minus; Avg Entry) &times; Exited Qty &minus; Charges</td></tr>
@@ -946,9 +946,10 @@ const settingsModule = (() => {
       { name: 'Max Drawdown', cat: 'Analytics', expr: 'MIN(Cumulative R from peak)', desc: 'The largest peak-to-trough decline in cumulative realized P&L expressed in R.', example: 'Peak 20R → Trough 14R = MDD of -6R' },
       { name: 'Profit R', cat: 'Trades', expr: 'Realized P&L / RPT', desc: 'Trade result expressed as a multiple of the original Risk Per Trade (RPT).', example: 'P&L ₹15,000 / RPT ₹7,500 = +2R' },
       { name: 'Avg Entry Price', cat: 'Positions', expr: 'Σ (price × qty) / Σ qty', desc: 'Weighted average price across all entries and pyramids for an open position.', example: '100 shares @₹100 + 50 shares @₹120 = ₹106.67 avg' },
-      { name: 'Open Risk R', cat: 'Positions', expr: '(currentStop − avgEntry) × openQty / RPT', desc: 'Current risk remaining in an open position if stop is hit, in R units.', example: '(Stop ₹95 − Avg ₹100) × 100 shares / RPT ₹5,000 = -1R' },
+      { name: 'Open Risk ₹', cat: 'Positions', expr: '(avgEntry − currentStop) × openQty', desc: 'Rupees at risk on the open position if the current stop is hit today. Positive = stop above entry (risk-free). Negative = loss if stopped out.', example: 'Stop ₹95, Avg Entry ₹100, 200 shares → −₹1,000 at risk' },
       { name: 'CAGR', cat: 'Analytics', expr: '(End/Start)^(1/years) − 1', desc: 'Compound Annual Growth Rate of your trading account.', example: '₹10L → ₹12.5L in 2 years = 11.8% CAGR' },
       { name: 'RPT (Position Sizing)', cat: 'Positions', expr: 'ABS(entryPrice − stopLoss) × qty', desc: 'Rupee risk at the point of entry. This is your 1R for this trade.', example: '(₹100 entry − ₹95 stop) × 200 qty = ₹1,000 RPT' },
+      { name: 'True RPT', cat: 'Positions', expr: 'Max(Original RPT, Booked Loss + Open Risk)', desc: 'Dynamic R denominator. Grows beyond Original RPT when a partial exit at a loss is followed by a pyramid or re-entry. Ensures final R-multiples reflect total economic commitment to the trade, not just the initial planned risk.', example: 'RPT ₹3,739 + booked loss ₹3,200 + open risk ₹3,477 → True RPT ₹6,677 → Final R = −1.0R (not −1.79R)' },
     ];
     return `<div class="settings-page">
       <div class="settings-section-header">Formula Manager</div>

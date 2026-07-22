@@ -70,8 +70,9 @@ const calc = (() => {
       }
     }
 
-    // Open Risk R = Current Position Risk / RPT
-    const rptToUse = initialRPT;
+    // Open Position Risk (signed: negative = loss if stop is hit now)
+    // currentRiskR kept for internal colour-coding logic, not displayed
+    const rptToUse    = initialRPT;
     const currentRiskR = rptToUse !== 0 ? currentRisk / rptToUse : 0;
 
     // Net Realized P&L = (AvgExit − AvgEntry) × SoldQty − TotalCharges
@@ -87,8 +88,12 @@ const calc = (() => {
     // Unrealized P&L (needs CMP — passed separately)
     // We compute it outside when CMP is known
 
-    // Profit R (realized)
-    const profitR = rptToUse !== 0 ? realizedPnl / rptToUse : 0;
+    // True RPT — dynamic denominator: grows when booked loss + open risk > original RPT.
+    // For trades with no losing partial exits: trueRPT === initialRPT (no change).
+    const trueRPT = computeTrueRPT(initialRPT, currentRisk, realizedPnl);
+
+    // Profit R (realized) — uses trueRPT for honest economic R-multiple
+    const profitR = trueRPT !== 0 ? realizedPnl / trueRPT : 0;
 
     // Return %
     const profitPct = positionSize > 0 ? (realizedPnl / positionSize) * 100 : 0;
@@ -110,7 +115,7 @@ const calc = (() => {
       openQty, remainingQty,
       avgEntryPrice, avgExitPrice,
       totalCharges,
-      currentStop, initialRPT, rptCurrent: rptToUse,
+      currentStop, initialRPT, rptCurrent: rptToUse, trueRPT,
       exposure, positionSize,
       currentRisk, currentRiskR,
       realizedPnl, profitR, profitPct,
@@ -126,7 +131,7 @@ const calc = (() => {
       openQty: 0, remainingQty: 0,
       avgEntryPrice: 0, avgExitPrice: 0,
       totalCharges: 0,
-      currentStop: 0, initialRPT: 0, rptCurrent: 0,
+      currentStop: 0, initialRPT: 0, rptCurrent: 0, trueRPT: 0,
       exposure: 0, positionSize: 0,
       currentRisk: 0, currentRiskR: 0,
       realizedPnl: 0, profitR: 0, profitPct: 0,
@@ -199,6 +204,17 @@ const calc = (() => {
     }
 
     return maxRPT;
+  }
+
+  // ── True RPT — dynamic denominator accounting for booked losses ───────────
+  // Grows beyond Original RPT only when: (1) a partial exit was taken at a net
+  // loss AND (2) open position still has capital at risk.
+  // trueRPT = Max(originalRPT, netBookedLoss + openPositionRisk)
+  // Never decreases. For trades with no booked losses: trueRPT === originalRPT.
+  function computeTrueRPT(originalRPT, currentRisk, realizedPnl) {
+    const openPositionRisk = Math.max(0, -(currentRisk  || 0)); // neg currentRisk = at risk
+    const netBookedLoss    = Math.max(0, -(realizedPnl  || 0)); // neg realizedPnl = loss
+    return Math.max(originalRPT, netBookedLoss + openPositionRisk);
   }
 
   // ── Unrealized P&L ─────────────────────────────────────────────────────────
@@ -563,6 +579,6 @@ const calc = (() => {
     isBreakEven, getTradeResult,
     formatCurrency, formatR, formatDate, formatNumber,
     getHoldingDays, getTradingDays, getCAGR,
-    computeRPT
+    computeRPT, computeTrueRPT
   };
 })();

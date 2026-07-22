@@ -231,7 +231,7 @@ const tradesModule = (() => {
             <div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
             <div class="metric-item"><div class="metric-label">Net P&L</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${calc.formatCurrency(m.realizedPnl)}</div></div>
             <div class="metric-item"><div class="metric-label">Result (R)</div><div class="metric-value ${m.profitR>=0?'positive':'negative'}">${calc.formatR(m.profitR)}</div></div>
-            <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.initialRPT)}</div></div>
+            <div class="metric-item"><div class="metric-label">True RPT</div><div class="metric-value">₹${calc.formatNumber(m.trueRPT)}</div></div>
             <div class="metric-item"><div class="metric-label">Return %</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${m.positionSize>0?((m.realizedPnl/m.positionSize)*100).toFixed(2)+'%':'—'}</div></div>
             <div class="metric-item"><div class="metric-label">Setup</div><div class="metric-value" style="font-size:12px">${pb?.name||'—'}</div></div>
             <div class="metric-item"><div class="metric-label">Total Charges</div><div class="metric-value">₹${calc.formatNumber(m.totalCharges)}</div></div>

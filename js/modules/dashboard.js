@@ -311,7 +311,9 @@ const dashboardModule = (() => {
       const dirBadge   = trade.direction === 'Long'
         ? `<span class="badge badge-success" style="font-size:10px;padding:1px 5px;">L</span>`
         : `<span class="badge badge-danger"  style="font-size:10px;padding:1px 5px;">S</span>`;
-      const rClass     = m.currentRiskR < 0 ? 'text-danger' : m.currentRiskR > 0 ? 'text-success' : 'text-muted';
+      const rClass     = m.currentRisk >= 0 ? 'text-success'
+        : Math.abs(m.currentRisk) > m.initialRPT ? 'text-danger'
+        : 'text-warning';
       const dayBadge   = m.holdingDays >= 5 ? 'badge-warning' : 'badge-info';
       const activeAlerts = alertEngine.getActiveAlerts([trade]);
       const alertIcon  = activeAlerts.length > 0 ? ' ⚠' : '';
@@ -327,7 +329,7 @@ const dashboardModule = (() => {
             <div style="font-size:11px;color:#94a3b8;">${trade.tradeType || 'Equity'} · ${trade.sector || ''}</div>
           </td>
           <td class="text-right">${calc.formatCurrency(m.exposure)}</td>
-          <td class="text-right ${rClass}">${calc.formatR(m.currentRiskR)}</td>
+          <td class="text-right ${rClass}">${calc.formatCurrency(m.currentRisk)}</td>
           <td class="text-right"><span class="badge ${dayBadge}">${m.holdingDays}d (T: ${m.tradingDays})</span></td>
         </tr>
       `;

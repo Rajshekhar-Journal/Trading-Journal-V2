@@ -170,7 +170,7 @@ const positionsModule = (() => {
       thead.innerHTML = `
         <th>Symbol</th><th>Type</th><th>Entry Date</th>
         <th>Open Qty</th><th>Avg Entry</th><th>Init Stop</th><th>Curr Stop</th>
-        <th>CMP</th><th>Chg%</th><th>Open Risk R</th>
+        <th>CMP</th><th>Chg%</th><th>Open Risk ₹</th>
         <th>Exposure</th><th>Unreal. P&L (R)</th><th>Net P&L</th><th>Alert</th>`;
     }
 
@@ -200,12 +200,15 @@ const positionsModule = (() => {
       const m         = calc.getTradeMetrics(trade);
       const cmp       = trade.cmp || m.avgEntryPrice;
       const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
-      const unrealR   = m.initialRPT > 0 ? (unrealPnl / m.initialRPT) : 0;
+      const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
       const chgPct    = m.avgEntryPrice > 0 ? ((cmp - m.avgEntryPrice) / m.avgEntryPrice * 100) : 0;
       const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
       const alertBadge= alerts.length ? `<span class="badge badge-warning">⚠ ${alerts.length}</span>` : `<span class="badge badge-muted">—</span>`;
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
-      const riskRCls  = m.currentRiskR <= -1.5 ? 'text-danger' : m.currentRiskR <= -0.5 ? 'text-warning' : 'text-success';
+      // Green = no risk (stop above entry); Red = open risk exceeds original plan; Amber = normal open risk
+      const riskRCls  = m.currentRisk >= 0 ? 'text-success'
+        : Math.abs(m.currentRisk) > m.initialRPT ? 'text-danger'
+        : 'text-warning';
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
       const netPnl    = m.realizedPnl || 0;  // = (AvgSell - AvgEntry) × SellQty − Charges
       const symColor  = cmp >= m.avgEntryPrice ? 'text-success' : 'text-danger';
@@ -220,7 +223,7 @@ const positionsModule = (() => {
         <td class="font-mono" data-cmp-cell="${trade.id}" style="cursor:pointer" onclick="event.stopPropagation();positionsModule._showCmpModal('${trade.id}')" title="Click to update CMP manually">
           ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span></td>
         <td class="${chgCls} font-mono">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(1)}%</td>
-        <td class="${riskRCls} font-mono">${calc.formatR(m.currentRiskR)}</td>
+        <td class="${riskRCls} font-mono">${calc.formatCurrency(m.currentRisk)}</td>
         <td class="font-mono">${calc.formatCurrency(m.exposure)}</td>
         <td class="${pnlCls} font-mono fw-600">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></td>
         <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono">${calc.formatCurrency(netPnl)}</td>
@@ -254,7 +257,7 @@ const positionsModule = (() => {
     const m         = calc.getTradeMetrics(trade);
     const cmp       = trade.cmp || m.avgEntryPrice;
     const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
-    const unrealR   = m.initialRPT > 0 ? (unrealPnl / m.initialRPT) : 0;
+    const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
     const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
     
@@ -324,7 +327,7 @@ const positionsModule = (() => {
             <div class="metric-item"><div class="metric-label">Open Qty</div><div class="metric-value">${m.openQty}</div></div>
             <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value">${calc.formatCurrency(m.exposure)}</div></div>
             <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.initialRPT)}</div></div>
-            <div class="metric-item"><div class="metric-label">Open Risk R</div><div class="metric-value ${m.currentRiskR <= -1 ? 'negative' : ''}">${calc.formatR(m.currentRiskR)}</div></div>
+            <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.initialRPT ? 'negative' : 'text-warning'}">${calc.formatCurrency(m.currentRisk)}</div></div>
             <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></div></div>
             <div class="metric-item"><div class="metric-label">Realized P&L</div><div class="metric-value ${m.realizedPnl >= 0 ? 'positive' : m.realizedPnl < 0 ? 'negative' : ''}">${calc.formatCurrency(m.realizedPnl || 0)} <span style="font-size:11px">(${calc.formatR(m.profitR)})</span></div></div>
           </div>
