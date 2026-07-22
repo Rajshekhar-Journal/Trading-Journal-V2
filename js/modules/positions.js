@@ -966,55 +966,90 @@ const positionsModule = (() => {
   async function _showPyramidModal(tradeId) {
     const trade = await db.getTradeById(tradeId);
     if (!trade) return;
-    const today    = new Date().toISOString().split('T')[0];
-    const settings = await db.getSettings();
-    _cachedSettings = settings;
-    const capital  = await db.getCapital();
-    const closedT  = await db.getClosedTrades();
-    const realPnl  = calc.getTotalPnl(closedT);
-    const equity   = calc.getCurrentEquity(capital, realPnl);
-    const currentR = calc.getCurrentR(equity, settings);
-    const maxHeat   = Number(settings?.riskManagement?.maxPortfolioHeat || 5);   // %
-    const warnHeat  = Number(settings?.riskManagement?.warningPortfolioHeat || 3); // %
-    const openTrades  = await db.getOpenTrades();
-    const currentHeat = calc.getPortfolioHeat(openTrades, equity);  // returns %
+    const today      = new Date().toISOString().split('T')[0];
+    const settings   = await db.getSettings();
+    _cachedSettings  = settings;
+    const capital    = await db.getCapital();
+    const closedT    = await db.getClosedTrades();
+    const realPnl    = calc.getTotalPnl(closedT);
+    const equity     = calc.getCurrentEquity(capital, realPnl);
+    const maxHeat    = Number(settings?.riskManagement?.maxPortfolioHeat || 5);
+    const openTrades = await db.getOpenTrades();
+    const m          = calc.getTradeMetrics(trade);
+    const curStop    = m.currentStop || trade.currentStop || 0;
 
     const content = `<div class="form-grid">
-      <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="pyr-date" value="${today}"></div>
-      <div class="form-group"><label class="form-label">Entry Price (₹)</label><input class="form-input" type="number" id="pyr-price" step="0.05" oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
-      <div class="form-group"><label class="form-label">Qty</label><input class="form-input" type="number" id="pyr-qty" min="1" oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
-      <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="pyr-charges" value="0" step="0.01"></div>
-      <div class="form-group form-full"><label class="form-label">Notes</label><input class="form-input" id="pyr-notes" placeholder="Reason for pyramid..."></div>
+      <div class="form-group"><label class="form-label">Date</label>
+        <input class="form-input" type="date" id="pyr-date" value="${today}"></div>
+      <div class="form-group"><label class="form-label">Entry Price (₹)</label>
+        <input class="form-input" type="number" id="pyr-price" step="0.05"
+          oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
+      <div class="form-group"><label class="form-label">Qty</label>
+        <input class="form-input" type="number" id="pyr-qty" min="1"
+          oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
+      <div class="form-group"><label class="form-label">Charges (₹)</label>
+        <input class="form-input" type="number" id="pyr-charges" value="0" step="0.01"></div>
+      <div class="form-group">
+        <label class="form-label">Stop Loss (₹)
+          <span style="font-size:10px;font-weight:400;color:var(--text-muted);margin-left:6px">
+            Current: ₹${calc.formatNumber(curStop)} — change if you moved stop before pyramiding
+          </span>
+        </label>
+        <input class="form-input" type="number" id="pyr-stop" step="0.05" value="${curStop}">
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label>
+        <input class="form-input" id="pyr-notes" placeholder="Reason for pyramid..."></div>
       <div class="form-full" id="pyr-heat-warn"></div>
     </div>`;
+
     app.openModal(`Pyramid — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Add Pyramid', class:'btn-success', onClick: async () => {
+      { id:'save',   label:'Add Pyramid', class:'btn-success', onClick: async () => {
         const date    = document.getElementById('pyr-date').value;
         const price   = parseFloat(document.getElementById('pyr-price').value);
         const qty     = parseInt(document.getElementById('pyr-qty').value);
         const charges = parseFloat(document.getElementById('pyr-charges').value) || 0;
+        const newStop = parseFloat(document.getElementById('pyr-stop').value) || curStop;
         const notes   = document.getElementById('pyr-notes').value;
         if (!date || !price || !qty) { app.toast('Please fill all fields', 'error'); return; }
 
-        // Portfolio heat validation (%)
-        const m         = calc.getTradeMetrics(trade);
-        const newRisk   = Math.abs((price - m.currentStop) * qty);       // ₹ risk of this pyramid
-        const projHeat  = equity > 0 ? ((calc.getPortfolioHeatRs(openTrades) + newRisk) / equity * 100) : 0;
-        const warnEl    = document.getElementById('pyr-heat-warn');
+        // Portfolio heat check — use entered stop for accurate risk
+        const pyrRisk  = Math.abs((price - newStop) * qty);
+        const projHeat = equity > 0 ? ((calc.getPortfolioHeatRs(openTrades) + pyrRisk) / equity * 100) : 0;
+        const warnEl   = document.getElementById('pyr-heat-warn');
 
         if (projHeat > maxHeat + 1) {
           if (warnEl) warnEl.innerHTML = `<div class="alert-banner danger">⚠ High Risk: Projected heat ${projHeat.toFixed(2)}% exceeds max ${maxHeat}% by ${(projHeat-maxHeat).toFixed(2)}%. Are you sure?</div>`;
           if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}% (max: ${maxHeat}%). Proceed?`)) return;
         } else if (projHeat > maxHeat) {
-          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}% which slightly exceeds max ${maxHeat}%. Proceed?`)) return;
+          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}% — slightly above max ${maxHeat}%. Proceed?`)) return;
         }
 
-        const updated = { ...trade, pyramids: [...(trade.pyramids||[]), { id: db.generateId('py'), date, price, qty, charges, actionSource: 'Pyramid', notes }] };
+        // Build update atomically
+        const updated = { ...trade };
+
+        // If stop changed → log a stop revision BEFORE pyramid in same save
+        // computeRPT() will process stop before buy on same date (fixed sort order)
+        if (newStop !== curStop) {
+          updated.currentStop   = newStop;
+          updated.stopRevisions = [
+            ...(trade.stopRevisions || []),
+            { id: db.generateId('sr'), date, oldStop: curStop, newStop, actionSource: 'Manual', notes: 'Stop updated at pyramid entry' }
+          ];
+        }
+
+        // Add the pyramid
+        updated.pyramids = [
+          ...(trade.pyramids || []),
+          { id: db.generateId('py'), date, price, qty, charges, actionSource: 'Pyramid', notes }
+        ];
+
         await db.saveTrade(updated);
         app.closeModal();
-        app.toast(`Pyramid added to ${trade.symbol}`, 'success');
-        await init(); await _renderDetailPanel(tradeId);
+        const stopMsg = newStop !== curStop ? ` | Stop → ₹${calc.formatNumber(newStop)}` : '';
+        app.toast(`Pyramid added to ${trade.symbol}${stopMsg}`, 'success');
+        await init();
+        await _renderDetailPanel(tradeId);
       }}
     ]);
   }

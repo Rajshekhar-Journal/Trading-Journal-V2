@@ -173,8 +173,15 @@ const calc = (() => {
       });
     });
 
-    // Sort chronologically (YYYY-MM-DD strings sort correctly lexicographically)
-    events.sort((a, b) => a.date.localeCompare(b.date));
+    // Sort chronologically. For same-date events, stops are processed BEFORE buys so
+    // that a stop revision on the same day as a pyramid uses the updated stop for risk calc.
+    // Order: stop → sell → buy  (stops first so they affect the subsequent buy risk)
+    const _typeOrder = { stop: 0, sell: 1, buy: 2 };
+    events.sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      if (d !== 0) return d;
+      return (_typeOrder[a.type] || 1) - (_typeOrder[b.type] || 1);
+    });
 
     let totalCost   = 0;
     let totalQty    = 0;
