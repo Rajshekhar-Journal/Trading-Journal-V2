@@ -160,18 +160,31 @@ const positionsModule = (() => {
       </div>`).join('');
   }
 
+  // ── Positions Table Sort State ────────────────────────────────────────────
+  let _sortState = { col: 'entryDate', dir: 'desc' };
+
   // ── Positions Table ────────────────────────────────────────────────────────
   async function _renderTable() {
     const tbl = document.getElementById('pos-table');
     if (!tbl) return;
-    // Update header dynamically to include all SRS-required columns
+    // Build sortable headers
+    const _arrow = col => {
+      if (_sortState.col !== col) return '<span style="color:var(--text-muted);font-size:10px;margin-left:3px">↕</span>';
+      return _sortState.dir === 'asc'
+        ? '<span style="color:#5b6af0;font-size:10px;margin-left:3px">↑</span>'
+        : '<span style="color:#5b6af0;font-size:10px;margin-left:3px">↓</span>';
+    };
+    const _th = (col, label) =>
+      `<th data-sort="${col}" style="cursor:pointer;user-select:none;white-space:nowrap" onclick="positionsModule._sortTable('${col}')">${label}${_arrow(col)}</th>`;
+
     const thead = tbl.querySelector('thead tr');
     if (thead) {
-      thead.innerHTML = `
-        <th>Symbol</th><th>Type</th><th>Entry Date</th>
-        <th>Open Qty</th><th>Avg Entry</th><th>Init Stop</th><th>Curr Stop</th>
-        <th>CMP</th><th>Chg%</th><th>Open Risk ₹</th>
-        <th>Exposure</th><th>Unreal. P&L (R)</th><th>Net P&L</th><th>Alert</th>`;
+      thead.innerHTML =
+        _th('symbol','Symbol') + '<th>Type</th>' + _th('entryDate','Entry Date') +
+        '<th>Open Qty</th><th>Avg Entry</th><th>Init Stop</th><th>Curr Stop</th><th>CMP</th>' +
+        _th('chgPct','Chg%') + _th('openRisk','Open Risk ₹') +
+        _th('exposure','Exposure') + _th('unrealPnl','Unreal. P&L (R)') +
+        _th('netPnl','Net P&L') + '<th>Alert</th>';
     }
 
     const tbody = document.getElementById('pos-table-body');
@@ -182,35 +195,48 @@ const positionsModule = (() => {
     const closedTrades = await db.getClosedTrades();
     const realizedPnl  = calc.getTotalPnl(closedTrades);
     const equity       = calc.getCurrentEquity(capital, realizedPnl);
-    const currentR     = calc.getCurrentR(equity, settings);
 
     if (!openTrades.length) {
       tbody.innerHTML = `<tr><td colspan="14"><div class="no-data"><div class="no-data-icon">📭</div>No open positions. Click "+ New Trade" to add one.</div></td></tr>`;
       return;
     }
 
-    // Sort: most recent entry date first; tie-break by createdAt
-    openTrades.sort((a, b) => {
-      const da = a.entries?.[0]?.date || a.createdAt || '';
-      const db_ = b.entries?.[0]?.date || b.createdAt || '';
-      return db_.localeCompare(da);
-    });
-
-    tbody.innerHTML = openTrades.map(trade => {
+    // Compute sort key for each trade, then sort
+    const withKeys = openTrades.map(trade => {
       const m         = calc.getTradeMetrics(trade);
       const cmp       = trade.cmp || m.avgEntryPrice;
       const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
-      const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
       const chgPct    = m.avgEntryPrice > 0 ? ((cmp - m.avgEntryPrice) / m.avgEntryPrice * 100) : 0;
+      const entryDate = trade.entries?.[0]?.date || trade.createdAt || '';
+      return { trade, m, cmp, unrealPnl, chgPct, entryDate };
+    });
+
+    withKeys.sort((a, b) => {
+      let va, vb;
+      switch (_sortState.col) {
+        case 'symbol':    va = a.trade.symbol; vb = b.trade.symbol; break;
+        case 'entryDate': va = a.entryDate;    vb = b.entryDate;    break;
+        case 'chgPct':    va = a.chgPct;       vb = b.chgPct;       break;
+        case 'openRisk':  va = a.m.currentRisk; vb = b.m.currentRisk; break;
+        case 'exposure':  va = a.m.exposure;   vb = b.m.exposure;   break;
+        case 'unrealPnl': va = a.unrealPnl;    vb = b.unrealPnl;    break;
+        case 'netPnl':    va = a.m.realizedPnl; vb = b.m.realizedPnl; break;
+        default:          va = a.entryDate;    vb = b.entryDate;
+      }
+      const cmp_ = typeof va === 'string' ? va.localeCompare(vb) : (va - vb);
+      return _sortState.dir === 'asc' ? cmp_ : -cmp_;
+    });
+
+    tbody.innerHTML = withKeys.map(({ trade, m, cmp, unrealPnl, chgPct }) => {
+      const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
       const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
       const alertBadge= alerts.length ? `<span class="badge badge-warning">⚠ ${alerts.length}</span>` : `<span class="badge badge-muted">—</span>`;
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
-      // Green = no risk (stop above entry); Red = open risk exceeds original plan; Amber = normal open risk
       const riskRCls  = m.currentRisk >= 0 ? 'text-success'
         : Math.abs(m.currentRisk) > m.initialRPT ? 'text-danger'
         : 'text-warning';
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
-      const netPnl    = m.realizedPnl || 0;  // = (AvgSell - AvgEntry) × SellQty − Charges
+      const netPnl    = m.realizedPnl || 0;
       const symColor  = cmp >= m.avgEntryPrice ? 'text-success' : 'text-danger';
       return `<tr data-id="${trade.id}" onclick="positionsModule._onRowClick('${trade.id}')">
         <td><strong class="${symColor}">${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
@@ -230,6 +256,20 @@ const positionsModule = (() => {
         <td>${alertBadge}</td>
       </tr>`;
     }).join('');
+  }
+
+
+  // ── Column Sort Handler ────────────────────────────────────────────────────
+  function _sortTable(col) {
+    if (_sortState.col === col) {
+      // Same column — toggle direction
+      _sortState.dir = _sortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      // New column — default to descending
+      _sortState.col = col;
+      _sortState.dir = 'desc';
+    }
+    _renderTable();
   }
 
   async function _onRowClick(id) {
@@ -1300,5 +1340,5 @@ const positionsModule = (() => {
   return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal,
     _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges,
     _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _editStopRow, _deleteStopRow,
-    _deleteTrade, forceRefresh: () => _autoRefreshAllCmps(true) };
+    _deleteTrade, _sortTable, forceRefresh: () => _autoRefreshAllCmps(true) };
 })();
