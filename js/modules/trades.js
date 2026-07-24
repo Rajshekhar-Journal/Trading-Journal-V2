@@ -5,11 +5,14 @@
  *        TradingView chart fix, fullscreen panel, CMP update.
  */
 const tradesModule = (() => {
-  let _range    = 'YTD';
-  let _sortCol  = 'exitDate';
-  let _sortDir  = -1;
+  let _range       = 'YTD';
+  let _sortCol     = 'exitDate';
+  let _sortDir     = -1;
   let _selectedId  = null;
   let _isFullscreen = false;
+  let _currentView = 'metrics';   // 'metrics' | 'chart'
+  let _cvTrades    = [];           // trades shown in chart view
+  let _cvIdx       = 0;            // current trade index in chart view
 
   async function init() {
     _setupFilters();
@@ -41,6 +44,19 @@ const tradesModule = (() => {
         _renderTable(await _getFilteredTrades());
       });
     });
+
+    // View toggle: Metrics ↔ Chart
+    document.querySelectorAll('#mod-trades .view-toggle .toggle-btn').forEach(btn => {
+      const fresh = btn.cloneNode(true);
+      btn.parentNode.replaceChild(fresh, btn);
+      fresh.addEventListener('click', async () => {
+        document.querySelectorAll('#mod-trades .view-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+        fresh.classList.add('active');
+        _currentView = fresh.dataset.view;
+        _applyView();
+        if (_currentView === 'chart') await _loadChartView();
+      });
+    });
   }
 
   async function _getFilteredTrades() {
@@ -60,6 +76,163 @@ const tradesModule = (() => {
     await _populateSetupFilter(allClosed);
     _renderSummaryCards(filtered);
     _renderTable(await _getFilteredTrades());
+    _applyView();
+    if (_currentView === 'chart') await _loadChartView();
+  }
+
+  // ── View Switch ────────────────────────────────────────────────────────────
+  function _applyView() {
+    const tableArea = document.getElementById('trades-split-view');
+    const chartArea = document.getElementById('trades-chart-view');
+    const isChart   = _currentView === 'chart';
+    if (tableArea) tableArea.classList.toggle('hidden', isChart);
+    if (chartArea) chartArea.classList.toggle('hidden', !isChart);
+  }
+
+  async function _loadChartView() {
+    _cvTrades = await _getFilteredTrades();
+    // Keep current index if still valid, else reset
+    _cvIdx = Math.max(0, Math.min(_cvIdx, _cvTrades.length - 1));
+    await _renderChartView();
+  }
+
+  // ── Chart View: trade-by-trade TradingView navigator ──────────────────────
+  async function _renderChartView() {
+    const container = document.getElementById('trades-cv-content');
+    if (!container) return;
+    if (!_cvTrades.length) {
+      container.innerHTML = `<div class="no-data" style="padding:60px;text-align:center">📭 No closed trades for selected period</div>`;
+      return;
+    }
+    _cvIdx = Math.max(0, Math.min(_cvTrades.length - 1, _cvIdx));
+    const trade = _cvTrades[_cvIdx];
+    const m     = calc.getTradeMetrics(trade);
+
+    // Equity for privacy mode
+    const _cap   = await db.getCapital();
+    const _all   = await db.getClosedTrades();
+    const equity = calc.getCurrentEquity(_cap, calc.getTotalPnl(_all));
+    const pnlPct = equity > 0 ? (m.realizedPnl / equity * 100) : 0;
+    const _s     = v => v >= 0 ? '+' : '';
+
+    // TradingView date range (30 days before entry → 45 days after exit)
+    const entryDate = trade.entries?.[0]?.date || '';
+    const exitDate  = trade.finalExit?.date || entryDate;
+    const fromD     = new Date(entryDate || Date.now());
+    fromD.setDate(fromD.getDate() - 30);
+    const toD = new Date(exitDate || Date.now());
+    toD.setDate(toD.getDate() + 45);
+    const fromTs = Math.floor(fromD.getTime() / 1000);
+    const toTs   = Math.floor(toD.getTime()   / 1000);
+
+    const tvSym = encodeURIComponent(`NSE:${trade.symbol}`);
+    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${tvSym}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en&from=${fromTs}&to=${toTs}`;
+
+    // Entry markers
+    const entryMarkers = (trade.entries || []).map((e, i) =>
+      `<span class="cv-marker cv-entry">▲ Entry${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+    ).join('');
+
+    // Stop marker
+    const stopMarker = trade.initialStop
+      ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>`
+      : '';
+
+    // Partial exits
+    const exitMarkers = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
+      `<span class="cv-marker cv-exit">▼ Exit${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+    ).join('');
+
+    // Final exit
+    const finalExit = trade.finalExit
+      ? `<span class="cv-marker cv-exit" style="font-weight:700;">✓ Final: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>`
+      : '';
+
+    const pnlCls = m.realizedPnl >= 0 ? 'text-success' : 'text-danger';
+    const rCls   = m.profitR    >= 0 ? 'text-success' : 'text-danger';
+    const result = calc.getTradeResult(trade);
+    const resBadge = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
+
+    container.innerHTML = `
+      <!-- Nav bar -->
+      <div class="cv-nav">
+        <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''}>← Prev</button>
+        <div class="cv-nav-info">
+          <strong style="font-size:15px;color:var(--primary)">${trade.symbol}</strong>
+          <span class="badge badge-muted">${trade.direction}</span>
+          <span class="badge badge-muted" style="font-size:10px">${trade.tradeType || 'Equity'}</span>
+          <span class="badge ${resBadge}">${result}</span>
+          <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}</span>
+          <span style="font-size:11px;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:99px;border:1px solid var(--border-light)">${_cvIdx + 1} / ${_cvTrades.length}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank"
+             class="btn btn-secondary btn-sm" style="font-size:11px">↗ Full Chart</a>
+          <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''}>Next →</button>
+        </div>
+      </div>
+
+      <!-- TradingView chart iframe -->
+      <div class="cv-chart-wrap">
+        <iframe src="${tvUrl}" id="tv-cv-iframe"
+          style="width:100%;height:520px;border:none;"
+          allowtransparency="true" scrolling="no" allowfullscreen>
+        </iframe>
+      </div>
+
+      <!-- Trade key levels -->
+      <div class="cv-details">
+        <div class="cv-detail-grid">
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">Avg Entry</div>
+            <div class="cv-detail-value">₹${calc.formatNumber(m.avgEntryPrice)}</div>
+          </div>
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">Initial Stop</div>
+            <div class="cv-detail-value text-danger">₹${calc.formatNumber(trade.initialStop)}</div>
+          </div>
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">Avg Exit</div>
+            <div class="cv-detail-value">₹${calc.formatNumber(m.avgExitPrice)}</div>
+          </div>
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">P&amp;L</div>
+            <div class="cv-detail-value ${pnlCls}">
+              <span class="prv-amt">${calc.formatCurrency(m.realizedPnl)}</span>
+              <span class="prv-pct">${_s(pnlPct)}${pnlPct.toFixed(2)}% AV</span>
+            </div>
+          </div>
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">R Multiple</div>
+            <div class="cv-detail-value ${rCls}">${calc.formatR(m.profitR)}</div>
+          </div>
+          <div class="cv-detail-card">
+            <div class="cv-detail-label">Held</div>
+            <div class="cv-detail-value">${m.holdingDays}d (T:${m.tradingDays})</div>
+          </div>
+        </div>
+        <div class="cv-markers-label">Trade Levels</div>
+        <div class="cv-markers">
+          ${entryMarkers}
+          ${stopMarker}
+          ${exitMarkers}
+          ${finalExit}
+        </div>
+      </div>
+    `;
+
+    // Keyboard navigation (arrow keys)
+    document.onkeydown = e => {
+      if (_currentView !== 'chart') return;
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowLeft')  tradesModule._cvNav(-1);
+      if (e.key === 'ArrowRight') tradesModule._cvNav(1);
+    };
+  }
+
+  async function _cvNav(dir) {
+    _cvIdx = Math.max(0, Math.min(_cvTrades.length - 1, _cvIdx + dir));
+    await _renderChartView();
   }
 
   async function _populateSetupFilter(trades) {
@@ -510,5 +683,5 @@ const tradesModule = (() => {
     await init();
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _addNote, _deleteLifecycleRow, _editLifecycleRow, _deleteTrade };
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _addNote, _deleteLifecycleRow, _editLifecycleRow, _deleteTrade, _cvNav };
 })();
