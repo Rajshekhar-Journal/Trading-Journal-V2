@@ -114,9 +114,9 @@ const dashboardModule = (() => {
     container.innerHTML = `
       <div class="stat-card">
         <div class="stat-card-label">Account Value</div>
-        <div class="stat-card-value"><span class="prv-amt">${calc.formatCurrency(equity)}</span></div>
+        <div class="stat-card-value"><span class="prv-blur">${calc.formatCurrency(equity)}</span></div>
         <div class="stat-card-sub ${deltaClass}" style="margin-top:4px;">
-          ${deltaSign}<span class="prv-amt">${calc.formatCurrency(equityDelta)}</span>&nbsp;(${deltaSign}${deltaPct.toFixed(2)}%)
+          ${deltaSign}<span class="prv-blur">${calc.formatCurrency(equityDelta)}</span>&nbsp;(${deltaSign}${deltaPct.toFixed(2)}%)
           <span class="text-muted" style="font-size:11px;margin-left:4px;">vs deposits</span>
         </div>
       </div>

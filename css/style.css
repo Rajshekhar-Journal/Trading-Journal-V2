@@ -456,22 +456,24 @@ input, select, textarea { font-family: inherit; }
 }
 
 /* ── Privacy Mode ─────────────────────────────────────────────────────────── */
-.prv-amt {
-  border-radius: 4px;
-  transition: filter 0.2s ease;
-  display: inline-block;
+/* prv-amt : ₹ amount — shown normally, hidden in privacy mode              */
+/* prv-pct : % of AV  — hidden normally, shown in privacy mode              */
+/* prv-blur: qty/AV   — no % equivalent, blurred in privacy mode            */
+
+.prv-pct { display: none; }
+.prv-blur { transition: filter 0.2s ease; }
+
+body.privacy-mode .prv-amt { display: none !important; }
+body.privacy-mode .prv-pct {
+  display: inline !important;
+  font-size: inherit; font-weight: inherit; color: inherit;
 }
-body.privacy-mode .prv-amt {
-  filter: blur(7px);
-  user-select: none;
-  cursor: pointer;
-  background: rgba(91,106,240,0.06);
-  border-radius: 4px;
+body.privacy-mode .prv-blur {
+  filter: blur(6px);
+  user-select: none; cursor: pointer; border-radius: 3px;
 }
-body.privacy-mode .prv-amt:hover {
-  filter: none;
-  background: rgba(91,106,240,0.1);
-}
+body.privacy-mode .prv-blur:hover { filter: none; }
+
 /* Privacy badge in header */
 #privacy-badge {
   display: none;

@@ -152,6 +152,10 @@ const tradesModule = (() => {
       return;
     }
     const playbooks = await db.getPlaybooks();
+    // Fetch equity for % of AV in privacy mode
+    const _capital  = await db.getCapital();
+    const _allClosed = await db.getClosedTrades();
+    const _equity   = calc.getCurrentEquity(_capital, calc.getTotalPnl(_allClosed));
     tbody.innerHTML = sorted.map(trade => {
       const m        = calc.getTradeMetrics(trade);
       const result   = calc.getTradeResult(trade);
@@ -161,17 +165,21 @@ const tradesModule = (() => {
       const resBadge = result==='Win'?'badge-success':result==='Loss'?'badge-danger':'badge-muted';
       const revBadge = trade.reviewStatus==='Reviewed'?'badge-success':trade.reviewStatus==='Pending'?'badge-warning':'badge-muted';
       const retPct   = m.positionSize > 0 ? ((m.realizedPnl/m.positionSize)*100).toFixed(1) : '—';
+      const pnlPct   = _equity > 0 ? (m.realizedPnl / _equity * 100) : 0;
+      const _s       = v => v >= 0 ? '+' : '';
       return `<tr class="${rowCls}${!trade.ruleFollowed?' trade-row-rule-break':''}" data-id="${trade.id}" onclick="tradesModule._onRowClick('${trade.id}')">
         <td><strong>${trade.symbol}</strong></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date||'')}</td>
-        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.avgEntryPrice)}</span></td>
+        <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td>${calc.formatDate(trade.finalExit?.date||'')}</td>
-        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.avgExitPrice)}</span></td>
+        <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}</td>
         <td>${m.holdingDays}d (T: ${m.tradingDays})</td>
         <td class="text-muted">${pb?.name||'—'}</td>
         <td><span class="badge badge-muted" style="font-size:10px">${trade.tradeType||'Equity'}</span></td>
         <td><span class="badge ${trade.direction==='Long'?'badge-success':'badge-danger'}" style="font-size:10px">${trade.direction?.[0]||'L'}</span></td>
-        <td class="${m.realizedPnl>=0?'text-success':'text-danger'} font-mono fw-600"><span class="prv-amt">${calc.formatCurrency(m.realizedPnl)}</span></td>
+        <td class="${m.realizedPnl>=0?'text-success':'text-danger'} font-mono fw-600">
+          <span class="prv-amt">${calc.formatCurrency(m.realizedPnl)}</span>
+          <span class="prv-pct">${_s(pnlPct)}${pnlPct.toFixed(2)}% AV</span></td>
         <td class="${rCls} font-mono fw-600">${calc.formatR(m.profitR)}</td>
         <td class="${m.realizedPnl>=0?'text-success':'text-danger'}">${retPct}%</td>
         <td><span class="badge ${resBadge}">${result}</span></td>
