@@ -82,6 +82,10 @@ const app = (() => {
     const settings = await db.getSettings();
     settings.general = { ...(settings.general || {}), privacyMode: on };
     await db.saveSettings(settings);
+    // Re-render charts instantly if on dashboard
+    if (_currentModule === 'dashboard') {
+      try { dashboardModule.init(); } catch(e) {}
+    }
   }
 
   async function togglePrivacyMode() {

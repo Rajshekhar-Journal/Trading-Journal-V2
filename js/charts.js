@@ -32,51 +32,73 @@ const charts = (() => {
     };
   }
 
-  function renderLineChart(canvasId, labels, data, label = '', color = COLORS.primary) {
+  function renderLineChart(canvasId, labels, data, label = '', color = COLORS.primary, equity = 0) {
     _destroy(canvasId);
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
+    const prv      = document.body.classList.contains('privacy-mode') && equity > 0;
+    const dispData = prv ? data.map(v => v / equity * 100) : data;
+    const yFmt     = prv
+      ? v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}% AV`
+      : v => calc.formatCurrency(v);
+    const ttFmt    = prv
+      ? c => ` ${c.raw >= 0 ? '+' : ''}${c.raw.toFixed(2)}% AV`
+      : c => ` ${calc.formatCurrency(c.raw)}`;
     _instances[canvasId] = new Chart(ctx, {
       type: 'line',
       data: {
         labels,
         datasets: [{
-          label, data, borderColor: color, backgroundColor: color.replace(')', ',0.08)').replace('rgb', 'rgba'),
+          label, data: dispData, borderColor: color,
+          backgroundColor: color.replace(')', ',0.08)').replace('rgb', 'rgba'),
           borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, fill: true, tension: 0.3
         }]
       },
       options: _baseOptions({
-        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: (ctx) => ` ${calc.formatCurrency(ctx.raw)}` } } },
+        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: ttFmt } } },
         scales: {
           x: { grid: { display: false }, ticks: { maxTicksLimit: 8, font: BASE_FONT, color: '#94a3b8' } },
-          y: { grid: { color: COLORS.gridLine }, ticks: { callback: v => calc.formatCurrency(v), font: BASE_FONT, color: '#94a3b8' } }
+          y: { grid: { color: COLORS.gridLine }, ticks: { callback: yFmt, font: BASE_FONT, color: '#94a3b8' } }
         }
       })
     });
   }
 
-  function renderBubbleChart(canvasId, trades) {
+  function renderBubbleChart(canvasId, trades, equity = 0) {
     _destroy(canvasId);
     const ctx = document.getElementById(canvasId);
     if (!ctx) return;
+    const prv = document.body.classList.contains('privacy-mode') && equity > 0;
     const datasets = trades.map(t => {
-      const m = calc.getTradeMetrics(t);
+      const m     = calc.getTradeMetrics(t);
       const isWin = m.realizedPnl > 0;
+      const rawX  = Math.abs(m.currentRisk || m.initialRPT || 10000);
+      const rawY  = m.realizedPnl;
+      const x     = prv ? (rawX / equity * 100) : rawX;
+      const y     = prv ? (rawY / equity * 100) : rawY;
       return {
         label: t.symbol,
-        data: [{ x: Math.abs(m.currentRisk || m.initialRPT || 10000), y: m.realizedPnl, r: Math.max(4, Math.min(20, Math.abs(m.profitR) * 3 + 4)) }],
+        data: [{ x, y, r: Math.max(4, Math.min(20, Math.abs(m.profitR) * 3 + 4)) }],
         backgroundColor: isWin ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)',
         borderColor: isWin ? COLORS.success : COLORS.danger, borderWidth: 1
       };
     });
+    const xTitle  = prv ? 'Risk (% AV)' : 'Risk (₹)';
+    const yTitle  = prv ? 'P&L (% AV)'  : 'P&L (₹)';
+    const yFmt    = prv
+      ? v => `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`
+      : v => calc.formatCurrency(v);
+    const ttLabel = prv
+      ? c => ` ${c.dataset.label}: Risk ${Math.abs(c.raw.x).toFixed(2)}% AV, P&L ${c.raw.y >= 0 ? '+' : ''}${c.raw.y.toFixed(2)}% AV`
+      : c => ` ${c.dataset.label}: Risk ₹${Math.round(c.raw.x).toLocaleString('en-IN')}, P&L ₹${Math.round(c.raw.y).toLocaleString('en-IN')}`;
     _instances[canvasId] = new Chart(ctx, {
       type: 'bubble',
       data: { datasets },
       options: _baseOptions({
-        plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: Risk ₹${Math.round(ctx.raw.x).toLocaleString('en-IN')}, P&L ₹${Math.round(ctx.raw.y).toLocaleString('en-IN')}` } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ttLabel } } },
         scales: {
-          x: { title: { display: true, text: 'Risk (₹)', font: BASE_FONT }, grid: { color: COLORS.gridLine }, ticks: { font: BASE_FONT } },
-          y: { title: { display: true, text: 'P&L (₹)', font: BASE_FONT }, grid: { color: COLORS.gridLine }, ticks: { callback: v => calc.formatCurrency(v), font: BASE_FONT } }
+          x: { title: { display: true, text: xTitle, font: BASE_FONT }, grid: { color: COLORS.gridLine }, ticks: { font: BASE_FONT } },
+          y: { title: { display: true, text: yTitle, font: BASE_FONT }, grid: { color: COLORS.gridLine }, ticks: { callback: yFmt, font: BASE_FONT } }
         }
       })
     });

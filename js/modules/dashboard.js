@@ -63,10 +63,10 @@ const dashboardModule = (() => {
     const filteredClosed   = calc.filterByDateRange(closedTrades, _selectedRange);
 
     _renderCurrentState(equity, openTrades, currentR, settings, marketHealth, capital);
-    _renderSummaryCards(filteredClosed);
-    _renderDailyChart(filteredClosed);
-    _renderBubbleChart(filteredClosed);
-    _renderPositionSnapshot(openTrades, currentR, settings);
+    _renderSummaryCards(filteredClosed, equity);
+    _renderDailyChart(filteredClosed, equity);
+    _renderBubbleChart(filteredClosed, equity);
+    _renderPositionSnapshot(openTrades, currentR, settings, equity);
     _renderAlertCentre(openTrades);
   }
 
@@ -170,7 +170,7 @@ const dashboardModule = (() => {
   }
 
   // ── Section B: Trading Summary ────────────────────────────────────────────
-  function _renderSummaryCards(filteredClosed) {
+  function _renderSummaryCards(filteredClosed, equity = 0) {
     const container = document.getElementById('dash-summary-cards');
     if (!container) return;
 
@@ -189,14 +189,19 @@ const dashboardModule = (() => {
     const { avgWinR, avgLossR, winCount, lossCount } = avgWL;
     const rrRatio = avgLossR !== 0 ? (Math.abs(avgWinR / avgLossR)).toFixed(2) : '—';
 
-    const pnlClass = totalPnl >= 0 ? 'text-success' : 'text-danger';
-    const rClass   = totalR   >= 0 ? 'text-success' : 'text-danger';
-    const expClass = expectancy >= 0 ? 'text-success' : 'text-danger';
+    const pnlClass  = totalPnl >= 0 ? 'text-success' : 'text-danger';
+    const rClass    = totalR   >= 0 ? 'text-success' : 'text-danger';
+    const expClass  = expectancy >= 0 ? 'text-success' : 'text-danger';
+    const pnlPct    = equity > 0 ? (totalPnl / equity * 100) : 0;
+    const _s        = v => v >= 0 ? '+' : '';
 
     container.innerHTML = `
       <div class="stat-card">
         <div class="stat-card-label">Net P&amp;L <span class="text-muted" style="font-weight:400;">(${_selectedRange})</span></div>
-        <div class="stat-card-value ${pnlClass}">${calc.formatCurrency(totalPnl)}</div>
+        <div class="stat-card-value ${pnlClass}">
+          <span class="prv-amt">${calc.formatCurrency(totalPnl)}</span>
+          <span class="prv-pct">${_s(totalPnl)}${pnlPct.toFixed(2)}% AV</span>
+        </div>
         <div class="stat-card-sub ${rClass}">${calc.formatR(totalR)} &nbsp;|&nbsp; ${filteredClosed.length} trades</div>
       </div>
 
@@ -231,7 +236,7 @@ const dashboardModule = (() => {
   }
 
   // ── Daily Cumulative P&L Chart ────────────────────────────────────────────
-  function _renderDailyChart(filteredClosed) {
+  function _renderDailyChart(filteredClosed, equity = 0) {
     const el = document.getElementById('chart-daily-pnl');
     if (!el) return;
 
@@ -262,11 +267,11 @@ const dashboardModule = (() => {
     const data  = dailyData.map(d => d.cumPnl);
     const color = (data[data.length - 1] || 0) >= 0 ? charts.COLORS.success : charts.COLORS.danger;
 
-    charts.renderLineChart('chart-daily-pnl', labels, data, 'Cumulative P&L', color);
+    charts.renderLineChart('chart-daily-pnl', labels, data, 'Cumulative P&L', color, equity);
   }
 
   // ── Risk:Reward Bubble Chart ──────────────────────────────────────────────
-  function _renderBubbleChart(filteredClosed) {
+  function _renderBubbleChart(filteredClosed, equity = 0) {
     const el = document.getElementById('chart-rr-bubble');
     if (!el) return;
 
@@ -287,11 +292,11 @@ const dashboardModule = (() => {
     }
 
     el.style.display = '';
-    charts.renderBubbleChart('chart-rr-bubble', filteredClosed);
+    charts.renderBubbleChart('chart-rr-bubble', filteredClosed, equity);
   }
 
   // ── Position Snapshot ─────────────────────────────────────────────────────
-  function _renderPositionSnapshot(openTrades, currentR, settings) {
+  function _renderPositionSnapshot(openTrades, currentR, settings, equity = 0) {
     const tbody   = document.getElementById('dash-position-body');
     const counter = document.getElementById('dash-pos-count');
     if (!tbody) return;
@@ -318,6 +323,10 @@ const dashboardModule = (() => {
       const activeAlerts = alertEngine.getActiveAlerts([trade]);
       const alertIcon  = activeAlerts.length > 0 ? ' ⚠' : '';
 
+      const expPct  = equity > 0 ? (m.exposure    / equity * 100) : 0;
+      const riskPct = equity > 0 ? (m.currentRisk / equity * 100) : 0;
+      const _s      = v => v >= 0 ? '+' : '';
+
       return `
         <tr class="clickable-row" data-id="${trade.id}" style="cursor:pointer;" title="Open in Positions">
           <td>
@@ -328,8 +337,14 @@ const dashboardModule = (() => {
             </div>
             <div style="font-size:11px;color:#94a3b8;">${trade.tradeType || 'Equity'} · ${trade.sector || ''}</div>
           </td>
-          <td class="text-right">${calc.formatCurrency(m.exposure)}</td>
-          <td class="text-right ${rClass}">${calc.formatCurrency(m.currentRisk)}</td>
+          <td class="text-right">
+            <span class="prv-amt">${calc.formatCurrency(m.exposure)}</span>
+            <span class="prv-pct">${expPct.toFixed(1)}% AV</span>
+          </td>
+          <td class="text-right ${rClass}">
+            <span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span>
+            <span class="prv-pct">${_s(riskPct)}${Math.abs(riskPct).toFixed(1)}% AV</span>
+          </td>
           <td class="text-right"><span class="badge ${dayBadge}">${m.holdingDays}d (T: ${m.tradingDays})</span></td>
         </tr>
       `;
