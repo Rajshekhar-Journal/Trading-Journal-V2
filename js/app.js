@@ -9,14 +9,14 @@ const app = (() => {
 
   // Phase 2: async init with auth guard
   async function init() {
-    // Check authentication — redirect to login if no session
     const ok = await auth.requireAuth();
     if (!ok) return;
-
     _setupNav();
     _setupGlobalListeners();
     const settings = await db.getSettings();
     const startModule = settings?.general?.defaultStartupModule || 'dashboard';
+    // Apply privacy mode on startup
+    _applyPrivacyClass(settings?.general?.privacyMode || false);
     navigate(startModule);
     await _updateTraderName();
   }
@@ -50,11 +50,19 @@ const app = (() => {
     document.getElementById('modal-overlay')?.addEventListener('click', (e) => {
       if (e.target.id === 'modal-overlay') closeModal();
     });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeModal();
+      // Ctrl+Shift+P — toggle privacy mode
+      if (e.ctrlKey && e.shiftKey && e.key === 'P') { e.preventDefault(); togglePrivacyMode(); }
+    });
     // Phase 2: logout button
     document.getElementById('btn-logout')?.addEventListener('click', () => auth.signOut());
-    // Settings change listener
-    db.on('settings', async () => await _updateTraderName());
+    // Settings change listener — re-apply privacy mode & trader name
+    db.on('settings', async () => {
+      await _updateTraderName();
+      const s = await db.getSettings();
+      _applyPrivacyClass(s?.general?.privacyMode || false);
+    });
   }
 
   async function _updateTraderName() {
@@ -62,6 +70,24 @@ const app = (() => {
     const name = settings?.general?.traderName || 'Trader';
     const el = document.getElementById('trader-name');
     if (el) el.textContent = name;
+  }
+
+  // ── Privacy Mode ───────────────────────────────────────────────────────────
+  function _applyPrivacyClass(on) {
+    document.body.classList.toggle('privacy-mode', !!on);
+  }
+
+  async function applyPrivacyMode(on) {
+    _applyPrivacyClass(on);
+    const settings = await db.getSettings();
+    settings.general = { ...(settings.general || {}), privacyMode: on };
+    await db.saveSettings(settings);
+  }
+
+  async function togglePrivacyMode() {
+    const isOn = document.body.classList.contains('privacy-mode');
+    await applyPrivacyMode(!isOn);
+    toast(isOn ? '🔓 Privacy mode off' : '🔒 Privacy mode on — amounts blurred', isOn ? 'info' : 'success', 2000);
   }
 
   // ── Toast ──────────────────────────────────────────────────────────────────
@@ -330,7 +356,9 @@ const app = (() => {
   function getCurrentModule() { return _currentModule; }
   function refreshCurrentModule() { navigate(_currentModule); }
 
-  return { init, navigate, toast, openModal, closeModal, showMarketHealthModal, updateMarketHealthAuto, getCurrentModule, refreshCurrentModule };
+  return { init, navigate, toast, openModal, closeModal, showMarketHealthModal,
+    updateMarketHealthAuto, getCurrentModule, refreshCurrentModule,
+    applyPrivacyMode, togglePrivacyMode };
 })();
 
 document.addEventListener('DOMContentLoaded', () => app.init());

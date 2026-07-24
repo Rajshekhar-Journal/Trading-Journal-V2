@@ -101,7 +101,7 @@ const dashboardModule = (() => {
     let remHint;
     if (remaining <= 0)         remHint = '🚫 No new positions — heat at max';
     else if (remaining <= 0.5)  remHint = '⚠ Very limited capacity remaining';
-    else                        remHint = `~${calc.formatCurrency(remainingRs)} more can be risked`;
+    else                        remHint = `~<span class="prv-amt">${calc.formatCurrency(remainingRs)}</span> more can be risked`;
 
     // Market health
     const trendEmoji   = marketHealth.trend === 'Uptrend' ? '🟢' : '🔴';
@@ -114,9 +114,9 @@ const dashboardModule = (() => {
     container.innerHTML = `
       <div class="stat-card">
         <div class="stat-card-label">Account Value</div>
-        <div class="stat-card-value">${calc.formatCurrency(equity)}</div>
+        <div class="stat-card-value"><span class="prv-amt">${calc.formatCurrency(equity)}</span></div>
         <div class="stat-card-sub ${deltaClass}" style="margin-top:4px;">
-          ${deltaSign}${calc.formatCurrency(equityDelta)}&nbsp;(${deltaSign}${deltaPct.toFixed(2)}%)
+          ${deltaSign}<span class="prv-amt">${calc.formatCurrency(equityDelta)}</span>&nbsp;(${deltaSign}${deltaPct.toFixed(2)}%)
           <span class="text-muted" style="font-size:11px;margin-left:4px;">vs deposits</span>
         </div>
       </div>
@@ -127,13 +127,13 @@ const dashboardModule = (() => {
           <span class="stat-card-value" style="margin:0;">${portfolioHeat.toFixed(2)}%</span>
           <span class="badge ${heatBadge}" style="font-size:10px;">${heatLabel}</span>
         </div>
-        <div style="margin-top:3px;font-size:11px;color:#64748b;">${calc.formatCurrency(heatRs)} at risk</div>
+        <div style="margin-top:3px;font-size:11px;color:#64748b;"><span class="prv-amt">${calc.formatCurrency(heatRs)}</span> at risk</div>
         <div style="margin-top:8px;">
           <div style="height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;">
             <div style="height:100%;width:${heatPct}%;background:${heatColor};border-radius:3px;transition:width 0.4s ease;"></div>
           </div>
           <div style="margin-top:5px;font-size:10px;color:#94a3b8;">
-            Max Risk Allowed : ${maxHeat}% (<strong style="color:#64748b;">${calc.formatCurrency((maxHeat / 100) * equity)}</strong>)
+            Max Risk Allowed : ${maxHeat}% (<strong style="color:#64748b;"><span class="prv-amt">${calc.formatCurrency((maxHeat / 100) * equity)}</span></strong>)
           </div>
         </div>
       </div>

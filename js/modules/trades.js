@@ -164,14 +164,14 @@ const tradesModule = (() => {
       return `<tr class="${rowCls}${!trade.ruleFollowed?' trade-row-rule-break':''}" data-id="${trade.id}" onclick="tradesModule._onRowClick('${trade.id}')">
         <td><strong>${trade.symbol}</strong></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date||'')}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
+        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.avgEntryPrice)}</span></td>
         <td>${calc.formatDate(trade.finalExit?.date||'')}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}</td>
+        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.avgExitPrice)}</span></td>
         <td>${m.holdingDays}d (T: ${m.tradingDays})</td>
         <td class="text-muted">${pb?.name||'—'}</td>
         <td><span class="badge badge-muted" style="font-size:10px">${trade.tradeType||'Equity'}</span></td>
         <td><span class="badge ${trade.direction==='Long'?'badge-success':'badge-danger'}" style="font-size:10px">${trade.direction?.[0]||'L'}</span></td>
-        <td class="${m.realizedPnl>=0?'text-success':'text-danger'} font-mono fw-600">${calc.formatCurrency(m.realizedPnl)}</td>
+        <td class="${m.realizedPnl>=0?'text-success':'text-danger'} font-mono fw-600"><span class="prv-amt">${calc.formatCurrency(m.realizedPnl)}</span></td>
         <td class="${rCls} font-mono fw-600">${calc.formatR(m.profitR)}</td>
         <td class="${m.realizedPnl>=0?'text-success':'text-danger'}">${retPct}%</td>
         <td><span class="badge ${resBadge}">${result}</span></td>

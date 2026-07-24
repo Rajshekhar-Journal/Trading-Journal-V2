@@ -128,6 +128,17 @@ const settingsModule = (() => {
       </div>
 
       ${_saveBtn('saveGeneral')}
+      <div class="settings-section-header" style="margin-top:28px;">Display</div>
+      <div class="toggle-wrap">
+        <div class="toggle-wrap-label">
+          <span class="toggle-wrap-title">🔒 Privacy Mode</span>
+          <span class="toggle-wrap-hint">Blur all ₹ amounts — R-multiples and % stay visible. Shortcut: <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:10px">Ctrl+Shift+P</kbd></span>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="s-privacy" ${s.privacyMode ? 'checked' : ''} onchange="app.applyPrivacyMode(this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
       ${_renderUserManual()}
     </div>`;
   }
@@ -142,6 +153,7 @@ const settingsModule = (() => {
       fyStart:              document.getElementById('s-fyr')?.value,
       defaultStartupModule: document.getElementById('s-startup')?.value,
       defaultDateRange:     document.getElementById('s-defrange')?.value,
+      privacyMode:          document.getElementById('s-privacy')?.checked || false,
     };
     // Save Market Health thresholds
     settings.marketHealthThresholds = {

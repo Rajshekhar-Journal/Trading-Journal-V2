@@ -209,7 +209,7 @@ const positionsModule = (() => {
       const chgPct    = m.avgEntryPrice > 0 ? ((cmp - m.avgEntryPrice) / m.avgEntryPrice * 100) : 0;
       const exposurePct = equity > 0 ? (m.exposure / equity * 100) : 0;
       const entryDate = trade.entries?.[0]?.date || trade.createdAt || '';
-      return { trade, m, cmp, unrealPnl, chgPct, entryDate };
+      return { trade, m, cmp, unrealPnl, chgPct, exposurePct, entryDate };
     });
 
     withKeys.sort((a, b) => {
@@ -244,16 +244,16 @@ const positionsModule = (() => {
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date || '')}</td>
         <td class="font-mono">${m.openQty}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
-        <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.currentStop)}</td>
+        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.avgEntryPrice)}</span></td>
+        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(trade.initialStop)}</span></td>
+        <td class="font-mono"><span class="prv-amt">₹${calc.formatNumber(m.currentStop)}</span></td>
         <td class="font-mono" data-cmp-cell="${trade.id}" style="cursor:pointer" onclick="event.stopPropagation();positionsModule._showCmpModal('${trade.id}')" title="Click to update CMP manually">
-          ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span></td>
+          <span class="prv-amt">₹${calc.formatNumber(cmp)}</span> <span style="color:#5b6af0;font-size:10px">✎</span></td>
         <td class="${chgCls} font-mono">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(1)}%</td>
-        <td class="${riskRCls} font-mono">${calc.formatCurrency(m.currentRisk)}</td>
-        <td class="font-mono">${calc.formatCurrency(m.exposure)}<span style="font-size:10px;color:var(--text-muted);margin-left:4px">(${exposurePct.toFixed(1)}%)</span></td>
-        <td class="${pnlCls} font-mono fw-600">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></td>
-        <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono">${calc.formatCurrency(netPnl)}</td>
+        <td class="${riskRCls} font-mono"><span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span></td>
+        <td class="font-mono"><span class="prv-amt">${calc.formatCurrency(m.exposure)}</span><span style="font-size:10px;color:var(--text-muted);margin-left:4px">(${exposurePct.toFixed(1)}%)</span></td>
+        <td class="${pnlCls} font-mono fw-600"><span class="prv-amt">${calc.formatCurrency(unrealPnl)}</span> <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></td>
+        <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono"><span class="prv-amt">${calc.formatCurrency(netPnl)}</span></td>
         <td>${alertBadge}</td>
       </tr>`;
     }).join('');
@@ -361,20 +361,20 @@ const positionsModule = (() => {
         <div class="detail-panel-body">
           ${alertHtml}
           <div class="metric-grid">
-            <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
+            <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(m.avgEntryPrice)}</span></div></div>
             <div class="metric-item">
               <div class="metric-label">CMP <span style="color:#5b6af0;font-size:10px;cursor:pointer" onclick="positionsModule._showCmpModal('${tradeId}')">✎ Update</span></div>
-              <div class="metric-value">₹${calc.formatNumber(cmp)}</div>
+              <div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(cmp)}</span></div>
             </div>
-            ${m.avgExitPrice > 0 ? `<div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)} <span style="font-size:11px;color:${m.avgExitPrice >= m.avgEntryPrice ? 'var(--positive)':'var(--negative)'}">(${((m.avgExitPrice-m.avgEntryPrice)/m.avgEntryPrice*100).toFixed(2)}%)</span></div></div>` : ''}
-            <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value">₹${calc.formatNumber(trade.initialStop)}</div></div>
-            <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value">₹${calc.formatNumber(m.currentStop)}</div></div>
+            ${m.avgExitPrice > 0 ? `<div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(m.avgExitPrice)}</span> <span style="font-size:11px;color:${m.avgExitPrice >= m.avgEntryPrice ? 'var(--positive)':'var(--negative)'}">(${((m.avgExitPrice-m.avgEntryPrice)/m.avgEntryPrice*100).toFixed(2)}%)</span></div></div>` : ''}
+            <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(trade.initialStop)}</span></div></div>
+            <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(m.currentStop)}</span></div></div>
             <div class="metric-item"><div class="metric-label">Open Qty</div><div class="metric-value">${m.openQty}</div></div>
-            <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value">${calc.formatCurrency(m.exposure)}<span style="display:block;font-size:11px;font-weight:400;color:var(--text-muted)">${equity > 0 ? (m.exposure/equity*100).toFixed(1) : 0}% of AV</span></div></div>
-            <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.trueRPT)}</div></div>
-            <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.initialRPT ? 'negative' : 'text-warning'}">${calc.formatCurrency(m.currentRisk)}</div></div>
-            <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></div></div>
-            <div class="metric-item"><div class="metric-label">Realized P&L</div><div class="metric-value ${m.realizedPnl >= 0 ? 'positive' : m.realizedPnl < 0 ? 'negative' : ''}">${calc.formatCurrency(m.realizedPnl || 0)} <span style="font-size:11px">(${calc.formatR(m.profitR)})</span></div></div>
+            <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value"><span class="prv-amt">${calc.formatCurrency(m.exposure)}</span><span style="display:block;font-size:11px;font-weight:400;color:var(--text-muted)">${equity > 0 ? (m.exposure/equity*100).toFixed(1) : 0}% of AV</span></div></div>
+            <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value"><span class="prv-amt">₹${calc.formatNumber(m.trueRPT)}</span></div></div>
+            <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.initialRPT ? 'negative' : 'text-warning'}"><span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span></div></div>
+            <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}"><span class="prv-amt">${calc.formatCurrency(unrealPnl)}</span> <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></div></div>
+            <div class="metric-item"><div class="metric-label">Realized P&L</div><div class="metric-value ${m.realizedPnl >= 0 ? 'positive' : m.realizedPnl < 0 ? 'negative' : ''}"><span class="prv-amt">${calc.formatCurrency(m.realizedPnl || 0)}</span> <span style="font-size:11px">(${calc.formatR(m.profitR)})</span></div></div>
           </div>
 
           <div class="quick-actions">
