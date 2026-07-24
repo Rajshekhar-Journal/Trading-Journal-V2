@@ -207,6 +207,7 @@ const positionsModule = (() => {
       const cmp       = trade.cmp || m.avgEntryPrice;
       const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
       const chgPct    = m.avgEntryPrice > 0 ? ((cmp - m.avgEntryPrice) / m.avgEntryPrice * 100) : 0;
+      const exposurePct = equity > 0 ? (m.exposure / equity * 100) : 0;
       const entryDate = trade.entries?.[0]?.date || trade.createdAt || '';
       return { trade, m, cmp, unrealPnl, chgPct, entryDate };
     });
@@ -227,7 +228,7 @@ const positionsModule = (() => {
       return _sortState.dir === 'asc' ? cmp_ : -cmp_;
     });
 
-    tbody.innerHTML = withKeys.map(({ trade, m, cmp, unrealPnl, chgPct }) => {
+    tbody.innerHTML = withKeys.map(({ trade, m, cmp, unrealPnl, chgPct, exposurePct }) => {
       const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
       const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
       const alertBadge= alerts.length ? `<span class="badge badge-warning">⚠ ${alerts.length}</span>` : `<span class="badge badge-muted">—</span>`;
@@ -250,7 +251,7 @@ const positionsModule = (() => {
           ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span></td>
         <td class="${chgCls} font-mono">${chgPct >= 0 ? '+' : ''}${chgPct.toFixed(1)}%</td>
         <td class="${riskRCls} font-mono">${calc.formatCurrency(m.currentRisk)}</td>
-        <td class="font-mono">${calc.formatCurrency(m.exposure)}</td>
+        <td class="font-mono">${calc.formatCurrency(m.exposure)}<span style="font-size:10px;color:var(--text-muted);margin-left:4px">(${exposurePct.toFixed(1)}%)</span></td>
         <td class="${pnlCls} font-mono fw-600">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></td>
         <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono">${calc.formatCurrency(netPnl)}</td>
         <td>${alertBadge}</td>
@@ -298,6 +299,10 @@ const positionsModule = (() => {
     const cmp       = trade.cmp || m.avgEntryPrice;
     const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
     const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
+    // Fetch equity for Exposure % of AV
+    const _cap    = await db.getCapital();
+    const _closed = await db.getClosedTrades();
+    const equity  = calc.getCurrentEquity(_cap, calc.getTotalPnl(_closed));
     const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
     
@@ -365,7 +370,7 @@ const positionsModule = (() => {
             <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value">₹${calc.formatNumber(trade.initialStop)}</div></div>
             <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value">₹${calc.formatNumber(m.currentStop)}</div></div>
             <div class="metric-item"><div class="metric-label">Open Qty</div><div class="metric-value">${m.openQty}</div></div>
-            <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value">${calc.formatCurrency(m.exposure)}</div></div>
+            <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value">${calc.formatCurrency(m.exposure)}<span style="display:block;font-size:11px;font-weight:400;color:var(--text-muted)">${equity > 0 ? (m.exposure/equity*100).toFixed(1) : 0}% of AV</span></div></div>
             <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.trueRPT)}</div></div>
             <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.initialRPT ? 'negative' : 'text-warning'}">${calc.formatCurrency(m.currentRisk)}</div></div>
             <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></div></div>
