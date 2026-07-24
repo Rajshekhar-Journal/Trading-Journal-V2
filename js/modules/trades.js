@@ -115,18 +115,13 @@ const tradesModule = (() => {
     const pnlPct = equity > 0 ? (m.realizedPnl / equity * 100) : 0;
     const _s     = v => v >= 0 ? '+' : '';
 
-    // TradingView date range (30 days before entry → 45 days after exit)
+    // Dates for display only (not passed to widget — widgetembed doesn't support from/to)
     const entryDate = trade.entries?.[0]?.date || '';
     const exitDate  = trade.finalExit?.date || entryDate;
-    const fromD     = new Date(entryDate || Date.now());
-    fromD.setDate(fromD.getDate() - 30);
-    const toD = new Date(exitDate || Date.now());
-    toD.setDate(toD.getDate() + 45);
-    const fromTs = Math.floor(fromD.getTime() / 1000);
-    const toTs   = Math.floor(toD.getTime()   / 1000);
 
     const tvSym = encodeURIComponent(`NSE:${trade.symbol}`);
-    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${tvSym}&interval=D&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en&from=${fromTs}&to=${toTs}`;
+    // Use range=6M — gives good trade context without unsupported timestamp params
+    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${tvSym}&interval=D&range=6M&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en`;
 
     // Entry markers
     const entryMarkers = (trade.entries || []).map((e, i) =>
@@ -165,14 +160,21 @@ const tradesModule = (() => {
           <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}</span>
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:99px;border:1px solid var(--border-light)">${_cvIdx + 1} / ${_cvTrades.length}</span>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank"
-             class="btn btn-secondary btn-sm" style="font-size:11px">↗ Full Chart</a>
+             class="btn btn-secondary btn-sm" style="font-size:11px" title="Open full chart in TradingView">↗ TradingView</a>
+          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank"
+             class="btn btn-secondary btn-sm" style="font-size:11px" title="NSE India quote">📊 NSE</a>
+          <a href="https://www.screener.in/company/${trade.symbol}/" target="_blank"
+             class="btn btn-secondary btn-sm" style="font-size:11px" title="Screener.in">🔍 Screener</a>
           <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''}>Next →</button>
         </div>
       </div>
 
       <!-- TradingView chart iframe -->
+      <div style="font-size:11px;color:var(--text-muted);background:rgba(91,106,240,0.05);border:1px solid rgba(91,106,240,0.15);border-radius:6px;padding:6px 12px;margin-bottom:8px">
+        ℹ Chart shows 6-month daily view (MA20 &amp; MA50). If TradingView shows a login prompt for this symbol, use the <strong>NSE</strong> or <strong>Screener</strong> links above, or sign in to TradingView.
+      </div>
       <div class="cv-chart-wrap">
         <iframe src="${tvUrl}" id="tv-cv-iframe"
           style="width:100%;height:520px;border:none;"
