@@ -13,6 +13,22 @@ const tradesModule = (() => {
   let _currentView = 'metrics';   // 'metrics' | 'chart'
   let _cvTrades    = [];           // trades shown in chart view
   let _cvIdx       = 0;            // current trade index in chart view
+  let _tvScriptPromise = null;     // singleton TV script loader
+
+  // Load TradingView Advanced Chart Widget script (once per session)
+  function _loadTVScript() {
+    if (!_tvScriptPromise) {
+      _tvScriptPromise = new Promise(resolve => {
+        if (window.TradingView) { resolve(); return; }
+        const s = document.createElement('script');
+        s.src = 'https://s3.tradingview.com/tv.js';
+        s.onload = resolve;
+        s.onerror = resolve; // resolve anyway so chart view still renders
+        document.head.appendChild(s);
+      });
+    }
+    return _tvScriptPromise;
+  }
 
   async function init() {
     _setupFilters();
@@ -119,9 +135,10 @@ const tradesModule = (() => {
     const entryDate = trade.entries?.[0]?.date || '';
     const exitDate  = trade.finalExit?.date || entryDate;
 
-    const tvSym = encodeURIComponent(`NSE:${trade.symbol}`);
+    const tvSym = `NSE:${trade.symbol}`;
     // Use range=6M — gives good trade context without unsupported timestamp params
-    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${tvSym}&interval=D&range=6M&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en`;
+    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${encodeURIComponent(tvSym)}&interval=D&range=6M&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en`;
+    const chartContainerId = `tv_cv_${trade.id.replace(/[^a-z0-9]/gi,'_')}`;
 
     // Entry markers
     const entryMarkers = (trade.entries || []).map((e, i) =>
@@ -171,15 +188,12 @@ const tradesModule = (() => {
         </div>
       </div>
 
-      <!-- TradingView chart iframe -->
+      <!-- TradingView Advanced Chart Widget container -->
       <div style="font-size:11px;color:var(--text-muted);background:rgba(91,106,240,0.05);border:1px solid rgba(91,106,240,0.15);border-radius:6px;padding:6px 12px;margin-bottom:8px">
-        ℹ Chart shows 6-month daily view (MA20 &amp; MA50). If TradingView shows a login prompt for this symbol, use the <strong>NSE</strong> or <strong>Screener</strong> links above, or sign in to TradingView.
+        ℹ Chart loads via TradingView Advanced Widget. If it asks you to sign in, <a href="https://www.tradingview.com/signin/" target="_blank" style="color:var(--primary)">log into TradingView.com</a> once in this browser — then all NSE symbols will work without popups.
       </div>
       <div class="cv-chart-wrap">
-        <iframe src="${tvUrl}" id="tv-cv-iframe"
-          style="width:100%;height:520px;border:none;"
-          allowtransparency="true" scrolling="no" allowfullscreen>
-        </iframe>
+        <div id="${chartContainerId}" style="height:520px"></div>
       </div>
 
       <!-- Trade key levels -->
@@ -230,6 +244,39 @@ const tradesModule = (() => {
       if (e.key === 'ArrowLeft')  tradesModule._cvNav(-1);
       if (e.key === 'ArrowRight') tradesModule._cvNav(1);
     };
+
+    // Initialise TradingView Advanced Chart Widget
+    await _loadTVScript();
+    if (window.TradingView) {
+      try {
+        new window.TradingView.widget({
+          container_id:   chartContainerId,
+          symbol:         tvSym,
+          interval:       'D',
+          timezone:       'Asia/Kolkata',
+          theme:          'light',
+          style:          '1',
+          locale:         'en',
+          width:          '100%',
+          height:         520,
+          allow_symbol_change: true,
+          studies:        ['MASimple@tv-basicstudies', 'MASimple@tv-basicstudies'],
+          hide_legend:    false,
+          save_image:     true,
+          show_popup_button: true,
+          popup_width:    '1000',
+          popup_height:   '650',
+        });
+      } catch(e) {
+        // Fallback to iframe if widget init fails
+        const wrap = document.getElementById(chartContainerId)?.parentElement;
+        if (wrap) wrap.innerHTML = `<iframe src="${tvUrl.replace('NSE:'+trade.symbol, encodeURIComponent('NSE:'+trade.symbol))}" style="width:100%;height:520px;border:none" allowfullscreen></iframe>`;
+      }
+    } else {
+      // Script failed to load — use iframe fallback
+      const el = document.getElementById(chartContainerId);
+      if (el) el.outerHTML = `<iframe src="${tvUrl}" style="width:100%;height:520px;border:none" allowfullscreen></iframe>`;
+    }
   }
 
   async function _cvNav(dir) {
