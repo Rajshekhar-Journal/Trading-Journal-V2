@@ -13,22 +13,6 @@ const tradesModule = (() => {
   let _currentView = 'metrics';   // 'metrics' | 'chart'
   let _cvTrades    = [];           // trades shown in chart view
   let _cvIdx       = 0;            // current trade index in chart view
-  let _tvScriptPromise = null;     // singleton TV script loader
-
-  // Load TradingView Advanced Chart Widget script (once per session)
-  function _loadTVScript() {
-    if (!_tvScriptPromise) {
-      _tvScriptPromise = new Promise(resolve => {
-        if (window.TradingView) { resolve(); return; }
-        const s = document.createElement('script');
-        s.src = 'https://s3.tradingview.com/tv.js';
-        s.onload = resolve;
-        s.onerror = resolve; // resolve anyway so chart view still renders
-        document.head.appendChild(s);
-      });
-    }
-    return _tvScriptPromise;
-  }
 
   async function init() {
     _setupFilters();
@@ -112,7 +96,7 @@ const tradesModule = (() => {
     await _renderChartView();
   }
 
-  // ── Chart View: trade-by-trade TradingView navigator ──────────────────────
+  // ── Chart View: trade-by-trade Lightweight Charts candlestick navigator ───
   async function _renderChartView() {
     const container = document.getElementById('trades-cv-content');
     if (!container) return;
@@ -131,39 +115,25 @@ const tradesModule = (() => {
     const pnlPct = equity > 0 ? (m.realizedPnl / equity * 100) : 0;
     const _s     = v => v >= 0 ? '+' : '';
 
-    // Dates for display only (not passed to widget — widgetembed doesn't support from/to)
     const entryDate = trade.entries?.[0]?.date || '';
     const exitDate  = trade.finalExit?.date || entryDate;
+    const pnlCls    = m.realizedPnl >= 0 ? 'text-success' : 'text-danger';
+    const rCls      = m.profitR    >= 0 ? 'text-success' : 'text-danger';
+    const result    = calc.getTradeResult(trade);
+    const resBadge  = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
+    const chartId   = `lwc_${trade.id.replace(/[^a-z0-9]/gi,'_')}`;
 
-    const tvSym = `NSE:${trade.symbol}`;
-    // Use range=6M — gives good trade context without unsupported timestamp params
-    const tvUrl = `https://www.tradingview.com/widgetembed/?frameElementId=tv_cv_${trade.id}&symbol=${encodeURIComponent(tvSym)}&interval=D&range=6M&hidesidetoolbar=0&symboledit=1&saveimage=1&theme=light&style=1&timezone=Asia%2FKolkata&studies=%5B%22MASimple%4020%22%2C%22MASimple%4050%22%5D&show_popup_button=1&popup_width=1000&popup_height=650&locale=en`;
-    const chartContainerId = `tv_cv_${trade.id.replace(/[^a-z0-9]/gi,'_')}`;
-
-    // Entry markers
+    // Build marker pills for detail panel
     const entryMarkers = (trade.entries || []).map((e, i) =>
       `<span class="cv-marker cv-entry">▲ Entry${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
     ).join('');
-
-    // Stop marker
     const stopMarker = trade.initialStop
-      ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>`
-      : '';
-
-    // Partial exits
+      ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>` : '';
     const exitMarkers = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
       `<span class="cv-marker cv-exit">▼ Exit${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
     ).join('');
-
-    // Final exit
     const finalExit = trade.finalExit
-      ? `<span class="cv-marker cv-exit" style="font-weight:700;">✓ Final: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>`
-      : '';
-
-    const pnlCls = m.realizedPnl >= 0 ? 'text-success' : 'text-danger';
-    const rCls   = m.profitR    >= 0 ? 'text-success' : 'text-danger';
-    const result = calc.getTradeResult(trade);
-    const resBadge = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
+      ? `<span class="cv-marker cv-exit" style="font-weight:700">✓ Final: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>` : '';
 
     container.innerHTML = `
       <!-- Nav bar -->
@@ -178,39 +148,25 @@ const tradesModule = (() => {
           <span style="font-size:11px;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:99px;border:1px solid var(--border-light)">${_cvIdx + 1} / ${_cvTrades.length}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank"
-             class="btn btn-secondary btn-sm" style="font-size:11px" title="Open full chart in TradingView">↗ TradingView</a>
-          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank"
-             class="btn btn-secondary btn-sm" style="font-size:11px" title="NSE India quote">📊 NSE</a>
-          <a href="https://www.screener.in/company/${trade.symbol}/" target="_blank"
-             class="btn btn-secondary btn-sm" style="font-size:11px" title="Screener.in">🔍 Screener</a>
+          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">↗ TV</a>
+          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">📊 NSE</a>
           <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''}>Next →</button>
         </div>
       </div>
 
-      <!-- TradingView Advanced Chart Widget container -->
-      <div style="font-size:11px;color:var(--text-muted);background:rgba(91,106,240,0.05);border:1px solid rgba(91,106,240,0.15);border-radius:6px;padding:6px 12px;margin-bottom:8px">
-        ℹ Chart loads via TradingView Advanced Widget. If it asks you to sign in, <a href="https://www.tradingview.com/signin/" target="_blank" style="color:var(--primary)">log into TradingView.com</a> once in this browser — then all NSE symbols will work without popups.
-      </div>
+      <!-- Candlestick chart canvas -->
       <div class="cv-chart-wrap">
-        <div id="${chartContainerId}" style="height:520px"></div>
+        <div id="${chartId}" style="height:520px;position:relative">
+          <div class="cv-loading">⏳ Loading ${trade.symbol} chart data…</div>
+        </div>
       </div>
 
       <!-- Trade key levels -->
       <div class="cv-details">
         <div class="cv-detail-grid">
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">Avg Entry</div>
-            <div class="cv-detail-value">₹${calc.formatNumber(m.avgEntryPrice)}</div>
-          </div>
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">Initial Stop</div>
-            <div class="cv-detail-value text-danger">₹${calc.formatNumber(trade.initialStop)}</div>
-          </div>
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">Avg Exit</div>
-            <div class="cv-detail-value">₹${calc.formatNumber(m.avgExitPrice)}</div>
-          </div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹${calc.formatNumber(trade.initialStop)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
           <div class="cv-detail-card">
             <div class="cv-detail-label">P&amp;L</div>
             <div class="cv-detail-value ${pnlCls}">
@@ -218,26 +174,15 @@ const tradesModule = (() => {
               <span class="prv-pct">${_s(pnlPct)}${pnlPct.toFixed(2)}% AV</span>
             </div>
           </div>
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">R Multiple</div>
-            <div class="cv-detail-value ${rCls}">${calc.formatR(m.profitR)}</div>
-          </div>
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">Held</div>
-            <div class="cv-detail-value">${m.holdingDays}d (T:${m.tradingDays})</div>
-          </div>
+          <div class="cv-detail-card"><div class="cv-detail-label">R Multiple</div><div class="cv-detail-value ${rCls}">${calc.formatR(m.profitR)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Held</div><div class="cv-detail-value">${m.holdingDays}d (T:${m.tradingDays})</div></div>
         </div>
         <div class="cv-markers-label">Trade Levels</div>
-        <div class="cv-markers">
-          ${entryMarkers}
-          ${stopMarker}
-          ${exitMarkers}
-          ${finalExit}
-        </div>
+        <div class="cv-markers">${entryMarkers}${stopMarker}${exitMarkers}${finalExit}</div>
       </div>
     `;
 
-    // Keyboard navigation (arrow keys)
+    // Keyboard navigation
     document.onkeydown = e => {
       if (_currentView !== 'chart') return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -245,37 +190,176 @@ const tradesModule = (() => {
       if (e.key === 'ArrowRight') tradesModule._cvNav(1);
     };
 
-    // Initialise TradingView Advanced Chart Widget
-    await _loadTVScript();
-    if (window.TradingView) {
-      try {
-        new window.TradingView.widget({
-          container_id:   chartContainerId,
-          symbol:         tvSym,
-          interval:       'D',
-          timezone:       'Asia/Kolkata',
-          theme:          'light',
-          style:          '1',
-          locale:         'en',
-          width:          '100%',
-          height:         520,
-          allow_symbol_change: true,
-          studies:        ['MASimple@tv-basicstudies', 'MASimple@tv-basicstudies'],
-          hide_legend:    false,
-          save_image:     true,
-          show_popup_button: true,
-          popup_width:    '1000',
-          popup_height:   '650',
+    // Fetch OHLC and paint the chart
+    await _renderLightweightChart(trade, chartId, entryDate, exitDate);
+  }
+
+  // ── Lightweight Charts renderer ─────────────────────────────────────────
+  async function _renderLightweightChart(trade, containerId, entryDate, exitDate) {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+
+    // Determine Yahoo Finance symbol (NSE suffix = .NS)
+    const yfSymbol = `${trade.symbol}.NS`;
+
+    try {
+      // Fetch via Vercel API proxy (avoids CORS)
+      const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=1y`);
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const json = await res.json();
+
+      const result = json?.chart?.result?.[0];
+      if (!result) throw new Error('No chart data returned');
+
+      const timestamps = result.timestamp || [];
+      const q          = result.indicators?.quote?.[0] || {};
+
+      // Build cleaned candle + volume arrays
+      const candles = timestamps
+        .map((t, i) => ({
+          time:  t,
+          open:  q.open?.[i],
+          high:  q.high?.[i],
+          low:   q.low?.[i],
+          close: q.close?.[i],
+        }))
+        .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)
+        .sort((a, b) => a.time - b.time)
+        .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time); // dedupe
+
+      const volumes = timestamps
+        .map((t, i) => ({
+          time:  t,
+          value: q.volume?.[i] ?? 0,
+          color: (q.close?.[i] ?? 0) >= (q.open?.[i] ?? 0) ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)',
+        }))
+        .filter((v, i) => q.open?.[i] != null)
+        .sort((a, b) => a.time - b.time)
+        .filter((v, i, arr) => i === 0 || v.time !== arr[i - 1].time);
+
+      if (!candles.length) throw new Error('Empty candle data');
+
+      // Helper: nearest candle timestamp to a YYYY-MM-DD date string
+      const nearestTs = dateStr => {
+        const target = Math.floor(new Date(dateStr).getTime() / 1000);
+        return candles.reduce((best, c) =>
+          Math.abs(c.time - target) < Math.abs(best - target) ? c.time : best,
+          candles[0].time
+        );
+      };
+
+      // Clear loading spinner
+      el.innerHTML = '';
+
+      // ── Create chart ──────────────────────────────────────────────────
+      const LC = window.LightweightCharts;
+      if (!LC) throw new Error('Lightweight Charts not loaded');
+
+      const chart = LC.createChart(el, {
+        width:  el.clientWidth || 900,
+        height: 520,
+        layout: { background: { color: '#ffffff' }, textColor: '#334155' },
+        grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+        crosshair: { mode: LC.CrosshairMode.Normal },
+        rightPriceScale: {
+          borderColor: '#e2e8f0',
+          scaleMargins: { top: 0.08, bottom: 0.22 },
+        },
+        timeScale: { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
+      });
+
+      // Candlestick series
+      const candleSeries = chart.addCandlestickSeries({
+        upColor:         '#22c55e',
+        downColor:       '#ef4444',
+        borderUpColor:   '#22c55e',
+        borderDownColor: '#ef4444',
+        wickUpColor:     '#22c55e',
+        wickDownColor:   '#ef4444',
+      });
+      candleSeries.setData(candles);
+
+      // Volume histogram (lower portion)
+      const volSeries = chart.addHistogramSeries({
+        priceFormat:  { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      volSeries.setData(volumes);
+
+      // ── Price lines (horizontal annotations) ───────────────────────────
+      (trade.entries || []).forEach((e, i) => {
+        candleSeries.createPriceLine({
+          price: e.price, color: '#16a34a', lineWidth: 1,
+          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: `Entry${(trade.entries.length > 1 ? i + 1 : '')} ₹${calc.formatNumber(e.price)}`,
         });
-      } catch(e) {
-        // Fallback to iframe if widget init fails
-        const wrap = document.getElementById(chartContainerId)?.parentElement;
-        if (wrap) wrap.innerHTML = `<iframe src="${tvUrl.replace('NSE:'+trade.symbol, encodeURIComponent('NSE:'+trade.symbol))}" style="width:100%;height:520px;border:none" allowfullscreen></iframe>`;
+      });
+      if (trade.initialStop) {
+        candleSeries.createPriceLine({
+          price: trade.initialStop, color: '#dc2626', lineWidth: 1,
+          lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,
+          title: `Stop ₹${calc.formatNumber(trade.initialStop)}`,
+        });
       }
-    } else {
-      // Script failed to load — use iframe fallback
-      const el = document.getElementById(chartContainerId);
-      if (el) el.outerHTML = `<iframe src="${tvUrl}" style="width:100%;height:520px;border:none" allowfullscreen></iframe>`;
+      const allExits = [
+        ...(trade.exits || []).filter(e => e.qty > 0),
+        ...(trade.finalExit ? [trade.finalExit] : []),
+      ];
+      allExits.forEach((e, i) => {
+        candleSeries.createPriceLine({
+          price: e.price, color: '#f59e0b', lineWidth: 1,
+          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: i === allExits.length - 1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+        });
+      });
+
+      // ── Arrow markers on candles ────────────────────────────────────────
+      const markers = [];
+      (trade.entries || []).forEach(e => {
+        if (!e.date) return;
+        markers.push({
+          time: nearestTs(e.date), position: 'belowBar',
+          color: '#16a34a', shape: 'arrowUp',
+          text: `Entry ₹${calc.formatNumber(e.price)}`,
+        });
+      });
+      allExits.forEach((e, i) => {
+        if (!e.date) return;
+        markers.push({
+          time: nearestTs(e.date), position: 'aboveBar',
+          color: '#dc2626', shape: 'arrowDown',
+          text: i === allExits.length - 1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+        });
+      });
+      markers.sort((a, b) => a.time - b.time);
+      if (markers.length) candleSeries.setMarkers(markers);
+
+      // ── Zoom to trade period + context ───────────────────────────────
+      if (entryDate) {
+        const fromTs = Math.floor(new Date(entryDate).getTime() / 1000) - 35 * 86400;
+        const toTs   = exitDate
+          ? Math.floor(new Date(exitDate).getTime() / 1000) + 50 * 86400
+          : Math.floor(Date.now() / 1000);
+        try { chart.timeScale().setVisibleRange({ from: fromTs, to: toTs }); } catch(_) {}
+      }
+
+      // Responsive width
+      const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));
+      ro.observe(el);
+
+    } catch (err) {
+      el.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)">
+          <div style="font-size:32px">📊</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text)">Could not load chart data</div>
+          <div style="font-size:12px">${err.message}</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-primary btn-sm">↗ TradingView</a>
+            <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE India</a>
+          </div>
+        </div>
+      `;
     }
   }
 
