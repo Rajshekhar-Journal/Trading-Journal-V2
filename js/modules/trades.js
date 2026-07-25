@@ -123,41 +123,47 @@ const tradesModule = (() => {
     const resBadge  = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
     const chartId   = `lwc_${trade.id.replace(/[^a-z0-9]/gi,'_')}`;
 
-    // Build marker pills for detail panel
-    const entryMarkers = (trade.entries || []).map((e, i) =>
-      `<span class="cv-marker cv-entry">▲ Entry${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+    // Build marker pills (entry / pyramid / partial / final exit)
+    const entryPills = (trade.entries || []).map((e, i) =>
+      i === 0
+        ? `<span class="cv-marker cv-entry">▲ Entry: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+        : `<span class="cv-marker cv-pyramid">▲ Pyramid${i}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
     ).join('');
-    const stopMarker = trade.initialStop
+    const stopPill = trade.initialStop
       ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>` : '';
-    const exitMarkers = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
-      `<span class="cv-marker cv-exit">▼ Exit${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+    const stopRevPill = (trade.currentStop && trade.currentStop !== trade.initialStop)
+      ? `<span class="cv-marker cv-stop" style="border-style:solid">▸ Revised: ₹${calc.formatNumber(trade.currentStop)}</span>` : '';
+    const partialPills = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
+      `<span class="cv-marker cv-partial">▼ Partial${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
     ).join('');
-    const finalExit = trade.finalExit
-      ? `<span class="cv-marker cv-exit" style="font-weight:700">✓ Final: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>` : '';
+    const finalExitPill = trade.finalExit
+      ? `<span class="cv-marker cv-exit" style="font-weight:700">✓ Exit: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>` : '';
 
     container.innerHTML = `
-      <!-- Nav bar -->
-      <div class="cv-nav">
-        <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''}>← Prev</button>
+      <!-- Nav bar: compact ‹ › + scroll/swipe/keyboard navigation -->
+      <div class="cv-nav" id="cv-nav-bar">
         <div class="cv-nav-info">
           <strong style="font-size:15px;color:var(--primary)">${trade.symbol}</strong>
           <span class="badge badge-muted">${trade.direction}</span>
           <span class="badge badge-muted" style="font-size:10px">${trade.tradeType || 'Equity'}</span>
           <span class="badge ${resBadge}">${result}</span>
           <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}</span>
-          <span style="font-size:11px;color:var(--text-muted);background:var(--bg);padding:2px 8px;border-radius:99px;border:1px solid var(--border-light)">${_cvIdx + 1} / ${_cvTrades.length}</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="cv-page-ctrl">
+            <button class="cv-nb" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''} title="Prev trade (← or scroll up)">‹</button>
+            <span class="cv-page">${_cvIdx + 1} / ${_cvTrades.length}</span>
+            <button class="cv-nb" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''} title="Next trade (→ or scroll down)">›</button>
+          </div>
           <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">↗ TV</a>
           <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">📊 NSE</a>
-          <button class="btn btn-secondary btn-sm" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''}>Next →</button>
         </div>
       </div>
 
       <!-- Candlestick chart canvas -->
       <div class="cv-chart-wrap">
-        <div id="${chartId}" style="height:520px;position:relative">
-          <div class="cv-loading">⏳ Loading ${trade.symbol} chart data…</div>
+        <div id="${chartId}" style="position:relative">
+          <div class="cv-loading" style="height:520px">⏳ Loading ${trade.symbol} chart data…</div>
         </div>
       </div>
 
@@ -178,17 +184,33 @@ const tradesModule = (() => {
           <div class="cv-detail-card"><div class="cv-detail-label">Held</div><div class="cv-detail-value">${m.holdingDays}d (T:${m.tradingDays})</div></div>
         </div>
         <div class="cv-markers-label">Trade Levels</div>
-        <div class="cv-markers">${entryMarkers}${stopMarker}${exitMarkers}${finalExit}</div>
+        <div class="cv-markers">${entryPills}${stopPill}${stopRevPill}${partialPills}${finalExitPill}</div>
       </div>
     `;
 
-    // Keyboard navigation
+    // Keyboard navigation (← →)
     document.onkeydown = e => {
       if (_currentView !== 'chart') return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       if (e.key === 'ArrowLeft')  tradesModule._cvNav(-1);
       if (e.key === 'ArrowRight') tradesModule._cvNav(1);
     };
+
+    // Wheel scroll on nav bar = navigate trades (chart area keeps its own scroll)
+    const cvNavEl = document.getElementById('cv-nav-bar');
+    if (cvNavEl) {
+      cvNavEl.addEventListener('wheel', e => {
+        e.preventDefault();
+        tradesModule._cvNav(e.deltaY > 0 ? 1 : -1);
+      }, { passive: false });
+      // Touch swipe on nav bar
+      let _tx = 0;
+      cvNavEl.addEventListener('touchstart', e => { _tx = e.touches[0].clientX; }, { passive: true });
+      cvNavEl.addEventListener('touchend',   e => {
+        const dx = e.changedTouches[0].clientX - _tx;
+        if (Math.abs(dx) > 50) tradesModule._cvNav(dx < 0 ? 1 : -1);
+      }, { passive: true });
+    }
 
     // Fetch OHLC and paint the chart
     await _renderLightweightChart(trade, chartId, entryDate, exitDate);
@@ -202,7 +224,7 @@ const tradesModule = (() => {
     const yfSymbol = `${trade.symbol}.NS`;
 
     try {
-      const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=1y`);
+      const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=2y`);
       if (!res.ok) throw new Error(`API ${res.status}`);
       const json = await res.json();
 
@@ -321,46 +343,74 @@ const tradesModule = (() => {
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       volSeries.setData(volumes);
 
-      // Price lines
+      // ── Price lines ───────────────────────────────────────────
+      // Entry/pyramid price lines (green dashed)
       (trade.entries || []).forEach((e, i) => {
+        const isPyramid = i > 0;
         candleSeries.createPriceLine({
-          price: e.price, color: '#16a34a', lineWidth: 1,
-          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: `Entry${trade.entries.length > 1 ? i+1 : ''} ₹${calc.formatNumber(e.price)}`,
+          price: e.price,
+          color: isPyramid ? '#d97706' : '#16a34a',
+          lineWidth: 1,
+          lineStyle: LC.LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: isPyramid ? `Pyr${i} ₹${calc.formatNumber(e.price)}` : `Entry ₹${calc.formatNumber(e.price)}`,
         });
       });
+      // Initial stop (subtle red dotted)
       if (trade.initialStop) {
         candleSeries.createPriceLine({
-          price: trade.initialStop, color: '#dc2626', lineWidth: 1,
+          price: trade.initialStop, color: 'rgba(220,38,38,0.5)', lineWidth: 1,
           lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,
           title: `Stop ₹${calc.formatNumber(trade.initialStop)}`,
         });
       }
-      const allExits = [
-        ...(trade.exits || []).filter(e => e.qty > 0),
-        ...(trade.finalExit ? [trade.finalExit] : []),
-      ];
-      allExits.forEach((e, i) => {
+      // Stop revision (if stop was moved)
+      if (trade.currentStop && trade.currentStop !== trade.initialStop) {
         candleSeries.createPriceLine({
-          price: e.price, color: '#f59e0b', lineWidth: 1,
+          price: trade.currentStop, color: 'rgba(220,38,38,0.75)', lineWidth: 1,
           lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: i === allExits.length-1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+          title: `Stop Rev ₹${calc.formatNumber(trade.currentStop)}`,
+        });
+      }
+      // Final exit price line (amber dashed)
+      if (trade.finalExit?.price) {
+        candleSeries.createPriceLine({
+          price: trade.finalExit.price, color: '#f59e0b', lineWidth: 1,
+          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: `Exit ₹${calc.formatNumber(trade.finalExit.price)}`,
+        });
+      }
+
+      // ── Arrow markers ───────────────────────────────────────────
+      const markers = [];
+      // Entries: green ▲ for first entry, amber ▲ for pyramids
+      (trade.entries || []).forEach((e, i) => {
+        if (!e.date) return;
+        const isPyramid = i > 0;
+        markers.push({
+          time: nearestTs(e.date), position: 'belowBar',
+          color: isPyramid ? '#f59e0b' : '#16a34a',
+          shape: 'arrowUp',
+          text: isPyramid ? `Pyramid ₹${calc.formatNumber(e.price)}` : `Entry ₹${calc.formatNumber(e.price)}`,
         });
       });
-
-      // Arrow markers
-      const markers = [];
-      (trade.entries || []).forEach(e => {
-        if (!e.date) return;
-        markers.push({ time: nearestTs(e.date), position: 'belowBar', color: '#16a34a', shape: 'arrowUp', text: `Entry ₹${calc.formatNumber(e.price)}` });
-      });
-      allExits.forEach((e, i) => {
+      // Partial exits: amber ▼
+      (trade.exits || []).filter(e => e.qty > 0).forEach(e => {
         if (!e.date) return;
         markers.push({
-          time: nearestTs(e.date), position: 'aboveBar', color: '#dc2626', shape: 'arrowDown',
-          text: i === allExits.length-1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+          time: nearestTs(e.date), position: 'aboveBar',
+          color: '#f59e0b', shape: 'arrowDown',
+          text: `Partial ₹${calc.formatNumber(e.price)}`,
         });
       });
+      // Final exit: red ▼
+      if (trade.finalExit?.date) {
+        markers.push({
+          time: nearestTs(trade.finalExit.date), position: 'aboveBar',
+          color: '#dc2626', shape: 'arrowDown',
+          text: `Exit ₹${calc.formatNumber(trade.finalExit.price)}`,
+        });
+      }
       markers.sort((a, b) => a.time - b.time);
       if (markers.length) candleSeries.setMarkers(markers);
 
@@ -386,13 +436,13 @@ const tradesModule = (() => {
         // Move the overview window marker to match (optional: skip for simplicity)
       });
 
-      // Zoom main chart to trade period + context
-      if (entryDate) {
-        const fromTs = Math.floor(new Date(entryDate).getTime()/1000) - 35 * 86400;
-        const toTs   = exitDate
-          ? Math.floor(new Date(exitDate).getTime()/1000) + 50 * 86400
-          : Math.floor(Date.now()/1000);
-        try { chart.timeScale().setVisibleRange({ from: fromTs, to: toTs }); } catch(_) {}
+      // ── Default view: 6 months context ending at exit + 10 days ───
+      if (exitDate || entryDate) {
+        const endTs   = exitDate
+          ? Math.floor(new Date(exitDate).getTime()/1000) + 10 * 86400
+          : Math.floor(Date.now()/1000) + 10 * 86400;
+        const startTs = endTs - 183 * 86400; // ~6 months
+        try { chart.timeScale().setVisibleRange({ from: startTs, to: endTs }); } catch(_) {}
       }
 
       // Responsive resize
