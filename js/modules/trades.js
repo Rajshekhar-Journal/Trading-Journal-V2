@@ -101,128 +101,94 @@ const tradesModule = (() => {
     const container = document.getElementById('trades-cv-content');
     if (!container) return;
     if (!_cvTrades.length) {
-      container.innerHTML = `<div class="no-data" style="padding:60px;text-align:center">📭 No closed trades for selected period</div>`;
+      container.innerHTML = '<div class="no-data" style="padding:60px;text-align:center">📭 No closed trades for selected period</div>';
       return;
     }
-    _cvIdx = Math.max(0, Math.min(_cvTrades.length - 1, _cvIdx));
-    const trade = _cvTrades[_cvIdx];
-    const m     = calc.getTradeMetrics(trade);
 
-    // Equity for privacy mode
+    // Pre-fetch shared data
     const _cap   = await db.getCapital();
     const _all   = await db.getClosedTrades();
     const equity = calc.getCurrentEquity(_cap, calc.getTotalPnl(_all));
-    const pnlPct = equity > 0 ? (m.realizedPnl / equity * 100) : 0;
-    const _s     = v => v >= 0 ? '+' : '';
 
-    const entryDate = trade.entries?.[0]?.date || '';
-    const exitDate  = trade.finalExit?.date || entryDate;
-    const pnlCls    = m.realizedPnl >= 0 ? 'text-success' : 'text-danger';
-    const rCls      = m.profitR    >= 0 ? 'text-success' : 'text-danger';
-    const result    = calc.getTradeResult(trade);
-    const resBadge  = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
-    const chartId   = `lwc_${trade.id.replace(/[^a-z0-9]/gi,'_')}`;
+    // Build stacked HTML for ALL trades
+    const cards = _cvTrades.map((trade, idx) => {
+      const m         = calc.getTradeMetrics(trade);
+      const pnlPct    = equity > 0 ? (m.realizedPnl / equity * 100) : 0;
+      const _s        = v => v >= 0 ? '+' : '';
+      const entryDate = (trade.entries && trade.entries[0] && trade.entries[0].date) || '';
+      const exitDate  = (trade.finalExit && trade.finalExit.date) || entryDate;
+      const pnlCls    = m.realizedPnl >= 0 ? 'text-success' : 'text-danger';
+      const rCls      = m.profitR    >= 0 ? 'text-success' : 'text-danger';
+      const result    = calc.getTradeResult(trade);
+      const resBadge  = result === 'Win' ? 'badge-success' : result === 'Loss' ? 'badge-danger' : 'badge-muted';
+      const chartId   = 'lwc_' + trade.id.replace(/[^a-z0-9]/gi, '_');
 
-    // Build marker pills (entry / pyramid / partial / final exit)
-    const entryPills = (trade.entries || []).map((e, i) =>
-      i === 0
-        ? `<span class="cv-marker cv-entry">▲ Entry: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
-        : `<span class="cv-marker cv-pyramid">▲ Pyramid${i}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
-    ).join('');
-    const stopPill = trade.initialStop
-      ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>` : '';
-    const stopRevPill = (trade.currentStop && trade.currentStop !== trade.initialStop)
-      ? `<span class="cv-marker cv-stop" style="border-style:solid">▸ Revised: ₹${calc.formatNumber(trade.currentStop)}</span>` : '';
-    const partialPills = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
-      `<span class="cv-marker cv-partial">▼ Partial${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
-    ).join('');
-    const finalExitPill = trade.finalExit
-      ? `<span class="cv-marker cv-exit" style="font-weight:700">✓ Exit: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>` : '';
+      const entryPills = (trade.entries || []).map((e, i) =>
+        i === 0
+          ? '<span class="cv-marker cv-entry">▲ Entry: ₹' + calc.formatNumber(e.price) + ' × <span class="prv-blur">' + e.qty + '</span> · ' + calc.formatDate(e.date) + '</span>'
+          : '<span class="cv-marker cv-pyramid">▲ Pyramid' + i + ': ₹' + calc.formatNumber(e.price) + ' × <span class="prv-blur">' + e.qty + '</span> · ' + calc.formatDate(e.date) + '</span>'
+      ).join('');
+      const stopPill = trade.initialStop
+        ? '<span class="cv-marker cv-stop">⛔ Stop: ₹' + calc.formatNumber(trade.initialStop) + '</span>' : '';
+      const partialPills = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
+        '<span class="cv-marker cv-partial">▼ Partial' + (i+1) + ': ₹' + calc.formatNumber(e.price) + ' × <span class="prv-blur">' + e.qty + '</span> · ' + calc.formatDate(e.date) + '</span>'
+      ).join('');
+      const finalExitPill = trade.finalExit
+        ? '<span class="cv-marker cv-exit" style="font-weight:700">✓ Exit: ₹' + calc.formatNumber(trade.finalExit.price) + ' × <span class="prv-blur">' + trade.finalExit.qty + '</span> · ' + calc.formatDate(trade.finalExit.date) + '</span>' : '';
 
-    container.innerHTML = `
-      <!-- Nav bar: compact ‹ › + scroll/swipe/keyboard navigation -->
-      <div class="cv-nav" id="cv-nav-bar">
-        <div class="cv-nav-info">
-          <strong style="font-size:15px;color:var(--primary)">${trade.symbol}</strong>
-          <span class="badge badge-muted">${trade.direction}</span>
-          <span class="badge badge-muted" style="font-size:10px">${trade.tradeType || 'Equity'}</span>
-          <span class="badge ${resBadge}">${result}</span>
-          <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}</span>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <div class="cv-page-ctrl">
-            <button class="cv-nb" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''} title="Prev trade (← or scroll up)">‹</button>
-            <span class="cv-page">${_cvIdx + 1} / ${_cvTrades.length}</span>
-            <button class="cv-nb" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''} title="Next trade (→ or scroll down)">›</button>
-          </div>
-          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">↗ TV</a>
-          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">📊 NSE</a>
-        </div>
-      </div>
+      return '<div class="cv-trade-card" data-idx="' + idx + '" data-chart-id="' + chartId + '"'
+        + ' data-entry="' + entryDate + '" data-exit="' + exitDate + '">'
+        + '<div class="cv-nav">'
+        + '<div class="cv-nav-info">'
+        + '<strong style="font-size:15px;color:var(--primary)">' + trade.symbol + '</strong>'
+        + '<span class="badge badge-muted">' + trade.direction + '</span>'
+        + '<span class="badge badge-muted" style="font-size:10px">' + (trade.tradeType || 'Equity') + '</span>'
+        + '<span class="badge ' + resBadge + '">' + result + '</span>'
+        + '<span class="text-muted" style="font-size:12px">' + calc.formatDate(entryDate) + ' → ' + calc.formatDate(exitDate) + '</span>'
+        + '</div>'
+        + '<div style="display:flex;gap:8px;align-items:center">'
+        + '<span class="text-muted" style="font-size:11px">' + (idx+1) + ' / ' + _cvTrades.length + '</span>'
+        + '<a href="https://www.tradingview.com/chart/?symbol=NSE:' + trade.symbol + '" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">↗ TV</a>'
+        + '<a href="https://www.nseindia.com/get-quotes/equity?symbol=' + encodeURIComponent(trade.symbol) + '" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">📊 NSE</a>'
+        + '</div></div>'
+        + '<div class="cv-chart-wrap"><div id="' + chartId + '" style="position:relative">'
+        + '<div class="cv-loading" style="height:480px">⏳ Loading ' + trade.symbol + ' chart…</div>'
+        + '</div></div>'
+        + '<div class="cv-details">'
+        + '<div class="cv-detail-grid">'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">₹' + calc.formatNumber(m.avgEntryPrice) + '</div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹' + calc.formatNumber(trade.initialStop) + '</div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹' + calc.formatNumber(m.avgExitPrice) + '</div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">P&amp;L</div><div class="cv-detail-value ' + pnlCls + '"><span class="prv-amt">' + calc.formatCurrency(m.realizedPnl) + '</span><span class="prv-pct">' + _s(pnlPct) + pnlPct.toFixed(2) + '% AV</span></div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">R Multiple</div><div class="cv-detail-value ' + rCls + '">' + calc.formatR(m.profitR) + '</div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Held</div><div class="cv-detail-value">' + m.holdingDays + 'd (T:' + m.tradingDays + ')</div></div>'
+        + '</div>'
+        + '<div class="cv-markers-label">Trade Levels</div>'
+        + '<div class="cv-markers">' + entryPills + stopPill + partialPills + finalExitPill + '</div>'
+        + '</div></div>';
+    });
 
-      <!-- Candlestick chart canvas -->
-      <div class="cv-chart-wrap">
-        <div id="${chartId}" style="position:relative">
-          <div class="cv-loading" style="height:520px">⏳ Loading ${trade.symbol} chart data…</div>
-        </div>
-      </div>
+    container.innerHTML = cards.join('<hr class="cv-trade-divider">');
 
-      <!-- Trade key levels -->
-      <div class="cv-details">
-        <div class="cv-detail-grid">
-          <div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
-          <div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹${calc.formatNumber(trade.initialStop)}</div></div>
-          <div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
-          <div class="cv-detail-card">
-            <div class="cv-detail-label">P&amp;L</div>
-            <div class="cv-detail-value ${pnlCls}">
-              <span class="prv-amt">${calc.formatCurrency(m.realizedPnl)}</span>
-              <span class="prv-pct">${_s(pnlPct)}${pnlPct.toFixed(2)}% AV</span>
-            </div>
-          </div>
-          <div class="cv-detail-card"><div class="cv-detail-label">R Multiple</div><div class="cv-detail-value ${rCls}">${calc.formatR(m.profitR)}</div></div>
-          <div class="cv-detail-card"><div class="cv-detail-label">Held</div><div class="cv-detail-value">${m.holdingDays}d (T:${m.tradingDays})</div></div>
-        </div>
-        <div class="cv-markers-label">Trade Levels</div>
-        <div class="cv-markers">${entryPills}${stopPill}${stopRevPill}${partialPills}${finalExitPill}</div>
-      </div>
-    `;
+    // Lazy-load charts with IntersectionObserver as each card scrolls into view
+    const rendered = new Set();
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const card = entry.target;
+        const idx  = parseInt(card.dataset.idx, 10);
+        if (rendered.has(idx)) return;
+        rendered.add(idx);
+        observer.unobserve(card);
+        const trade     = _cvTrades[idx];
+        const chartId   = card.dataset.chartId;
+        const entryDate = card.dataset.entry;
+        const exitDate  = card.dataset.exit;
+        _renderLightweightChart(trade, chartId, entryDate, exitDate);
+      });
+    }, { rootMargin: '200px' });
 
-    // Keyboard navigation (← →)
-    document.onkeydown = e => {
-      if (_currentView !== 'chart') return;
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.key === 'ArrowLeft')  tradesModule._cvNav(-1);
-      if (e.key === 'ArrowRight') tradesModule._cvNav(1);
-    };
-
-    // Wheel scroll on nav bar = navigate trades (chart area keeps its own scroll)
-    const cvNavEl = document.getElementById('cv-nav-bar');
-    if (cvNavEl) {
-      cvNavEl.addEventListener('wheel', e => {
-        e.preventDefault();
-        tradesModule._cvNav(e.deltaY > 0 ? 1 : -1);
-      }, { passive: false });
-      // Touch swipe on nav bar
-      let _tx = 0;
-      cvNavEl.addEventListener('touchstart', e => { _tx = e.touches[0].clientX; }, { passive: true });
-      cvNavEl.addEventListener('touchend',   e => {
-        const dx = e.changedTouches[0].clientX - _tx;
-        if (Math.abs(dx) > 50) tradesModule._cvNav(dx < 0 ? 1 : -1);
-      }, { passive: true });
-    }
-
-    // Wheel scroll on detail panel = navigate trades (chart canvas intercepts its own scroll)
-    const cvDetailsEl = container.querySelector('.cv-details');
-    if (cvDetailsEl) {
-      cvDetailsEl.addEventListener('wheel', e => {
-        e.preventDefault();
-        tradesModule._cvNav(e.deltaY > 0 ? 1 : -1);
-      }, { passive: false });
-    }
-
-    // Fetch OHLC and paint the chart
-    await _renderLightweightChart(trade, chartId, entryDate, exitDate);
+    container.querySelectorAll('.cv-trade-card').forEach(card => observer.observe(card));
   }
 
   // ── Lightweight Charts renderer (single-pane) ───────────────────────────
@@ -329,22 +295,7 @@ const tradesModule = (() => {
           });
         }
       }
-      // Stop revision segment
-      if (trade.currentStop && trade.currentStop !== trade.initialStop && entryDate) {
-        const entryTs  = nearestTs(entryDate);
-        const entryIdx = candles.findIndex(c => c.time === entryTs);
-        if (entryIdx !== -1) {
-          const slStart = Math.max(0, entryIdx - 5);
-          const slEnd   = Math.min(candles.length - 1, entryIdx + 30);
-          const slRevData = candles.slice(slStart, slEnd + 1).map(c => ({ time: c.time, value: trade.currentStop }));
-          const slRevSeries = chart.addLineSeries({
-            color: 'rgba(239,83,80,0.8)', lineWidth: 1,
-            lineStyle: LC.LineStyle.Dashed, priceLineVisible: false,
-            lastValueVisible: false, crosshairMarkerVisible: false,
-          });
-          slRevSeries.setData(slRevData);
-        }
-      }
+      // Stop revision line removed per user request
 
       // ── Exit price line (full width, amber dashed) ────────────────────────────
       if (trade.finalExit && trade.finalExit.price) {
