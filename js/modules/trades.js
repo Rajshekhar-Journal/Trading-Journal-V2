@@ -1,4 +1,4 @@
-﻿/**
+/**
  * trades.js â€” Module 03: Trades
  * Closed trade history, performance metrics, detail panel with full lifecycle.
  * Fixes: edit/delete lifecycle, missing columns, realized P&L in lifecycle,
@@ -273,14 +273,13 @@ const tradesModule = (() => {
         layout: { background: { color: '#ffffff' }, textColor: '#334155', fontSize: 11 },
         grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
         crosshair: { mode: LC.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.06, bottom: 0.20 } },
+        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.12, bottom: 0.20 } },
         timeScale: { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
       });
       const candleSeries = chart.addCandlestickSeries({
         upColor: '#26a69a', downColor: '#ef5350',
         borderUpColor: '#26a69a', borderDownColor: '#ef5350',
         wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-        autoscaleInfoProvider: () => null,
       });
       candleSeries.setData(candles);
       const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
