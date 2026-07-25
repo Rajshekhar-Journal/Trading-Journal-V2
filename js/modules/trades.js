@@ -284,28 +284,69 @@ const tradesModule = (() => {
       const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       volSeries.setData(volumes);
-      // Price lines
-      (trade.entries || []).forEach((e, i) => {
+      // ── 20 EMA line ──────────────────────────────────────────────────────────
+      const ema20Data = [];
+      const k20 = 2 / 21;
+      let ema20 = null;
+      candles.forEach((c, i) => {
+        ema20 = ema20 === null ? c.close : (c.close * k20 + ema20 * (1 - k20));
+        if (i >= 19) ema20Data.push({ time: c.time, value: parseFloat(ema20.toFixed(4)) });
+      });
+      const emaSeries = chart.addLineSeries({
+        color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
+        lastValueVisible: true, crosshairMarkerVisible: false,
+      });
+      emaSeries.setData(ema20Data);
+
+      // ── Pyramid price lines (amber dashed) — entry line removed per user request ──
+      (trade.entries || []).filter((_, i) => i > 0).forEach((e, i) => {
         candleSeries.createPriceLine({
-          price: e.price, color: i === 0 ? '#26a69a' : '#f59e0b',
+          price: e.price, color: '#f59e0b',
           lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: (i === 0 ? 'Entry@' : ('Pyr' + i + '@')) + calc.formatNumber(e.price),
+          title: 'Pyr' + (i + 1) + '@' + calc.formatNumber(e.price),
         });
       });
-      if (trade.initialStop) {
-        candleSeries.createPriceLine({
-          price: trade.initialStop, color: 'rgba(239,83,80,0.5)',
-          lineWidth: 1, lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,
-          title: 'Stop@' + calc.formatNumber(trade.initialStop),
-        });
+
+      // ── Stop loss as a SHORT segment (entry-10 to entry+30 candles) ───────────
+      if (trade.initialStop && entryDate) {
+        const entryTs  = nearestTs(entryDate);
+        const entryIdx = candles.findIndex(c => c.time === entryTs);
+        if (entryIdx !== -1) {
+          const slStart = Math.max(0, entryIdx - 10);
+          const slEnd   = Math.min(candles.length - 1, entryIdx + 30);
+          const slData  = candles.slice(slStart, slEnd + 1).map(c => ({ time: c.time, value: trade.initialStop }));
+          const slSeries = chart.addLineSeries({
+            color: 'rgba(239,83,80,0.55)', lineWidth: 1,
+            lineStyle: LC.LineStyle.Dashed, priceLineVisible: false,
+            lastValueVisible: false, crosshairMarkerVisible: false,
+          });
+          slSeries.setData(slData);
+          // Axis label via a thin price line (invisible line, axis label only)
+          candleSeries.createPriceLine({
+            price: trade.initialStop, color: 'rgba(239,83,80,0.55)',
+            lineWidth: 0, lineStyle: LC.LineStyle.Solid, axisLabelVisible: true,
+            title: 'Stop@' + calc.formatNumber(trade.initialStop),
+          });
+        }
       }
-      if (trade.currentStop && trade.currentStop !== trade.initialStop) {
-        candleSeries.createPriceLine({
-          price: trade.currentStop, color: 'rgba(239,83,80,0.8)',
-          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: 'SLRev@' + calc.formatNumber(trade.currentStop),
-        });
+      // Stop revision segment
+      if (trade.currentStop && trade.currentStop !== trade.initialStop && entryDate) {
+        const entryTs  = nearestTs(entryDate);
+        const entryIdx = candles.findIndex(c => c.time === entryTs);
+        if (entryIdx !== -1) {
+          const slStart = Math.max(0, entryIdx - 5);
+          const slEnd   = Math.min(candles.length - 1, entryIdx + 30);
+          const slRevData = candles.slice(slStart, slEnd + 1).map(c => ({ time: c.time, value: trade.currentStop }));
+          const slRevSeries = chart.addLineSeries({
+            color: 'rgba(239,83,80,0.8)', lineWidth: 1,
+            lineStyle: LC.LineStyle.Dashed, priceLineVisible: false,
+            lastValueVisible: false, crosshairMarkerVisible: false,
+          });
+          slRevSeries.setData(slRevData);
+        }
       }
+
+      // ── Exit price line (full width, amber dashed) ────────────────────────────
       if (trade.finalExit && trade.finalExit.price) {
         candleSeries.createPriceLine({
           price: trade.finalExit.price, color: '#ef5350',
@@ -313,7 +354,8 @@ const tradesModule = (() => {
           title: 'Exit@' + calc.formatNumber(trade.finalExit.price),
         });
       }
-      // Arrow markers
+
+      // ── Arrow markers ─────────────────────────────────────────────────────────
       const markers = [];
       (trade.entries || []).forEach((e, i) => {
         if (!e.date) return;
@@ -335,6 +377,7 @@ const tradesModule = (() => {
       }
       markers.sort((a, b) => a.time - b.time);
       if (markers.length) candleSeries.setMarkers(markers);
+
       // Vertical date lines
       const _addVLine = (ts, color) => {
         const vl = document.createElement('div');
