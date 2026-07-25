@@ -249,7 +249,7 @@ const tradesModule = (() => {
           time:  t,
           value: (q.volume && q.volume[i]) || 0,
           color: ((q.close && q.close[i]) || 0) >= ((q.open && q.open[i]) || 0)
-            ? 'rgba(38,166,154,0.35)' : 'rgba(239,83,80,0.35)',
+            ? '#26a69a' : '#ef5350',
         }))
         .filter((v, i) => q.open && q.open[i] != null)
         .sort((a, b) => a.time - b.time)
@@ -293,7 +293,7 @@ const tradesModule = (() => {
         if (i >= 19) ema20Data.push({ time: c.time, value: parseFloat(ema20.toFixed(4)) });
       });
       const emaSeries = chart.addLineSeries({
-        color: '#f59e0b', lineWidth: 1.5, priceLineVisible: false,
+        color: '#1e293b', lineWidth: 1.5, priceLineVisible: false,
         lastValueVisible: true, crosshairMarkerVisible: false,
       });
       emaSeries.setData(ema20Data);
@@ -397,7 +397,7 @@ const tradesModule = (() => {
       const refDate = exitDate || entryDate;
       if (refDate) {
         const endTs   = Math.floor(new Date(refDate).getTime()/1000) + 10 * 86400;
-        const startTs = endTs - 183 * 86400;
+        const startTs = endTs - 305 * 86400;
         try { chart.timeScale().setVisibleRange({ from: startTs, to: endTs }); } catch(_) {}
       }
       // Company info bar (from Yahoo Finance meta)
