@@ -581,6 +581,12 @@ body.privacy-mode #privacy-badge { display: inline-flex; }
 .cv-co-sep  { color: var(--text-muted); margin: 0 2px; }
 .cv-co-name { color: var(--text); }
 .cv-co-meta { color: var(--text-muted); margin-left: auto; font-size: 11px; }
+/* Stacked trade card in chart view */
+.cv-trade-card { margin-bottom: 0; }
+.cv-trade-divider {
+  border: none; border-top: 3px solid #e2e8f0;
+  margin: 32px 0; opacity: 0.7;
+}
 /* Scroll hint bar */
 .cv-scroll-hint {
   text-align: center; font-size: 11px; color: var(--text-muted);
