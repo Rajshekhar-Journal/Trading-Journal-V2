@@ -1,5 +1,5 @@
-/**
- * trades.js — Module 03: Trades
+﻿/**
+ * trades.js â€” Module 03: Trades
  * Closed trade history, performance metrics, detail panel with full lifecycle.
  * Fixes: edit/delete lifecycle, missing columns, realized P&L in lifecycle,
  *        TradingView chart fix, fullscreen panel, CMP update.
@@ -45,7 +45,7 @@ const tradesModule = (() => {
       });
     });
 
-    // View toggle: Metrics ↔ Chart
+    // View toggle: Metrics â†” Chart
     document.querySelectorAll('#mod-trades .view-toggle .toggle-btn').forEach(btn => {
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
@@ -80,7 +80,7 @@ const tradesModule = (() => {
     if (_currentView === 'chart') await _loadChartView();
   }
 
-  // ── View Switch ────────────────────────────────────────────────────────────
+  // â”€â”€ View Switch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _applyView() {
     const tableArea = document.getElementById('trades-split-view');
     const chartArea = document.getElementById('trades-chart-view');
@@ -96,12 +96,12 @@ const tradesModule = (() => {
     await _renderChartView();
   }
 
-  // ── Chart View: trade-by-trade Lightweight Charts candlestick navigator ───
+  // â”€â”€ Chart View: trade-by-trade Lightweight Charts candlestick navigator â”€â”€â”€
   async function _renderChartView() {
     const container = document.getElementById('trades-cv-content');
     if (!container) return;
     if (!_cvTrades.length) {
-      container.innerHTML = `<div class="no-data" style="padding:60px;text-align:center">📭 No closed trades for selected period</div>`;
+      container.innerHTML = `<div class="no-data" style="padding:60px;text-align:center">ðŸ“­ No closed trades for selected period</div>`;
       return;
     }
     _cvIdx = Math.max(0, Math.min(_cvTrades.length - 1, _cvIdx));
@@ -126,53 +126,53 @@ const tradesModule = (() => {
     // Build marker pills (entry / pyramid / partial / final exit)
     const entryPills = (trade.entries || []).map((e, i) =>
       i === 0
-        ? `<span class="cv-marker cv-entry">▲ Entry: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
-        : `<span class="cv-marker cv-pyramid">▲ Pyramid${i}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+        ? `<span class="cv-marker cv-entry">â–² Entry: â‚¹${calc.formatNumber(e.price)} Ã— <span class="prv-blur">${e.qty}</span> Â· ${calc.formatDate(e.date)}</span>`
+        : `<span class="cv-marker cv-pyramid">â–² Pyramid${i}: â‚¹${calc.formatNumber(e.price)} Ã— <span class="prv-blur">${e.qty}</span> Â· ${calc.formatDate(e.date)}</span>`
     ).join('');
     const stopPill = trade.initialStop
-      ? `<span class="cv-marker cv-stop">⛔ Stop: ₹${calc.formatNumber(trade.initialStop)}</span>` : '';
+      ? `<span class="cv-marker cv-stop">â›” Stop: â‚¹${calc.formatNumber(trade.initialStop)}</span>` : '';
     const stopRevPill = (trade.currentStop && trade.currentStop !== trade.initialStop)
-      ? `<span class="cv-marker cv-stop" style="border-style:solid">▸ Revised: ₹${calc.formatNumber(trade.currentStop)}</span>` : '';
+      ? `<span class="cv-marker cv-stop" style="border-style:solid">â–¸ Revised: â‚¹${calc.formatNumber(trade.currentStop)}</span>` : '';
     const partialPills = (trade.exits || []).filter(e => e.qty > 0).map((e, i) =>
-      `<span class="cv-marker cv-partial">▼ Partial${i+1}: ₹${calc.formatNumber(e.price)} × <span class="prv-blur">${e.qty}</span> · ${calc.formatDate(e.date)}</span>`
+      `<span class="cv-marker cv-partial">â–¼ Partial${i+1}: â‚¹${calc.formatNumber(e.price)} Ã— <span class="prv-blur">${e.qty}</span> Â· ${calc.formatDate(e.date)}</span>`
     ).join('');
     const finalExitPill = trade.finalExit
-      ? `<span class="cv-marker cv-exit" style="font-weight:700">✓ Exit: ₹${calc.formatNumber(trade.finalExit.price)} × <span class="prv-blur">${trade.finalExit.qty}</span> · ${calc.formatDate(trade.finalExit.date)}</span>` : '';
+      ? `<span class="cv-marker cv-exit" style="font-weight:700">âœ“ Exit: â‚¹${calc.formatNumber(trade.finalExit.price)} Ã— <span class="prv-blur">${trade.finalExit.qty}</span> Â· ${calc.formatDate(trade.finalExit.date)}</span>` : '';
 
     container.innerHTML = `
-      <!-- Nav bar: compact ‹ › + scroll/swipe/keyboard navigation -->
+      <!-- Nav bar: compact â€¹ â€º + scroll/swipe/keyboard navigation -->
       <div class="cv-nav" id="cv-nav-bar">
         <div class="cv-nav-info">
           <strong style="font-size:15px;color:var(--primary)">${trade.symbol}</strong>
           <span class="badge badge-muted">${trade.direction}</span>
           <span class="badge badge-muted" style="font-size:10px">${trade.tradeType || 'Equity'}</span>
           <span class="badge ${resBadge}">${result}</span>
-          <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}</span>
+          <span class="text-muted" style="font-size:12px">${calc.formatDate(entryDate)} â†’ ${calc.formatDate(exitDate)}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <div class="cv-page-ctrl">
-            <button class="cv-nb" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''} title="Prev trade (← or scroll up)">‹</button>
+            <button class="cv-nb" onclick="tradesModule._cvNav(-1)" ${_cvIdx <= 0 ? 'disabled' : ''} title="Prev trade (â† or scroll up)">â€¹</button>
             <span class="cv-page">${_cvIdx + 1} / ${_cvTrades.length}</span>
-            <button class="cv-nb" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''} title="Next trade (→ or scroll down)">›</button>
+            <button class="cv-nb" onclick="tradesModule._cvNav(1)" ${_cvIdx >= _cvTrades.length - 1 ? 'disabled' : ''} title="Next trade (â†’ or scroll down)">â€º</button>
           </div>
-          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">↗ TV</a>
-          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">📊 NSE</a>
+          <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">â†— TV</a>
+          <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px">ðŸ“Š NSE</a>
         </div>
       </div>
 
       <!-- Candlestick chart canvas -->
       <div class="cv-chart-wrap">
         <div id="${chartId}" style="position:relative">
-          <div class="cv-loading" style="height:520px">⏳ Loading ${trade.symbol} chart data…</div>
+          <div class="cv-loading" style="height:520px">â³ Loading ${trade.symbol} chart dataâ€¦</div>
         </div>
       </div>
 
       <!-- Trade key levels -->
       <div class="cv-details">
         <div class="cv-detail-grid">
-          <div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
-          <div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹${calc.formatNumber(trade.initialStop)}</div></div>
-          <div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">â‚¹${calc.formatNumber(m.avgEntryPrice)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">â‚¹${calc.formatNumber(trade.initialStop)}</div></div>
+          <div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">â‚¹${calc.formatNumber(m.avgExitPrice)}</div></div>
           <div class="cv-detail-card">
             <div class="cv-detail-label">P&amp;L</div>
             <div class="cv-detail-value ${pnlCls}">
@@ -188,7 +188,7 @@ const tradesModule = (() => {
       </div>
     `;
 
-    // Keyboard navigation (← →)
+    // Keyboard navigation (â† â†’)
     document.onkeydown = e => {
       if (_currentView !== 'chart') return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -213,7 +213,7 @@ const tradesModule = (() => {
     }
 
     // Wheel scroll on DETAIL PANEL below chart = navigate trades
-    // (The Lightweight Charts canvas itself intercepts scroll for pan/zoom — can't reliably
+    // (The Lightweight Charts canvas itself intercepts scroll for pan/zoom â€” can't reliably
     //  place scroll listener there. Detail section is outside the chart and always available.)
     const cvDetailsEl = container.querySelector('.cv-details');
     if (cvDetailsEl) {
@@ -227,256 +227,147 @@ const tradesModule = (() => {
     await _renderLightweightChart(trade, chartId, entryDate, exitDate);
   }
 
-  // \u2500\u2500 Lightweight Charts renderer \u2014 single-pane (matches reference style) \u2500\u2500\u2500\n  async function _renderLightweightChart(trade, containerId, entryDate, exitDate) {\n    const el = document.getElementById(containerId);\n    if (!el) return;\n\n    const yfSymbol = `${trade.symbol}.NS`;\n\n    try {\n      const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=2y`);\n      if (!res.ok) throw new Error(`HTTP ${res.status} from Yahoo Finance`);\n      const json = await res.json();\n\n      const result = json?.chart?.result?.[0];\n      if (!result) throw new Error('No chart data in API response');\n\n      const meta       = result.meta || {};\n      const timestamps = result.timestamp || [];\n      const q          = result.indicators?.quote?.[0] || {};\n\n      // Build candle + volume arrays\n      const candles = timestamps\n        .map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i] }))\n        .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)\n        .sort((a, b) => a.time - b.time)\n        .filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);\n\n      const volumes = timestamps\n        .map((t, i) => ({\n          time:  t,\n          value: q.volume?.[i] ?? 0,\n          color: (q.close?.[i] ?? 0) >= (q.open?.[i] ?? 0) ? 'rgba(38,166,154,0.35)' : 'rgba(239,83,80,0.35)',\n        }))\n        .filter((_, i) => q.open?.[i] != null)\n        .sort((a, b) => a.time - b.time)\n        .filter((v, i, arr) => i === 0 || v.time !== arr[i-1].time);\n\n      if (!candles.length) throw new Error('No candle data \u2014 check symbol name');\n\n      const nearestTs = dateStr => {\n        const t = Math.floor(new Date(dateStr).getTime() / 1000);\n        return candles.reduce((best, c) => Math.abs(c.time - t) < Math.abs(best - t) ? c.time : best, candles[0].time);\n      };\n\n      // Clear loading spinner; single-pane container\n      el.innerHTML = '';\n      el.style.height = 'auto';\n\n      const LC = window.LightweightCharts;\n      if (!LC) throw new Error('Lightweight Charts library not loaded');\n      const w = el.clientWidth || 900;\n\n      // Chart wrapper div (position:relative for vertical line overlays)\n      const chartEl = document.createElement('div');\n      chartEl.style.cssText = 'position:relative;overflow:hidden';\n      el.appendChild(chartEl);\n\n      // Create chart\n      const chart = LC.createChart(chartEl, {\n        width:  w,\n        height: 500,\n        layout: { background: { color: '#ffffff' }, textColor: '#334155', fontSize: 11 },\n        grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },\n        crosshair: { mode: LC.CrosshairMode.Normal },\n        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.06, bottom: 0.20 } },\n        timeScale: { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },\n      });\n\n      // Candlestick series (TradingView classic colors: teal/red)\n      const candleSeries = chart.addCandlestickSeries({\n        upColor: '#26a69a', downColor: '#ef5350',\n        borderUpColor: '#26a69a', borderDownColor: '#ef5350',\n        wickUpColor: '#26a69a', wickDownColor: '#ef5350',\n      });\n      candleSeries.setData(candles);\n\n      // Volume histogram (bottom 18% of chart)\n      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });\n      chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });\n      volSeries.setData(volumes);\n\n      // Price lines (axis label boxes, like the reference screenshot)\n      (trade.entries || []).forEach((e, i) => {\n        candleSeries.createPriceLine({\n          price: e.price,\n          color: i === 0 ? '#26a69a' : '#f59e0b',\n          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,\n          title: i === 0 ? `Entry@${calc.formatNumber(e.price)}` : `Pyr${i}@${calc.formatNumber(e.price)}`,\n        });\n      });\n      if (trade.initialStop) {\n        candleSeries.createPriceLine({\n          price: trade.initialStop, color: 'rgba(239,83,80,0.5)',\n          lineWidth: 1, lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,\n          title: `Stop@${calc.formatNumber(trade.initialStop)}`,\n        });\n      }\n      if (trade.currentStop && trade.currentStop !== trade.initialStop) {\n        candleSeries.createPriceLine({\n          price: trade.currentStop, color: 'rgba(239,83,80,0.8)',\n          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,\n          title: `SLRev@${calc.formatNumber(trade.currentStop)}`,\n        });\n      }\n      if (trade.finalExit?.price) {\n        candleSeries.createPriceLine({\n          price: trade.finalExit.price, color: '#ef5350',\n          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,\n          title: `Exit@${calc.formatNumber(trade.finalExit.price)}`,\n        });\n      }\n\n      // Arrow markers (entry green, pyramid amber, partial amber, exit red)\n      const markers = [];\n      (trade.entries || []).forEach((e, i) => {\n        if (!e.date) return;\n        markers.push({\n          time: nearestTs(e.date), position: 'belowBar',\n          color: i === 0 ? '#26a69a' : '#f59e0b', shape: 'arrowUp',\n          text: i === 0 ? `Entry \u20b9${calc.formatNumber(e.price)}` : `Pyr \u20b9${calc.formatNumber(e.price)}`,\n        });\n      });\n      (trade.exits || []).filter(e => e.qty > 0).forEach(e => {\n        if (!e.date) return;\n        markers.push({ time: nearestTs(e.date), position: 'aboveBar', color: '#f59e0b', shape: 'arrowDown', text: `Partial \u20b9${calc.formatNumber(e.price)}` });\n      });\n      if (trade.finalExit?.date) {\n        markers.push({ time: nearestTs(trade.finalExit.date), position: 'aboveBar', color: '#ef5350', shape: 'arrowDown', text: `Exit \u20b9${calc.formatNumber(trade.finalExit.price)}` });\n      }\n      markers.sort((a, b) => a.time - b.time);\n      if (markers.length) candleSeries.setMarkers(markers);\n\n      // Vertical dashed lines (CSS overlay divs \u2014 track via subscribeVisibleLogicalRangeChange)\n      const _addVLine = (ts, color) => {\n        const vl = document.createElement('div');\n        vl.style.cssText = `position:absolute;top:0;bottom:0;width:0;border-left:1px dashed ${color};pointer-events:none;z-index:5`;\n        chartEl.appendChild(vl);\n        const update = () => {\n          const x = chart.timeScale().timeToCoordinate(ts);\n          vl.style.display = x !== null && x > 0 ? 'block' : 'none';\n          if (x !== null) vl.style.left = `${x}px`;\n        };\n        chart.timeScale().subscribeVisibleLogicalRangeChange(update);\n        update();\n      };\n      if (entryDate) _addVLine(Math.floor(new Date(entryDate).getTime()/1000), 'rgba(38,166,154,0.6)');\n      if (exitDate)  _addVLine(Math.floor(new Date(exitDate).getTime()/1000),  'rgba(239,83,80,0.6)');\n\n      // Default view: 6 months back from exit + 10 days\n      const refDate = exitDate || entryDate;\n      if (refDate) {\n        const endTs   = Math.floor(new Date(refDate).getTime()/1000) + 10 * 86400;\n        const startTs = endTs - 183 * 86400;\n        try { chart.timeScale().setVisibleRange({ from: startTs, to: endTs }); } catch(_) {}\n      }\n\n      // Company info bar (from Yahoo Finance meta) \u2014 just below the chart\n      const infoBar = document.createElement('div');\n      infoBar.className = 'cv-company-bar';\n      const coName = meta.shortName || meta.longName || '';\n      const trDays = (() => {\n        try { return Math.round((new Date(exitDate||entryDate) - new Date(entryDate)) / 86400000); } catch(_) { return 0; }\n      })();\n      infoBar.innerHTML = [\n        coName ? `<span class=\"cv-co-sym\">${trade.symbol}</span><span class=\"cv-co-sep\">\u00b7</span><span class=\"cv-co-name\">${coName}</span>` : `<span class=\"cv-co-sym\">${trade.symbol}</span>`,\n        `<span class=\"cv-co-meta\">${calc.formatDate(entryDate)} \u2192 ${calc.formatDate(exitDate)}${trDays ? ' \u00b7 ' + trDays + 'd held' : ''}</span>`,\n      ].join('');\n      el.appendChild(infoBar);\n\n      // Scroll hint (visible in the info section below chart)\n      const hintEl = document.createElement('div');\n      hintEl.className = 'cv-scroll-hint';\n      hintEl.innerHTML = '\u2195 <strong>Scroll here</strong> or use <kbd>\u2190</kbd><kbd>\u2192</kbd> to navigate trades';\n      el.appendChild(hintEl);\n\n      // Responsive resize\n      const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));\n      ro.observe(el);\n\n    } catch (err) {\n      el.style.height = '520px';\n      el.innerHTML = `\n        <div style=\"display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;\">\n          <div style=\"font-size:32px\">\ud83d\udcca</div>\n          <div style=\"font-size:14px;font-weight:600;color:var(--text)\">Could not load chart for <strong>${trade.symbol}</strong></div>\n          <div style=\"font-size:12px;color:var(--text-muted)\">${err.message}</div>\n          <div style=\"display:flex;gap:8px;margin-top:8px\">\n            <a href=\"https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}\" target=\"_blank\" class=\"btn btn-primary btn-sm\">\u2197 TradingView</a>\n            <a href=\"https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}\" target=\"_blank\" class=\"btn btn-secondary btn-sm\">\ud83d\udcca NSE India</a>\n          </div>\n        </div>\n      `;\n    }\n  }\n
+  // ── Lightweight Charts renderer ─────────────────────────────────────────
   async function _renderLightweightChart(trade, containerId, entryDate, exitDate) {
     const el = document.getElementById(containerId);
     if (!el) return;
-
     const yfSymbol = `${trade.symbol}.NS`;
-
     try {
       const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=2y`);
-      if (!res.ok) throw new Error(`API ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} from Yahoo Finance`);
       const json = await res.json();
-
       const result = json?.chart?.result?.[0];
-      if (!result) throw new Error('No chart data returned');
-
+      if (!result) throw new Error('No chart data in API response');
+      const meta       = result.meta || {};
       const timestamps = result.timestamp || [];
       const q          = result.indicators?.quote?.[0] || {};
-
       const candles = timestamps
         .map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i] }))
         .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)
         .sort((a, b) => a.time - b.time)
         .filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);
-
       const volumes = timestamps
         .map((t, i) => ({
           time:  t,
           value: q.volume?.[i] ?? 0,
-          color: (q.close?.[i] ?? 0) >= (q.open?.[i] ?? 0) ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)',
+          color: (q.close?.[i] ?? 0) >= (q.open?.[i] ?? 0) ? 'rgba(38,166,154,0.35)' : 'rgba(239,83,80,0.35)',
         }))
         .filter((_, i) => q.open?.[i] != null)
         .sort((a, b) => a.time - b.time)
         .filter((v, i, arr) => i === 0 || v.time !== arr[i-1].time);
-
-      if (!candles.length) throw new Error('Empty candle data');
-
+      if (!candles.length) throw new Error('No candle data — check symbol');
       const nearestTs = dateStr => {
-        const target = Math.floor(new Date(dateStr).getTime() / 1000);
-        return candles.reduce((best, c) =>
-          Math.abs(c.time - target) < Math.abs(best - target) ? c.time : best, candles[0].time);
+        const t = Math.floor(new Date(dateStr).getTime() / 1000);
+        return candles.reduce((best, c) => Math.abs(c.time - t) < Math.abs(best - t) ? c.time : best, candles[0].time);
       };
-
-      // Build two-pane layout inside container
+      el.innerHTML = '';
       el.style.height = 'auto';
-      el.innerHTML = `
-        <div id="${containerId}_ov"
-          style="height:70px;background:#f8fafc;border-bottom:1px solid #e8ecf0;position:relative;overflow:hidden">
-        </div>
-        <div id="${containerId}_main" style="height:450px;position:relative;overflow:hidden"></div>
-      `;
-
-      const LC     = window.LightweightCharts;
+      const LC = window.LightweightCharts;
       if (!LC) throw new Error('Lightweight Charts not loaded');
-      const ovEl   = document.getElementById(`${containerId}_ov`);
-      const mainEl = document.getElementById(`${containerId}_main`);
-      const w      = el.clientWidth || 900;
-
-      // ── OVERVIEW (top mini bar) ──────────────────────────────────────────
-      const ovChart = LC.createChart(ovEl, {
-        width: w, height: 70,
-        layout: { background: { color: '#f8fafc' }, textColor: 'transparent' },
-        grid:   { vertLines: { visible: false }, horzLines: { visible: false } },
-        crosshair:       { mode: LC.CrosshairMode.Hidden },
-        rightPriceScale: { visible: false },
-        leftPriceScale:  { visible: false },
-        timeScale: {
-          borderVisible: false, timeVisible: false,
-          fixLeftEdge: true, fixRightEdge: true,
-        },
-        handleScroll: false,
-        handleScale:  false,
-      });
-
-      const ovCandles = ovChart.addCandlestickSeries({
-        upColor:          '#22c55e', downColor:        '#ef4444',
-        borderUpColor:    '#22c55e', borderDownColor:  '#ef4444',
-        wickUpColor:      '#22c55e', wickDownColor:    '#ef4444',
-        priceLineVisible: false,     lastValueVisible: false,
-      });
-      ovCandles.setData(candles);
-      ovChart.timeScale().fitContent();
-
-      // Highlight trade period rectangle on overview using a positioned div
-      if (entryDate) {
-        const tradeFromTs = Math.floor(new Date(entryDate).getTime() / 1000);
-        const tradeToTs   = exitDate ? Math.floor(new Date(exitDate).getTime() / 1000) : tradeFromTs + 86400;
-        // Delay to allow chart layout to settle
-        setTimeout(() => {
-          const x1 = ovChart.timeScale().timeToCoordinate(tradeFromTs);
-          const x2 = ovChart.timeScale().timeToCoordinate(tradeToTs);
-          if (x1 !== null && x2 !== null) {
-            const hl = document.createElement('div');
-            hl.style.cssText = [
-              'position:absolute', 'top:0', 'bottom:0',
-              `left:${Math.min(x1,x2)}px`,
-              `width:${Math.max(4, Math.abs(x2-x1))}px`,
-              'background:rgba(91,106,240,0.22)',
-              'border-left:2px solid rgba(91,106,240,0.6)',
-              'border-right:2px solid rgba(91,106,240,0.6)',
-              'pointer-events:none',
-            ].join(';');
-            ovEl.appendChild(hl);
-          }
-        }, 120);
-      }
-
-      // ── MAIN chart ───────────────────────────────────────────────────────
-      const chart = LC.createChart(mainEl, {
-        width: w, height: 450,
-        layout: { background: { color: '#ffffff' }, textColor: '#334155' },
+      const w = el.clientWidth || 900;
+      const chartEl = document.createElement('div');
+      chartEl.style.cssText = 'position:relative;overflow:hidden';
+      el.appendChild(chartEl);
+      const chart = LC.createChart(chartEl, {
+        width: w, height: 500,
+        layout: { background: { color: '#ffffff' }, textColor: '#334155', fontSize: 11 },
         grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-        crosshair:       { mode: LC.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.08, bottom: 0.22 } },
-        timeScale:       { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
+        crosshair: { mode: LC.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.06, bottom: 0.20 } },
+        timeScale: { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
       });
-
       const candleSeries = chart.addCandlestickSeries({
-        upColor:         '#22c55e', downColor:       '#ef4444',
-        borderUpColor:   '#22c55e', borderDownColor: '#ef4444',
-        wickUpColor:     '#22c55e', wickDownColor:   '#ef4444',
+        upColor: '#26a69a', downColor: '#ef5350',
+        borderUpColor: '#26a69a', borderDownColor: '#ef5350',
+        wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+        autoscaleInfoProvider: () => null,
       });
       candleSeries.setData(candles);
-
       const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       volSeries.setData(volumes);
-
-      // ── Price lines ───────────────────────────────────────────
-      // Entry/pyramid price lines (green dashed)
       (trade.entries || []).forEach((e, i) => {
-        const isPyramid = i > 0;
         candleSeries.createPriceLine({
-          price: e.price,
-          color: isPyramid ? '#d97706' : '#16a34a',
-          lineWidth: 1,
-          lineStyle: LC.LineStyle.Dashed,
-          axisLabelVisible: true,
-          title: isPyramid ? `Pyr${i} ₹${calc.formatNumber(e.price)}` : `Entry ₹${calc.formatNumber(e.price)}`,
+          price: e.price, color: i === 0 ? '#26a69a' : '#f59e0b',
+          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: i === 0 ? `Entry@${calc.formatNumber(e.price)}` : `Pyr${i}@${calc.formatNumber(e.price)}`,
         });
       });
-      // Initial stop (subtle red dotted)
       if (trade.initialStop) {
         candleSeries.createPriceLine({
-          price: trade.initialStop, color: 'rgba(220,38,38,0.5)', lineWidth: 1,
-          lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,
-          title: `Stop ₹${calc.formatNumber(trade.initialStop)}`,
+          price: trade.initialStop, color: 'rgba(239,83,80,0.5)',
+          lineWidth: 1, lineStyle: LC.LineStyle.Dotted, axisLabelVisible: true,
+          title: `Stop@${calc.formatNumber(trade.initialStop)}`,
         });
       }
-      // Stop revision (if stop was moved)
       if (trade.currentStop && trade.currentStop !== trade.initialStop) {
         candleSeries.createPriceLine({
-          price: trade.currentStop, color: 'rgba(220,38,38,0.75)', lineWidth: 1,
-          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: `Stop Rev ₹${calc.formatNumber(trade.currentStop)}`,
+          price: trade.currentStop, color: 'rgba(239,83,80,0.8)',
+          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: `SLRev@${calc.formatNumber(trade.currentStop)}`,
         });
       }
-      // Final exit price line (amber dashed)
       if (trade.finalExit?.price) {
         candleSeries.createPriceLine({
-          price: trade.finalExit.price, color: '#f59e0b', lineWidth: 1,
-          lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: `Exit ₹${calc.formatNumber(trade.finalExit.price)}`,
+          price: trade.finalExit.price, color: '#ef5350',
+          lineWidth: 1, lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
+          title: `Exit@${calc.formatNumber(trade.finalExit.price)}`,
         });
       }
-
-      // ── Arrow markers ───────────────────────────────────────────
       const markers = [];
-      // Entries: green ▲ for first entry, amber ▲ for pyramids
       (trade.entries || []).forEach((e, i) => {
         if (!e.date) return;
-        const isPyramid = i > 0;
         markers.push({
           time: nearestTs(e.date), position: 'belowBar',
-          color: isPyramid ? '#f59e0b' : '#16a34a',
-          shape: 'arrowUp',
-          text: isPyramid ? `Pyramid ₹${calc.formatNumber(e.price)}` : `Entry ₹${calc.formatNumber(e.price)}`,
+          color: i === 0 ? '#26a69a' : '#f59e0b', shape: 'arrowUp',
+          text: i === 0 ? `Entry` : `Pyr${i}`,
         });
       });
-      // Partial exits: amber ▼
       (trade.exits || []).filter(e => e.qty > 0).forEach(e => {
         if (!e.date) return;
-        markers.push({
-          time: nearestTs(e.date), position: 'aboveBar',
-          color: '#f59e0b', shape: 'arrowDown',
-          text: `Partial ₹${calc.formatNumber(e.price)}`,
-        });
+        markers.push({ time: nearestTs(e.date), position: 'aboveBar', color: '#f59e0b', shape: 'arrowDown', text: 'Partial' });
       });
-      // Final exit: red ▼
       if (trade.finalExit?.date) {
-        markers.push({
-          time: nearestTs(trade.finalExit.date), position: 'aboveBar',
-          color: '#dc2626', shape: 'arrowDown',
-          text: `Exit ₹${calc.formatNumber(trade.finalExit.price)}`,
-        });
+        markers.push({ time: nearestTs(trade.finalExit.date), position: 'aboveBar', color: '#ef5350', shape: 'arrowDown', text: 'Exit' });
       }
       markers.sort((a, b) => a.time - b.time);
       if (markers.length) candleSeries.setMarkers(markers);
-
-      // Vertical dashed lines at entry & exit dates (overlay divs)
       const _addVLine = (ts, color) => {
-        const div = document.createElement('div');
-        div.style.cssText = `position:absolute;top:0;bottom:0;width:0;border-left:1px dashed ${color};pointer-events:none;z-index:5;transition:left .05s`;
-        mainEl.appendChild(div);
+        const vl = document.createElement('div');
+        vl.style.cssText = `position:absolute;top:0;bottom:0;width:0;border-left:1px dashed ${color};pointer-events:none;z-index:5`;
+        chartEl.appendChild(vl);
         const update = () => {
           const x = chart.timeScale().timeToCoordinate(ts);
-          div.style.display = x !== null && x > 0 ? 'block' : 'none';
-          if (x !== null) div.style.left = `${x}px`;
+          vl.style.display = x !== null && x > 0 ? 'block' : 'none';
+          if (x !== null) vl.style.left = `${x}px`;
         };
         chart.timeScale().subscribeVisibleLogicalRangeChange(update);
         update();
       };
-      if (entryDate) _addVLine(Math.floor(new Date(entryDate).getTime()/1000), 'rgba(22,163,74,0.55)');
-      if (exitDate)  _addVLine(Math.floor(new Date(exitDate).getTime()/1000),  'rgba(220,38,38,0.55)');
-
-      // Update overview highlight window as main chart scrolls
-      chart.timeScale().subscribeVisibleTimeRangeChange(range => {
-        if (!range) return;
-        // Move the overview window marker to match (optional: skip for simplicity)
-      });
-
-      // ── Default view: 6 months context ending at exit + 10 days ───
-      if (exitDate || entryDate) {
-        const endTs   = exitDate
-          ? Math.floor(new Date(exitDate).getTime()/1000) + 10 * 86400
-          : Math.floor(Date.now()/1000) + 10 * 86400;
-        const startTs = endTs - 183 * 86400; // ~6 months
+      if (entryDate) _addVLine(Math.floor(new Date(entryDate).getTime()/1000), 'rgba(38,166,154,0.55)');
+      if (exitDate)  _addVLine(Math.floor(new Date(exitDate).getTime()/1000),  'rgba(239,83,80,0.55)');
+      const refDate = exitDate || entryDate;
+      if (refDate) {
+        const endTs   = Math.floor(new Date(refDate).getTime()/1000) + 10 * 86400;
+        const startTs = endTs - 183 * 86400;
         try { chart.timeScale().setVisibleRange({ from: startTs, to: endTs }); } catch(_) {}
       }
-
-      // Responsive resize
-      const ro = new ResizeObserver(() => {
-        const nw = el.clientWidth;
-        chart.applyOptions({ width: nw });
-        ovChart.applyOptions({ width: nw });
-      });
+      const coName = meta.shortName || meta.longName || '';
+      const trDays = (() => { try { return Math.round((new Date(exitDate||entryDate) - new Date(entryDate)) / 86400000); } catch(_) { return 0; } })();
+      const infoBar = document.createElement('div');
+      infoBar.className = 'cv-company-bar';
+      infoBar.innerHTML = (coName ? `<span class="cv-co-sym">${trade.symbol}</span><span class="cv-co-sep"> · </span><span class="cv-co-name">${coName}</span>` : `<span class="cv-co-sym">${trade.symbol}</span>`) +
+        `<span class="cv-co-meta">${calc.formatDate(entryDate)} → ${calc.formatDate(exitDate)}${trDays ? ' · ' + trDays + 'd' : ''}</span>`;
+      el.appendChild(infoBar);
+      const hintEl = document.createElement('div');
+      hintEl.className = 'cv-scroll-hint';
+      hintEl.textContent = '↕ Scroll here to navigate trades  ·  ← → arrow keys';
+      el.appendChild(hintEl);
+      const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));
       ro.observe(el);
-
     } catch (err) {
-      el.style.height = '520px';
-      el.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)">
-          <div style="font-size:32px">📊</div>
-          <div style="font-size:14px;font-weight:600;color:var(--text)">Could not load chart data</div>
-          <div style="font-size:12px">${err.message}</div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-primary btn-sm">↗ TradingView</a>
-            <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE India</a>
-          </div>
-        </div>
-      `;
+      el.style.height = '420px';
+      el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;"><div style="font-size:32px">📊</div><div style="font-size:14px;font-weight:600">${trade.symbol} — chart unavailable</div><div style="font-size:12px;color:#64748b">${err.message}</div><div style="display:flex;gap:8px;margin-top:8px"><a href="https://www.tradingview.com/chart/?symbol=NSE:${trade.symbol}" target="_blank" class="btn btn-primary btn-sm">↗ TradingView</a><a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(trade.symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE</a></div></div>`;
     }
   }
 
@@ -504,12 +395,12 @@ const tradesModule = (() => {
     const ruleBreaks= trades.filter(t => !t.ruleFollowed).length;
     const exp       = calc.getExpectancy(trades);
     const cards = [
-      { label:'Total Trades', value:trades.length, sub:`${winCount}W / ${lossCount}L`, icon:'📋' },
-      { label:'Win Rate', value:`${wr.toFixed(1)}%`, sub:`Break-even: ${trades.length-winCount-lossCount}`, icon:'🎯', cls:wr>=40?'positive':'negative' },
-      { label:'Net P&L', value:calc.formatCurrency(netPnl), sub:`${calc.formatR(netR)}`, icon:'💰', cls:netPnl>=0?'positive':'negative' },
-      { label:'Expectancy', value:calc.formatR(exp), sub:'per trade', icon:'📊', cls:exp>=0?'positive':'negative' },
-      { label:'Avg Win / Loss', value:`${avgWinR.toFixed(2)}R`, sub:`Avg Loss: ${avgLossR.toFixed(2)}R`, icon:'⚖️' },
-      { label:'Rule Breaks', value:ruleBreaks, sub:`${trades.length>0?((ruleBreaks/trades.length)*100).toFixed(0):0}% of trades`, icon:'⚠️', cls:ruleBreaks>0?'negative':'positive' },
+      { label:'Total Trades', value:trades.length, sub:`${winCount}W / ${lossCount}L`, icon:'ðŸ“‹' },
+      { label:'Win Rate', value:`${wr.toFixed(1)}%`, sub:`Break-even: ${trades.length-winCount-lossCount}`, icon:'ðŸŽ¯', cls:wr>=40?'positive':'negative' },
+      { label:'Net P&L', value:calc.formatCurrency(netPnl), sub:`${calc.formatR(netR)}`, icon:'ðŸ’°', cls:netPnl>=0?'positive':'negative' },
+      { label:'Expectancy', value:calc.formatR(exp), sub:'per trade', icon:'ðŸ“Š', cls:exp>=0?'positive':'negative' },
+      { label:'Avg Win / Loss', value:`${avgWinR.toFixed(2)}R`, sub:`Avg Loss: ${avgLossR.toFixed(2)}R`, icon:'âš–ï¸' },
+      { label:'Rule Breaks', value:ruleBreaks, sub:`${trades.length>0?((ruleBreaks/trades.length)*100).toFixed(0):0}% of trades`, icon:'âš ï¸', cls:ruleBreaks>0?'negative':'positive' },
     ];
     el.innerHTML = cards.map(c => `
       <div class="stat-card">
@@ -536,7 +427,7 @@ const tradesModule = (() => {
         <th data-sort="setup">Setup</th>
         <th>Type</th>
         <th>Dir</th>
-        <th data-sort="pnl">P&L (₹)</th>
+        <th data-sort="pnl">P&L (â‚¹)</th>
         <th data-sort="profitR">R</th>
         <th>Return%</th>
         <th data-sort="result">Result</th>
@@ -571,7 +462,7 @@ const tradesModule = (() => {
       return va < vb ? _sortDir : va > vb ? -_sortDir : 0;
     });
     if (!sorted.length) {
-      tbody.innerHTML = `<tr><td colspan="15"><div class="no-data"><div class="no-data-icon">📭</div>No closed trades for this period.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15"><div class="no-data"><div class="no-data-icon">ðŸ“­</div>No closed trades for this period.</div></td></tr>`;
       return;
     }
     const playbooks = await db.getPlaybooks();
@@ -587,17 +478,17 @@ const tradesModule = (() => {
       const rCls     = m.profitR>0?'text-success':m.profitR<0?'text-danger':'text-muted';
       const resBadge = result==='Win'?'badge-success':result==='Loss'?'badge-danger':'badge-muted';
       const revBadge = trade.reviewStatus==='Reviewed'?'badge-success':trade.reviewStatus==='Pending'?'badge-warning':'badge-muted';
-      const retPct   = m.positionSize > 0 ? ((m.realizedPnl/m.positionSize)*100).toFixed(1) : '—';
+      const retPct   = m.positionSize > 0 ? ((m.realizedPnl/m.positionSize)*100).toFixed(1) : 'â€”';
       const pnlPct   = _equity > 0 ? (m.realizedPnl / _equity * 100) : 0;
       const _s       = v => v >= 0 ? '+' : '';
       return `<tr class="${rowCls}${!trade.ruleFollowed?' trade-row-rule-break':''}" data-id="${trade.id}" onclick="tradesModule._onRowClick('${trade.id}')">
         <td><strong>${trade.symbol}</strong></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date||'')}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
+        <td class="font-mono">â‚¹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td>${calc.formatDate(trade.finalExit?.date||'')}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}</td>
+        <td class="font-mono">â‚¹${calc.formatNumber(m.avgExitPrice)}</td>
         <td>${m.holdingDays}d (T: ${m.tradingDays})</td>
-        <td class="text-muted">${pb?.name||'—'}</td>
+        <td class="text-muted">${pb?.name||'â€”'}</td>
         <td><span class="badge badge-muted" style="font-size:10px">${trade.tradeType||'Equity'}</span></td>
         <td><span class="badge ${trade.direction==='Long'?'badge-success':'badge-danger'}" style="font-size:10px">${trade.direction?.[0]||'L'}</span></td>
         <td class="${m.realizedPnl>=0?'text-success':'text-danger'} font-mono fw-600">
@@ -606,7 +497,7 @@ const tradesModule = (() => {
         <td class="${rCls} font-mono fw-600">${calc.formatR(m.profitR)}</td>
         <td class="${m.realizedPnl>=0?'text-success':'text-danger'}">${retPct}%</td>
         <td><span class="badge ${resBadge}">${result}</span></td>
-        <td>${trade.ruleFollowed?'<span class="rule-tick">✓</span>':'<span class="rule-cross">✗</span>'}</td>
+        <td>${trade.ruleFollowed?'<span class="rule-tick">âœ“</span>':'<span class="rule-cross">âœ—</span>'}</td>
         <td><span class="badge ${revBadge}" style="font-size:10px">${trade.reviewStatus||'Pending'}</span></td>
       </tr>`;
     }).join('');
@@ -648,24 +539,24 @@ const tradesModule = (() => {
               <span class="badge badge-muted">${trade.direction}</span>
               <span class="badge badge-muted">${trade.tradeType||'Equity'}</span>
             </div>
-            <div class="detail-sub">${calc.formatDate(trade.entries?.[0]?.date)} → ${calc.formatDate(trade.finalExit?.date)} · ${m.holdingDays} days (trading days: ${m.tradingDays})</div>
+            <div class="detail-sub">${calc.formatDate(trade.entries?.[0]?.date)} â†’ ${calc.formatDate(trade.finalExit?.date)} Â· ${m.holdingDays} days (trading days: ${m.tradingDays})</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
-            <button class="btn btn-secondary btn-sm" onclick="tradesModule._toggleFullscreen()" title="Toggle fullscreen">⛶</button>
+            <button class="btn btn-secondary btn-sm" onclick="tradesModule._toggleFullscreen()" title="Toggle fullscreen">â›¶</button>
             <button class="btn btn-danger btn-sm" onclick="tradesModule._deleteTrade('${tradeId}')" title="Delete Trade">Delete Trade</button>
-            <button class="detail-close-btn" onclick="tradesModule._closePanel()">✕</button>
+            <button class="detail-close-btn" onclick="tradesModule._closePanel()">âœ•</button>
           </div>
         </div>
         <div class="detail-panel-body">
           <div class="metric-grid">
-            <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
-            <div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
+            <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value">â‚¹${calc.formatNumber(m.avgEntryPrice)}</div></div>
+            <div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">â‚¹${calc.formatNumber(m.avgExitPrice)}</div></div>
             <div class="metric-item"><div class="metric-label">Net P&L</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${calc.formatCurrency(m.realizedPnl)}</div></div>
             <div class="metric-item"><div class="metric-label">Result (R)</div><div class="metric-value ${m.profitR>=0?'positive':'negative'}">${calc.formatR(m.profitR)}</div></div>
-            <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.trueRPT)}</div></div>
-            <div class="metric-item"><div class="metric-label">Return %</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${m.positionSize>0?((m.realizedPnl/m.positionSize)*100).toFixed(2)+'%':'—'}</div></div>
-            <div class="metric-item"><div class="metric-label">Setup</div><div class="metric-value" style="font-size:12px">${pb?.name||'—'}</div></div>
-            <div class="metric-item"><div class="metric-label">Total Charges</div><div class="metric-value">₹${calc.formatNumber(m.totalCharges)}</div></div>
+            <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">â‚¹${calc.formatNumber(m.trueRPT)}</div></div>
+            <div class="metric-item"><div class="metric-label">Return %</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${m.positionSize>0?((m.realizedPnl/m.positionSize)*100).toFixed(2)+'%':'â€”'}</div></div>
+            <div class="metric-item"><div class="metric-label">Setup</div><div class="metric-value" style="font-size:12px">${pb?.name||'â€”'}</div></div>
+            <div class="metric-item"><div class="metric-label">Total Charges</div><div class="metric-value">â‚¹${calc.formatNumber(m.totalCharges)}</div></div>
           </div>
           <div class="detail-tab-bar">
             <button class="detail-tab-btn active" data-dtab="overview">Overview</button>
@@ -709,17 +600,17 @@ const tradesModule = (() => {
   }
 
   function _tabOverview(trade, m, pb) {
-    const stars    = [1,2,3,4,5].map(i => `<span class="star ${i<=(trade.rating||0)?'active':''}" data-star="${i}">★</span>`).join('');
+    const stars    = [1,2,3,4,5].map(i => `<span class="star ${i<=(trade.rating||0)?'active':''}" data-star="${i}">â˜…</span>`).join('');
     const revStatus= ['Pending','Reviewed','Needs Work'].map(s => `<option ${trade.reviewStatus===s?'selected':''}>${s}</option>`).join('');
     return `
       <div class="settings-row"><div><div class="settings-row-label">Trade Type</div></div><div><span class="badge badge-muted">${trade.tradeType}</span></div></div>
       <div class="settings-row"><div><div class="settings-row-label">Direction</div></div><div><span class="badge ${trade.direction==='Long'?'badge-success':'badge-danger'}">${trade.direction}</span></div></div>
-      <div class="settings-row"><div><div class="settings-row-label">Playbook</div></div><div><span>${pb?.name||'—'}</span></div></div>
+      <div class="settings-row"><div><div class="settings-row-label">Playbook</div></div><div><span>${pb?.name||'â€”'}</span></div></div>
       <div class="settings-row"><div><div class="settings-row-label">Rules Followed</div></div><div><label class="toggle-switch"><input type="checkbox" id="ov-rule" ${trade.ruleFollowed?'checked':''}><span class="toggle-slider"></span></label></div></div>
       <div class="settings-row"><div><div class="settings-row-label">Rating</div></div><div><div class="star-rating" id="ov-stars">${stars}</div></div></div>
       <div class="settings-row"><div><div class="settings-row-label">Review Status</div></div><div><select class="form-select form-select-sm" id="ov-review" style="width:130px">${revStatus}</select></div></div>
-      <div class="settings-row"><div><div class="settings-row-label">Total Charges</div></div><div><span class="font-mono">₹${calc.formatNumber(m.totalCharges)}</span></div></div>
-      ${trade.chartLink ? `<div style="margin-top:10px"><a href="${trade.chartLink}" target="_blank" class="btn btn-secondary btn-sm">📈 Open Chart in TradingView</a></div>` : ''}`;
+      <div class="settings-row"><div><div class="settings-row-label">Total Charges</div></div><div><span class="font-mono">â‚¹${calc.formatNumber(m.totalCharges)}</span></div></div>
+      ${trade.chartLink ? `<div style="margin-top:10px"><a href="${trade.chartLink}" target="_blank" class="btn btn-secondary btn-sm">ðŸ“ˆ Open Chart in TradingView</a></div>` : ''}`;
   }
 
   function _setupOverviewTab(trade, tradeId) {
@@ -745,7 +636,7 @@ const tradesModule = (() => {
     });
   }
 
-  // ── Lifecycle Tab with Edit/Delete and Realized P&L summary ───────────────
+  // â”€â”€ Lifecycle Tab with Edit/Delete and Realized P&L summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _tabLifecycle(trade, tradeId) {
     const rows = [];
     (trade.entries     || []).forEach(e => rows.push({ type:'Entry',        id:e.id, date:e.date, price:e.price, qty:e.qty, charges:e.charges||0 }));
@@ -761,12 +652,12 @@ const tradesModule = (() => {
       <tbody>${rows.map(r => `<tr>
         <td><span class="badge ${r.type.includes('Exit')?'badge-danger':r.type==='Pyramid'?'badge-success':'badge-primary'}">${r.type}</span></td>
         <td>${calc.formatDate(r.date)}</td>
-        <td class="font-mono">₹${calc.formatNumber(r.price)}</td>
+        <td class="font-mono">â‚¹${calc.formatNumber(r.price)}</td>
         <td>${r.qty}</td>
-        <td class="font-mono">₹${calc.formatNumber(r.charges)}</td>
+        <td class="font-mono">â‚¹${calc.formatNumber(r.charges)}</td>
         <td>
-          <button class="btn btn-secondary btn-xs" title="Edit" onclick="tradesModule._editLifecycleRow('${tid}','${r.type}','${r.id}')">✏</button>
-          <button class="btn btn-danger btn-xs" title="Delete" onclick="tradesModule._deleteLifecycleRow('${tid}','${r.type}','${r.id}')">🗑</button>
+          <button class="btn btn-secondary btn-xs" title="Edit" onclick="tradesModule._editLifecycleRow('${tid}','${r.type}','${r.id}')">âœ</button>
+          <button class="btn btn-danger btn-xs" title="Delete" onclick="tradesModule._deleteLifecycleRow('${tid}','${r.type}','${r.id}')">ðŸ—‘</button>
         </td>
       </tr>`).join('')}</tbody>
       <tfoot><tr>
@@ -792,7 +683,7 @@ const tradesModule = (() => {
       updated.finalExit = null;
     }
     await db.saveTrade(updated);
-    app.toast(`${type} deleted — metrics recalculated.`, 'success');
+    app.toast(`${type} deleted â€” metrics recalculated.`, 'success');
     await _render();
     await _renderDetailPanel(tradeId);
     document.querySelector('.detail-tab-btn[data-dtab="lifecycle"]')?.click();
@@ -810,11 +701,11 @@ const tradesModule = (() => {
 
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="el-date" value="${record.date}"></div>
-      <div class="form-group"><label class="form-label">Price (₹)</label><input class="form-input" type="number" id="el-price" step="0.05" value="${record.price}"></div>
+      <div class="form-group"><label class="form-label">Price (â‚¹)</label><input class="form-input" type="number" id="el-price" step="0.05" value="${record.price}"></div>
       <div class="form-group"><label class="form-label">Qty</label><input class="form-input" type="number" id="el-qty" min="1" value="${record.qty}"></div>
-      <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="el-charges" step="0.01" value="${record.charges||0}"></div>
+      <div class="form-group"><label class="form-label">Charges (â‚¹)</label><input class="form-input" type="number" id="el-charges" step="0.01" value="${record.charges||0}"></div>
     </div>`;
-    app.openModal(`Edit ${type} — ${trade.symbol}`, content, [
+    app.openModal(`Edit ${type} â€” ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
       { id:'save', label:'Save & Recalculate', class:'btn-primary', onClick: async () => {
         const date    = document.getElementById('el-date').value;
@@ -830,7 +721,7 @@ const tradesModule = (() => {
         else if (type==='Final Exit')   updated.finalExit = updRec;
         await db.saveTrade(updated);
         app.closeModal();
-        app.toast(`${type} updated — metrics recalculated.`,'success');
+        app.toast(`${type} updated â€” metrics recalculated.`,'success');
         await _render();
         await _renderDetailPanel(tradeId);
         document.querySelector('.detail-tab-btn[data-dtab="lifecycle"]')?.click();
@@ -844,9 +735,9 @@ const tradesModule = (() => {
     return `<div>${stops.map((s,i) => `<div class="stop-item">
       <span class="badge badge-muted">Rev ${i+1}</span>
       <span>${calc.formatDate(s.date)}</span>
-      <span class="font-mono">₹${calc.formatNumber(s.oldStop)}</span>
-      <span class="stop-arrow">→</span>
-      <span class="font-mono fw-600">₹${calc.formatNumber(s.newStop)}</span>
+      <span class="font-mono">â‚¹${calc.formatNumber(s.oldStop)}</span>
+      <span class="stop-arrow">â†’</span>
+      <span class="font-mono fw-600">â‚¹${calc.formatNumber(s.newStop)}</span>
       <span class="badge badge-muted">${s.actionSource}</span>
     </div>`).join('')}</div>`;
   }
@@ -884,8 +775,8 @@ const tradesModule = (() => {
         width="100%" height="340" allowtransparency="true" scrolling="no" allowfullscreen>
       </iframe>
       <div style="margin-top:6px;display:flex;gap:8px;">
-        <a href="https://www.tradingview.com/chart/?symbol=NSE:${symbol}" target="_blank" class="btn btn-secondary btn-sm">🔗 Open Full Chart in TradingView</a>
-        <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}" target="_blank" class="btn btn-secondary btn-sm">📊 NSE Quote</a>
+        <a href="https://www.tradingview.com/chart/?symbol=NSE:${symbol}" target="_blank" class="btn btn-secondary btn-sm">ðŸ”— Open Full Chart in TradingView</a>
+        <a href="https://www.nseindia.com/get-quotes/equity?symbol=${encodeURIComponent(symbol)}" target="_blank" class="btn btn-secondary btn-sm">ðŸ“Š NSE Quote</a>
       </div>
     </div>`;
   }
@@ -902,7 +793,7 @@ const tradesModule = (() => {
       if (tablePanel) tablePanel.style.display = 'none';
       if (detPanel)   detPanel.style.cssText = 'flex:1;min-width:0;width:100%;';
       if (splitView)  splitView.style.cssText = 'height:calc(100vh - 200px);';
-      if (fsBtn)      { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
+      if (fsBtn)      { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize â€” return to split view'; }
     } else {
       // Exit fullscreen: restore split view
       if (tablePanel) tablePanel.style.display = '';
