@@ -572,3 +572,22 @@ body.privacy-mode #privacy-badge { display: inline-flex; }
 /* Pyramid & partial marker pills */
 .cv-pyramid { background: rgba(251,191,36,0.12); color: #b45309; border: 1px solid rgba(251,191,36,0.4); }
 .cv-partial  { background: rgba(251,191,36,0.08); color: #92400e; border: 1px dashed rgba(251,191,36,0.4); }
+/* Company info bar below chart */
+.cv-company-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 10px; border-top: 1px solid #f1f5f9; font-size: 12px; background: #fff;
+}
+.cv-co-sym  { font-weight: 700; color: var(--primary); font-size: 13px; }
+.cv-co-sep  { color: var(--text-muted); margin: 0 2px; }
+.cv-co-name { color: var(--text); }
+.cv-co-meta { color: var(--text-muted); margin-left: auto; font-size: 11px; }
+/* Scroll hint bar */
+.cv-scroll-hint {
+  text-align: center; font-size: 11px; color: var(--text-muted);
+  padding: 6px 12px; background: #f8fafc; border-top: 1px solid #f1f5f9;
+  cursor: ns-resize; user-select: none;
+}
+.cv-scroll-hint kbd {
+  display: inline-block; font-size: 10px; background: #e2e8f0;
+  border: 1px solid #cbd5e1; border-radius: 3px; padding: 0 4px; line-height: 1.5;
+}
