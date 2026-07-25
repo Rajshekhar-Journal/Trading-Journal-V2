@@ -194,16 +194,14 @@ const tradesModule = (() => {
     await _renderLightweightChart(trade, chartId, entryDate, exitDate);
   }
 
-  // ── Lightweight Charts renderer ─────────────────────────────────────────
+  // ── Lightweight Charts renderer (overview + main two-pane) ─────────────
   async function _renderLightweightChart(trade, containerId, entryDate, exitDate) {
     const el = document.getElementById(containerId);
     if (!el) return;
 
-    // Determine Yahoo Finance symbol (NSE suffix = .NS)
     const yfSymbol = `${trade.symbol}.NS`;
 
     try {
-      // Fetch via Vercel API proxy (avoids CORS)
       const res  = await fetch(`/api/ohlc?symbol=${encodeURIComponent(yfSymbol)}&range=1y`);
       if (!res.ok) throw new Error(`API ${res.status}`);
       const json = await res.json();
@@ -214,18 +212,11 @@ const tradesModule = (() => {
       const timestamps = result.timestamp || [];
       const q          = result.indicators?.quote?.[0] || {};
 
-      // Build cleaned candle + volume arrays
       const candles = timestamps
-        .map((t, i) => ({
-          time:  t,
-          open:  q.open?.[i],
-          high:  q.high?.[i],
-          low:   q.low?.[i],
-          close: q.close?.[i],
-        }))
+        .map((t, i) => ({ time: t, open: q.open?.[i], high: q.high?.[i], low: q.low?.[i], close: q.close?.[i] }))
         .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)
         .sort((a, b) => a.time - b.time)
-        .filter((c, i, arr) => i === 0 || c.time !== arr[i - 1].time); // dedupe
+        .filter((c, i, arr) => i === 0 || c.time !== arr[i-1].time);
 
       const volumes = timestamps
         .map((t, i) => ({
@@ -233,66 +224,109 @@ const tradesModule = (() => {
           value: q.volume?.[i] ?? 0,
           color: (q.close?.[i] ?? 0) >= (q.open?.[i] ?? 0) ? 'rgba(34,197,94,0.35)' : 'rgba(239,68,68,0.35)',
         }))
-        .filter((v, i) => q.open?.[i] != null)
+        .filter((_, i) => q.open?.[i] != null)
         .sort((a, b) => a.time - b.time)
-        .filter((v, i, arr) => i === 0 || v.time !== arr[i - 1].time);
+        .filter((v, i, arr) => i === 0 || v.time !== arr[i-1].time);
 
       if (!candles.length) throw new Error('Empty candle data');
 
-      // Helper: nearest candle timestamp to a YYYY-MM-DD date string
       const nearestTs = dateStr => {
         const target = Math.floor(new Date(dateStr).getTime() / 1000);
         return candles.reduce((best, c) =>
-          Math.abs(c.time - target) < Math.abs(best - target) ? c.time : best,
-          candles[0].time
-        );
+          Math.abs(c.time - target) < Math.abs(best - target) ? c.time : best, candles[0].time);
       };
 
-      // Clear loading spinner
-      el.innerHTML = '';
+      // Build two-pane layout inside container
+      el.style.height = 'auto';
+      el.innerHTML = `
+        <div id="${containerId}_ov"
+          style="height:70px;background:#f8fafc;border-bottom:1px solid #e8ecf0;position:relative;overflow:hidden">
+        </div>
+        <div id="${containerId}_main" style="height:450px;position:relative;overflow:hidden"></div>
+      `;
 
-      // ── Create chart ──────────────────────────────────────────────────
-      const LC = window.LightweightCharts;
+      const LC     = window.LightweightCharts;
       if (!LC) throw new Error('Lightweight Charts not loaded');
+      const ovEl   = document.getElementById(`${containerId}_ov`);
+      const mainEl = document.getElementById(`${containerId}_main`);
+      const w      = el.clientWidth || 900;
 
-      const chart = LC.createChart(el, {
-        width:  el.clientWidth || 900,
-        height: 520,
-        layout: { background: { color: '#ffffff' }, textColor: '#334155' },
-        grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-        crosshair: { mode: LC.CrosshairMode.Normal },
-        rightPriceScale: {
-          borderColor: '#e2e8f0',
-          scaleMargins: { top: 0.08, bottom: 0.22 },
+      // ── OVERVIEW (top mini bar) ──────────────────────────────────────────
+      const ovChart = LC.createChart(ovEl, {
+        width: w, height: 70,
+        layout: { background: { color: '#f8fafc' }, textColor: 'transparent' },
+        grid:   { vertLines: { visible: false }, horzLines: { visible: false } },
+        crosshair:       { mode: LC.CrosshairMode.Hidden },
+        rightPriceScale: { visible: false },
+        leftPriceScale:  { visible: false },
+        timeScale: {
+          borderVisible: false, timeVisible: false,
+          fixLeftEdge: true, fixRightEdge: true,
         },
-        timeScale: { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
+        handleScroll: false,
+        handleScale:  false,
       });
 
-      // Candlestick series
+      const ovCandles = ovChart.addCandlestickSeries({
+        upColor:          '#22c55e', downColor:        '#ef4444',
+        borderUpColor:    '#22c55e', borderDownColor:  '#ef4444',
+        wickUpColor:      '#22c55e', wickDownColor:    '#ef4444',
+        priceLineVisible: false,     lastValueVisible: false,
+      });
+      ovCandles.setData(candles);
+      ovChart.timeScale().fitContent();
+
+      // Highlight trade period rectangle on overview using a positioned div
+      if (entryDate) {
+        const tradeFromTs = Math.floor(new Date(entryDate).getTime() / 1000);
+        const tradeToTs   = exitDate ? Math.floor(new Date(exitDate).getTime() / 1000) : tradeFromTs + 86400;
+        // Delay to allow chart layout to settle
+        setTimeout(() => {
+          const x1 = ovChart.timeScale().timeToCoordinate(tradeFromTs);
+          const x2 = ovChart.timeScale().timeToCoordinate(tradeToTs);
+          if (x1 !== null && x2 !== null) {
+            const hl = document.createElement('div');
+            hl.style.cssText = [
+              'position:absolute', 'top:0', 'bottom:0',
+              `left:${Math.min(x1,x2)}px`,
+              `width:${Math.max(4, Math.abs(x2-x1))}px`,
+              'background:rgba(91,106,240,0.22)',
+              'border-left:2px solid rgba(91,106,240,0.6)',
+              'border-right:2px solid rgba(91,106,240,0.6)',
+              'pointer-events:none',
+            ].join(';');
+            ovEl.appendChild(hl);
+          }
+        }, 120);
+      }
+
+      // ── MAIN chart ───────────────────────────────────────────────────────
+      const chart = LC.createChart(mainEl, {
+        width: w, height: 450,
+        layout: { background: { color: '#ffffff' }, textColor: '#334155' },
+        grid:   { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+        crosshair:       { mode: LC.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#e2e8f0', scaleMargins: { top: 0.08, bottom: 0.22 } },
+        timeScale:       { borderColor: '#e2e8f0', timeVisible: true, secondsVisible: false },
+      });
+
       const candleSeries = chart.addCandlestickSeries({
-        upColor:         '#22c55e',
-        downColor:       '#ef4444',
-        borderUpColor:   '#22c55e',
-        borderDownColor: '#ef4444',
-        wickUpColor:     '#22c55e',
-        wickDownColor:   '#ef4444',
+        upColor:         '#22c55e', downColor:       '#ef4444',
+        borderUpColor:   '#22c55e', borderDownColor: '#ef4444',
+        wickUpColor:     '#22c55e', wickDownColor:   '#ef4444',
       });
       candleSeries.setData(candles);
 
-      // Volume histogram (lower portion)
-      const volSeries = chart.addHistogramSeries({
-        priceFormat:  { type: 'volume' },
-        priceScaleId: 'vol',
-      });
+      const volSeries = chart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
       volSeries.setData(volumes);
 
-      // ── Price lines (horizontal annotations) ───────────────────────────
+      // Price lines
       (trade.entries || []).forEach((e, i) => {
         candleSeries.createPriceLine({
           price: e.price, color: '#16a34a', lineWidth: 1,
           lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: `Entry${(trade.entries.length > 1 ? i + 1 : '')} ₹${calc.formatNumber(e.price)}`,
+          title: `Entry${trade.entries.length > 1 ? i+1 : ''} ₹${calc.formatNumber(e.price)}`,
         });
       });
       if (trade.initialStop) {
@@ -310,45 +344,67 @@ const tradesModule = (() => {
         candleSeries.createPriceLine({
           price: e.price, color: '#f59e0b', lineWidth: 1,
           lineStyle: LC.LineStyle.Dashed, axisLabelVisible: true,
-          title: i === allExits.length - 1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+          title: i === allExits.length-1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
         });
       });
 
-      // ── Arrow markers on candles ────────────────────────────────────────
+      // Arrow markers
       const markers = [];
       (trade.entries || []).forEach(e => {
         if (!e.date) return;
-        markers.push({
-          time: nearestTs(e.date), position: 'belowBar',
-          color: '#16a34a', shape: 'arrowUp',
-          text: `Entry ₹${calc.formatNumber(e.price)}`,
-        });
+        markers.push({ time: nearestTs(e.date), position: 'belowBar', color: '#16a34a', shape: 'arrowUp', text: `Entry ₹${calc.formatNumber(e.price)}` });
       });
       allExits.forEach((e, i) => {
         if (!e.date) return;
         markers.push({
-          time: nearestTs(e.date), position: 'aboveBar',
-          color: '#dc2626', shape: 'arrowDown',
-          text: i === allExits.length - 1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
+          time: nearestTs(e.date), position: 'aboveBar', color: '#dc2626', shape: 'arrowDown',
+          text: i === allExits.length-1 ? `Exit ₹${calc.formatNumber(e.price)}` : `Exit${i+1} ₹${calc.formatNumber(e.price)}`,
         });
       });
       markers.sort((a, b) => a.time - b.time);
       if (markers.length) candleSeries.setMarkers(markers);
 
-      // ── Zoom to trade period + context ───────────────────────────────
+      // Vertical dashed lines at entry & exit dates (overlay divs)
+      const _addVLine = (ts, color) => {
+        const div = document.createElement('div');
+        div.style.cssText = `position:absolute;top:0;bottom:0;width:0;border-left:1px dashed ${color};pointer-events:none;z-index:5;transition:left .05s`;
+        mainEl.appendChild(div);
+        const update = () => {
+          const x = chart.timeScale().timeToCoordinate(ts);
+          div.style.display = x !== null && x > 0 ? 'block' : 'none';
+          if (x !== null) div.style.left = `${x}px`;
+        };
+        chart.timeScale().subscribeVisibleLogicalRangeChange(update);
+        update();
+      };
+      if (entryDate) _addVLine(Math.floor(new Date(entryDate).getTime()/1000), 'rgba(22,163,74,0.55)');
+      if (exitDate)  _addVLine(Math.floor(new Date(exitDate).getTime()/1000),  'rgba(220,38,38,0.55)');
+
+      // Update overview highlight window as main chart scrolls
+      chart.timeScale().subscribeVisibleTimeRangeChange(range => {
+        if (!range) return;
+        // Move the overview window marker to match (optional: skip for simplicity)
+      });
+
+      // Zoom main chart to trade period + context
       if (entryDate) {
-        const fromTs = Math.floor(new Date(entryDate).getTime() / 1000) - 35 * 86400;
+        const fromTs = Math.floor(new Date(entryDate).getTime()/1000) - 35 * 86400;
         const toTs   = exitDate
-          ? Math.floor(new Date(exitDate).getTime() / 1000) + 50 * 86400
-          : Math.floor(Date.now() / 1000);
+          ? Math.floor(new Date(exitDate).getTime()/1000) + 50 * 86400
+          : Math.floor(Date.now()/1000);
         try { chart.timeScale().setVisibleRange({ from: fromTs, to: toTs }); } catch(_) {}
       }
 
-      // Responsive width
-      const ro = new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth }));
+      // Responsive resize
+      const ro = new ResizeObserver(() => {
+        const nw = el.clientWidth;
+        chart.applyOptions({ width: nw });
+        ovChart.applyOptions({ width: nw });
+      });
       ro.observe(el);
 
     } catch (err) {
+      el.style.height = '520px';
       el.innerHTML = `
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:12px;color:var(--text-muted)">
           <div style="font-size:32px">📊</div>
