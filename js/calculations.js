@@ -576,6 +576,23 @@ const calc = (() => {
     return count;
   }
 
+  // ── % from Avg Entry (direction-aware) ────────────────────────────────────
+  // Returns { pct: number, cls: 'text-success'|'text-danger'|'', str: '+9.9%' }
+  // Long:  above entry = green (favorable), below = red
+  // Short: below entry = green (favorable), above = red
+  function pctFromEntry(value, avgEntry, direction) {
+    if (!avgEntry || !value || avgEntry === 0) return { pct: 0, cls: '', str: '' };
+    const pct  = ((value - avgEntry) / avgEntry) * 100;
+    const sign = pct > 0 ? '+' : '';
+    let cls;
+    if (direction === 'Short') {
+      cls = pct < 0 ? 'text-success' : pct > 0 ? 'text-danger' : '';
+    } else { // Long (default)
+      cls = pct > 0 ? 'text-success' : pct < 0 ? 'text-danger' : '';
+    }
+    return { pct, cls, str: sign + pct.toFixed(1) + '%' };
+  }
+
   return {
     getTradeMetrics, getUnrealizedPnl,
     getPortfolioHeat, getPortfolioHeatRs,
@@ -588,6 +605,6 @@ const calc = (() => {
     isBreakEven, getTradeResult,
     formatCurrency, formatR, formatDate, formatNumber,
     getHoldingDays, getTradingDays, getCAGR,
-    computeRPT, computeTrueRPT
+    computeRPT, computeTrueRPT, pctFromEntry
   };
 })();
