@@ -244,12 +244,14 @@ const calc = (() => {
     return (totalRiskRs / equity) * 100;  // returns a %
   }
 
-  // Returns total open risk in absolute ₹ (sum of |currentRisk| across all positions)
+  // Returns total open risk in ₹ — only counts positions where stop is BELOW entry
+  // (negative currentRisk = actual loss if stop is hit).
+  // Trailing stops ABOVE entry (positive currentRisk = locked profit) contribute 0 heat.
   function getPortfolioHeatRs(openTrades) {
     if (!openTrades || openTrades.length === 0) return 0;
     return openTrades.reduce((sum, trade) => {
       const m = getTradeMetrics(trade);
-      return sum + Math.max(0, Math.abs(m.currentRisk));
+      return sum + Math.max(0, -(m.currentRisk)); // only negative currentRisk = real risk
     }, 0);
   }
 
