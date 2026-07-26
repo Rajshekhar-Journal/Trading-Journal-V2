@@ -253,16 +253,20 @@ const positionsModule = (() => {
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
       const symColor  = cmp >= m.avgEntryPrice ? 'text-success' : 'text-danger';
       const _s        = v => v >= 0 ? '+' : '';   // sign helper
+      const pIS  = calc.pctFromEntry(trade.initialStop, m.avgEntryPrice, trade.direction);
+      const pCS  = calc.pctFromEntry(m.currentStop,     m.avgEntryPrice, trade.direction);
+      const pCMP = calc.pctFromEntry(cmp,               m.avgEntryPrice, trade.direction);
       return `<tr data-id="${trade.id}" onclick="positionsModule._onRowClick('${trade.id}')">
         <td><strong class="${symColor}">${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date || '')}</td>
         <td class="font-mono"><span class="prv-blur">${m.openQty}</span></td>
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
-        <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.currentStop)}</td>
+        <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}<div class="entry-pct ${pIS.cls}">${pIS.str}</div></td>
+        <td class="font-mono">₹${calc.formatNumber(m.currentStop)}<div class="entry-pct ${pCS.cls}">${pCS.str}</div></td>
         <td class="font-mono" data-cmp-cell="${trade.id}" style="cursor:pointer" onclick="event.stopPropagation();positionsModule._showCmpModal('${trade.id}')" title="Click to update CMP">
-          ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span></td>
+          ₹${calc.formatNumber(cmp)} <span style="color:#5b6af0;font-size:10px">✎</span>
+          <div class="entry-pct ${pCMP.cls}">${pCMP.str}</div></td>
         <td class="${chgCls} font-mono">${_s(chgPct)}${chgPct.toFixed(1)}%</td>
         <td class="${riskRCls} font-mono">
           <span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span>
@@ -386,11 +390,11 @@ const positionsModule = (() => {
             <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
             <div class="metric-item">
               <div class="metric-label">CMP <span style="color:#5b6af0;font-size:10px;cursor:pointer" onclick="positionsModule._showCmpModal('${tradeId}')">✎ Update</span></div>
-              <div class="metric-value">₹${calc.formatNumber(cmp)}</div>
+              <div class="metric-value">₹${calc.formatNumber(cmp)}<div class="entry-pct ${calc.pctFromEntry(cmp, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(cmp, m.avgEntryPrice, trade.direction).str}</div></div>
             </div>
-            ${m.avgExitPrice > 0 ? `<div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)} <span style="font-size:11px;color:${m.avgExitPrice >= m.avgEntryPrice ? 'var(--positive)':'var(--negative)'}">(${((m.avgExitPrice-m.avgEntryPrice)/m.avgEntryPrice*100).toFixed(2)}%)</span></div></div>` : ''}
-            <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value">₹${calc.formatNumber(trade.initialStop)}</div></div>
-            <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value">₹${calc.formatNumber(m.currentStop)}</div></div>
+            ${m.avgExitPrice > 0 ? `<div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)}<div class="entry-pct ${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).str}</div></div></div>` : ''}
+            <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value">₹${calc.formatNumber(trade.initialStop)}<div class="entry-pct ${calc.pctFromEntry(trade.initialStop, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(trade.initialStop, m.avgEntryPrice, trade.direction).str}</div></div></div>
+            <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value">₹${calc.formatNumber(m.currentStop)}<div class="entry-pct ${calc.pctFromEntry(m.currentStop, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(m.currentStop, m.avgEntryPrice, trade.direction).str}</div></div></div>
             <div class="metric-item"><div class="metric-label">Open Qty</div><div class="metric-value"><span class="prv-blur">${m.openQty}</span></div></div>
             <div class="metric-item"><div class="metric-label">Exposure</div><div class="metric-value">
               <span class="prv-amt">${calc.formatCurrency(m.exposure)}</span>
@@ -408,6 +412,7 @@ const positionsModule = (() => {
               <span class="prv-amt">${calc.formatCurrency(m.realizedPnl || 0)} <span style="font-size:11px">(${calc.formatR(m.profitR)})</span></span>
               <span class="prv-pct">${(m.realizedPnl||0) >= 0 ? '+' : ''}${equity > 0 ? ((m.realizedPnl||0)/equity*100).toFixed(2) : 0}% AV</span></div></div>
           </div>
+
 
           <div class="quick-actions">
             <button class="quick-action-btn exit" onclick="positionsModule._showExitModal('${tradeId}', 'partial')">Partial Exit</button>
