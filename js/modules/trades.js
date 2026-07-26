@@ -157,8 +157,8 @@ const tradesModule = (() => {
         + '<div class="cv-details">'
         + '<div class="cv-detail-grid">'
         + '<div class="cv-detail-card"><div class="cv-detail-label">Avg Entry</div><div class="cv-detail-value">₹' + calc.formatNumber(m.avgEntryPrice) + '</div></div>'
-        + '<div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹' + calc.formatNumber(trade.initialStop) + '</div></div>'
-        + '<div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹' + calc.formatNumber(m.avgExitPrice) + '</div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Initial Stop</div><div class="cv-detail-value text-danger">₹' + calc.formatNumber(trade.initialStop) + '<div class="entry-pct ' + calc.pctFromEntry(trade.initialStop, m.avgEntryPrice, trade.direction).cls + '">' + calc.pctFromEntry(trade.initialStop, m.avgEntryPrice, trade.direction).str + '</div></div></div>'
+        + '<div class="cv-detail-card"><div class="cv-detail-label">Avg Exit</div><div class="cv-detail-value">₹' + calc.formatNumber(m.avgExitPrice) + '<div class="entry-pct ' + calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).cls + '">' + calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).str + '</div></div></div>'
         + '<div class="cv-detail-card"><div class="cv-detail-label">P&amp;L</div><div class="cv-detail-value ' + pnlCls + '"><span class="prv-amt">' + calc.formatCurrency(m.realizedPnl) + '</span><span class="prv-pct">' + _s(pnlPct) + pnlPct.toFixed(2) + '% AV</span></div></div>'
         + '<div class="cv-detail-card"><div class="cv-detail-label">R Multiple</div><div class="cv-detail-value ' + rCls + '">' + calc.formatR(m.profitR) + '</div></div>'
         + '<div class="cv-detail-card"><div class="cv-detail-label">Held</div><div class="cv-detail-value">' + m.holdingDays + 'd (T:' + m.tradingDays + ')</div></div>'
@@ -500,7 +500,7 @@ const tradesModule = (() => {
         <td>${calc.formatDate(trade.entries?.[0]?.date||'')}</td>
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td>${calc.formatDate(trade.finalExit?.date||'')}</td>
-        <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}</td>
+        <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}<div class="entry-pct ${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).str}</div></td>
         <td>${m.holdingDays}d (T: ${m.tradingDays})</td>
         <td class="text-muted">${pb?.name||'—'}</td>
         <td><span class="badge badge-muted" style="font-size:10px">${trade.tradeType||'Equity'}</span></td>
@@ -564,7 +564,7 @@ const tradesModule = (() => {
         <div class="detail-panel-body">
           <div class="metric-grid">
             <div class="metric-item"><div class="metric-label">Avg Entry</div><div class="metric-value">₹${calc.formatNumber(m.avgEntryPrice)}</div></div>
-            <div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)}</div></div>
+            <div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)}<div class="entry-pct ${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).cls}">${calc.pctFromEntry(m.avgExitPrice, m.avgEntryPrice, trade.direction).str}</div></div></div>
             <div class="metric-item"><div class="metric-label">Net P&L</div><div class="metric-value ${m.realizedPnl>=0?'positive':'negative'}">${calc.formatCurrency(m.realizedPnl)}</div></div>
             <div class="metric-item"><div class="metric-label">Result (R)</div><div class="metric-value ${m.profitR>=0?'positive':'negative'}">${calc.formatR(m.profitR)}</div></div>
             <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.trueRPT)}</div></div>
