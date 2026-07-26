@@ -582,6 +582,14 @@ body.privacy-mode #privacy-badge { display: inline-flex; }
 .cv-co-name { color: var(--text); }
 .cv-co-meta { color: var(--text-muted); margin-left: auto; font-size: 11px; }
 /* Stacked trade card in chart view */
+/* % from avg entry — small secondary label below price values */
+.entry-pct {
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 2px;
+  letter-spacing: 0.02em;
+}
 .cv-trade-card { margin-bottom: 0; }
 .cv-trade-divider {
   border: none; border-top: 3px solid #e2e8f0;
