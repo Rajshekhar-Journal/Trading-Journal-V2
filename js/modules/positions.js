@@ -212,7 +212,7 @@ const positionsModule = (() => {
 
     // Compute sort key for each trade, then sort
     const withKeys = openTrades.map(trade => {
-      const m         = calc.getTradeMetrics(trade);
+      const m         = calc.getTradeMetrics(trade, settings);
       const cmp       = trade.cmp || m.avgEntryPrice;
       const unrealPnl = calc.getUnrealizedPnl(trade, cmp);
       const chgPct    = m.avgEntryPrice > 0 ? ((cmp - m.avgEntryPrice) / m.avgEntryPrice * 100) : 0;
@@ -260,7 +260,7 @@ const positionsModule = (() => {
         <td><strong class="${symColor}">${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date || '')}</td>
-        <td class="font-mono text-muted" style="font-size:12px">${m.holdingDays}d</td>
+        <td class="font-mono text-muted" style="font-size:12px">${m.tradingDays}d</td>
         <td class="font-mono"><span class="prv-blur">${m.openQty}</span></td>
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}<div class="entry-pct ${pIS.cls}">${pIS.str}</div></td>
