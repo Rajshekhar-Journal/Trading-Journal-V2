@@ -189,7 +189,7 @@ const positionsModule = (() => {
     const thead = tbl.querySelector('thead tr');
     if (thead) {
       thead.innerHTML =
-        _th('symbol','Symbol') + '<th>Type</th>' + _th('entryDate','Entry Date') +
+        _th('symbol','Symbol') + '<th>Type</th>' + _th('entryDate','Entry Date') + '<th title="Days since entry">Days</th>' +
         '<th>Open Qty</th><th>Avg Entry</th><th>Init Stop</th><th>Curr Stop</th><th>CMP</th>' +
         _th('chgPct','Chg%') + _th('openRisk','Open Risk ₹') +
         _th('exposure','Exposure') + _th('unrealPnl','Unreal. P&L (R)') +
@@ -206,7 +206,7 @@ const positionsModule = (() => {
     const equity       = calc.getCurrentEquity(capital, realizedPnl);
 
     if (!openTrades.length) {
-      tbody.innerHTML = `<tr><td colspan="14"><div class="no-data"><div class="no-data-icon">📭</div>No open positions. Click "+ New Trade" to add one.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="15"><div class="no-data"><div class="no-data-icon">📭</div>No open positions. Click "+ New Trade" to add one.</div></td></tr>`;
       return;
     }
 
@@ -260,6 +260,7 @@ const positionsModule = (() => {
         <td><strong class="${symColor}">${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date || '')}</td>
+        <td class="font-mono text-muted" style="font-size:12px">${m.holdingDays}d</td>
         <td class="font-mono"><span class="prv-blur">${m.openQty}</span></td>
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td class="font-mono">₹${calc.formatNumber(trade.initialStop)}<div class="entry-pct ${pIS.cls}">${pIS.str}</div></td>
