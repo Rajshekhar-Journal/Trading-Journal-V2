@@ -213,15 +213,14 @@ const calc = (() => {
     return maxRPT;
   }
 
-  // ── True RPT — dynamic denominator accounting for booked losses ───────────
-  // Grows beyond Original RPT only when: (1) a partial exit was taken at a net
-  // loss AND (2) open position still has capital at risk.
-  // trueRPT = Max(originalRPT, netBookedLoss + openPositionRisk)
-  // Never decreases. For trades with no booked losses: trueRPT === originalRPT.
+  // ── True RPT — maximum risk committed through entries, pyramids, stop revisions ─
+  // True RPT only grows when risk is actively committed (entry / pyramid / stop revision).
+  // Exits and P&L outcomes do NOT affect True RPT — those are outcomes, not commitments.
+  // This ensures R-multiple honestly reflects how much of your plan you lost/gained:
+  //   e.g. losing ₹8,006 on a ₹3,739 plan → R = −2.14 (not −1.0)
   function computeTrueRPT(originalRPT, currentRisk, realizedPnl) {
-    const openPositionRisk = Math.max(0, -(currentRisk  || 0)); // neg currentRisk = at risk
-    const netBookedLoss    = Math.max(0, -(realizedPnl  || 0)); // neg realizedPnl = loss
-    return Math.max(originalRPT, netBookedLoss + openPositionRisk);
+    const openPositionRisk = Math.max(0, -(currentRisk || 0)); // open risk if stop below entry
+    return Math.max(originalRPT, openPositionRisk);
   }
 
   // ── Unrealized P&L ─────────────────────────────────────────────────────────
