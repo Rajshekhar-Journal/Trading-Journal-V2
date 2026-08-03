@@ -72,7 +72,7 @@ const charts = (() => {
     const datasets = trades.map(t => {
       const m     = calc.getTradeMetrics(t);
       const isWin = m.realizedPnl > 0;
-      const rawX  = Math.abs(m.currentRisk || m.initialRPT || 10000);
+      const rawX  = Math.abs(m.currentRisk || m.trueRPT || 10000);
       const rawY  = m.realizedPnl;
       const x     = prv ? (rawX / equity * 100) : rawX;
       const y     = prv ? (rawY / equity * 100) : rawY;
