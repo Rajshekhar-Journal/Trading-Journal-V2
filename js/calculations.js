@@ -71,9 +71,6 @@ const calc = (() => {
     }
 
     // Open Position Risk (signed: negative = loss if stop is hit now)
-    // currentRiskR kept for internal colour-coding logic, not displayed
-    const rptToUse    = initialRPT;
-    const currentRiskR = rptToUse !== 0 ? currentRisk / rptToUse : 0;
 
     // Net Realized P&L = (AvgExit − AvgEntry) × SoldQty − TotalCharges
     // TotalCharges always deducted (buy charges are a cost even before any exit)
@@ -88,9 +85,13 @@ const calc = (() => {
     // Unrealized P&L (needs CMP — passed separately)
     // We compute it outside when CMP is known
 
-    // True RPT — dynamic denominator: grows when booked loss + open risk > original RPT.
-    // For trades with no losing partial exits: trueRPT === initialRPT (no change).
-    const trueRPT = computeTrueRPT(initialRPT, currentRisk, realizedPnl);
+    // True RPT — lifecycle denominator for R-multiple.
+    // Grows only when capital is actively committed (entry / pyramid).
+    // Frozen on partial exits and final exits — those are outcomes, not commitments.
+    // Rule: 1st entry → trueRPT = openPositionRisk
+    //       Pyramid   → trueRPT = max(earlier, netBookedLoss + openPositionRisk)
+    //       Sell      → trueRPT unchanged
+    const trueRPT = computeTrueRPT(trade);
 
     // Profit R (realized) — uses trueRPT for honest economic R-multiple
     const profitR = trueRPT !== 0 ? realizedPnl / trueRPT : 0;
@@ -115,9 +116,9 @@ const calc = (() => {
       openQty, remainingQty,
       avgEntryPrice, avgExitPrice,
       totalCharges,
-      currentStop, initialRPT, rptCurrent: rptToUse, trueRPT,
+      currentStop, initialRPT, trueRPT,
       exposure, positionSize,
-      currentRisk, currentRiskR,
+      currentRisk,
       realizedPnl, profitR, profitPct,
       holdingDays, tradingDays,
       isOpen: openQty > 0
@@ -131,9 +132,9 @@ const calc = (() => {
       openQty: 0, remainingQty: 0,
       avgEntryPrice: 0, avgExitPrice: 0,
       totalCharges: 0,
-      currentStop: 0, initialRPT: 0, rptCurrent: 0, trueRPT: 0,
+      currentStop: 0, initialRPT: 0, trueRPT: 0,
       exposure: 0, positionSize: 0,
-      currentRisk: 0, currentRiskR: 0,
+      currentRisk: 0,
       realizedPnl: 0, profitR: 0, profitPct: 0,
       holdingDays: 0, tradingDays: 0, isOpen: false
     };
@@ -154,33 +155,41 @@ const calc = (() => {
 
     if (!entries.length) return 0;
 
-    // Build a single chronological event list
+    // Build a single chronological event list.
+    // idx tracks insertion order so same-date buys/sells replay in journal sequence.
     const events = [];
     entries.forEach(e => events.push({
-      date: e.date || '', type: 'buy',
+      date: e.date || '', type: 'buy', idx: events.length,
       price: Number(e.price || 0), qty: Number(e.qty || 0)
     }));
     pyramids.forEach(p => events.push({
-      date: p.date || '', type: 'buy',
+      date: p.date || '', type: 'buy', idx: events.length,
       price: Number(p.price || 0), qty: Number(p.qty || 0)
     }));
     partialExits.forEach(p => events.push({
-      date: p.date || '', type: 'sell', qty: Number(p.qty || 0)
+      date: p.date || '', type: 'sell', idx: events.length,
+      qty: Number(p.qty || 0)
     }));
     stopRevisions.forEach(s => {
       if (s.newStop) events.push({
-        date: s.date || '', type: 'stop', newStop: Number(s.newStop)
+        date: s.date || '', type: 'stop', idx: events.length,
+        newStop: Number(s.newStop)
       });
     });
 
-    // Sort chronologically. For same-date events, stops are processed BEFORE buys so
-    // that a stop revision on the same day as a pyramid uses the updated stop for risk calc.
-    // Order: stop → sell → buy  (stops first so they affect the subsequent buy risk)
-    const _typeOrder = { stop: 0, sell: 1, buy: 2 };
+    // Sort chronologically. For same-date events:
+    //   - Stop revisions always sort FIRST so a revised stop takes effect before
+    //     the next buy's risk is measured (critical for correctness).
+    //   - Buys and sells sort by their journal insertion order (idx), replaying
+    //     the trade exactly as recorded rather than forcing sell-before-buy.
     events.sort((a, b) => {
       const d = a.date.localeCompare(b.date);
       if (d !== 0) return d;
-      return (_typeOrder[a.type] || 1) - (_typeOrder[b.type] || 1);
+      // Stops must lead; buys vs sells use journal entry order
+      const aIsStop = a.type === 'stop' ? 0 : 1;
+      const bIsStop = b.type === 'stop' ? 0 : 1;
+      if (aIsStop !== bIsStop) return aIsStop - bIsStop;
+      return a.idx - b.idx;   // preserve journal entry order
     });
 
     let totalCost   = 0;
@@ -213,14 +222,111 @@ const calc = (() => {
     return maxRPT;
   }
 
-  // ── True RPT — maximum risk committed through entries, pyramids, stop revisions ─
-  // True RPT only grows when risk is actively committed (entry / pyramid / stop revision).
-  // Exits and P&L outcomes do NOT affect True RPT — those are outcomes, not commitments.
-  // This ensures R-multiple honestly reflects how much of your plan you lost/gained:
-  //   e.g. losing ₹8,006 on a ₹3,739 plan → R = −2.14 (not −1.0)
-  function computeTrueRPT(originalRPT, currentRisk, realizedPnl) {
-    const openPositionRisk = Math.max(0, -(currentRisk || 0)); // open risk if stop below entry
-    return Math.max(originalRPT, openPositionRisk);
+  // ── True RPT — lifecycle replay, frozen on sells ─────────────────────────────
+  // Replays the trade event-by-event in journal (entry) order.
+  // trueRPT grows ONLY when capital is actively committed (entry / pyramid):
+  //   • 1st entry  → trueRPT = openPositionRisk  (plain position risk)
+  //   • Pyramid    → trueRPT = max(earlier, netBookedLoss + openPositionRisk)
+  //   • Sell       → trueRPT UNCHANGED (frozen — exits are outcomes, not commitments)
+  //   • Stop rev.  → trueRPT UNCHANGED (stop only affects the NEXT buy's risk calc)
+  // netBookedLoss accumulates gross losses from sells (charges handled separately).
+  function computeTrueRPT(trade) {
+    const entries       = trade.entries       || [];
+    const pyramids      = trade.pyramids      || [];
+    const partialExits  = trade.partialExits  || [];
+    const finalExit     = trade.finalExit     || null;
+    const stopRevisions = trade.stopRevisions || [];
+    const direction     = trade.direction     || 'Long';
+
+    if (!entries.length) return 0;
+
+    // Build events — same structure + sort as computeRPT, but sells now carry price
+    // so we can compute gross sell P&L for netBookedLoss tracking.
+    const events = [];
+    entries.forEach(e => events.push({
+      date: e.date || '', type: 'buy', idx: events.length,
+      price: Number(e.price || 0), qty: Number(e.qty || 0)
+    }));
+    pyramids.forEach(p => events.push({
+      date: p.date || '', type: 'buy', idx: events.length,
+      price: Number(p.price || 0), qty: Number(p.qty || 0)
+    }));
+    partialExits.forEach(p => events.push({
+      date: p.date || '', type: 'sell', idx: events.length,
+      price: Number(p.price || 0), qty: Number(p.qty || 0)
+    }));
+    if (finalExit) events.push({
+      date: finalExit.date || '', type: 'sell', idx: events.length,
+      price: Number(finalExit.price || 0), qty: Number(finalExit.qty || 0)
+    });
+    stopRevisions.forEach(s => {
+      if (s.newStop) events.push({
+        date: s.date || '', type: 'stop', idx: events.length,
+        newStop: Number(s.newStop)
+      });
+    });
+
+    // Same sort as computeRPT: stops first on same date, then journal entry order.
+    events.sort((a, b) => {
+      const d = a.date.localeCompare(b.date);
+      if (d !== 0) return d;
+      const aIsStop = a.type === 'stop' ? 0 : 1;
+      const bIsStop = b.type === 'stop' ? 0 : 1;
+      if (aIsStop !== bIsStop) return aIsStop - bIsStop;
+      return a.idx - b.idx;   // preserve journal entry order
+    });
+
+    let totalCost     = 0;
+    let totalQty      = 0;
+    let curStop       = Number(trade.initialStop || 0);
+    let trueRPT       = 0;
+    let netBookedLoss = 0;   // gross loss booked from sells so far
+    let isFirstBuy    = true;
+
+    for (const ev of events) {
+      if (ev.type === 'buy') {
+        totalCost += ev.price * ev.qty;
+        totalQty  += ev.qty;
+
+        if (totalQty > 0 && curStop > 0) {
+          const avgE = totalCost / totalQty;
+          const openPositionRisk = direction === 'Long'
+            ? Math.max(0, (avgE - curStop) * totalQty)
+            : Math.max(0, (curStop - avgE) * totalQty);
+
+          if (isFirstBuy) {
+            // 1st entry: trueRPT = position risk (no netBookedLoss yet)
+            trueRPT    = openPositionRisk;
+            isFirstBuy = false;
+          } else {
+            // Pyramid: trueRPT = max(earlier, netBookedLoss + new openPositionRisk)
+            trueRPT = Math.max(trueRPT, netBookedLoss + openPositionRisk);
+          }
+        } else {
+          isFirstBuy = false;
+        }
+
+      } else if (ev.type === 'sell') {
+        if (totalQty > 0) {
+          const avgE = totalCost / totalQty;
+          // Gross P&L of this individual sell (no charges — charges deducted separately)
+          const sellPnl = direction === 'Long'
+            ? (ev.price - avgE) * ev.qty
+            : (avgE - ev.price) * ev.qty;
+          if (sellPnl < 0) netBookedLoss += Math.abs(sellPnl);
+          // Reduce position (preserve avgEntry)
+          totalQty  = Math.max(0, totalQty - ev.qty);
+          totalCost = totalQty * avgE;
+        }
+        // trueRPT is FROZEN on sells — do not update
+
+      } else if (ev.type === 'stop') {
+        curStop = ev.newStop;
+        // Stop revision only affects NEXT buy's openPositionRisk; trueRPT unchanged here
+      }
+    }
+
+    return trueRPT;
   }
 
   // ── Unrealized P&L ─────────────────────────────────────────────────────────
