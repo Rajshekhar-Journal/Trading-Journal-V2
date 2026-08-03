@@ -248,7 +248,7 @@ const positionsModule = (() => {
       const alertBadge= alerts.length ? `<span class="badge badge-warning">⚠ ${alerts.length}</span>` : `<span class="badge badge-muted">—</span>`;
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
       const riskRCls  = m.currentRisk >= 0 ? 'text-success'
-        : Math.abs(m.currentRisk) > m.initialRPT ? 'text-danger'
+        : Math.abs(m.currentRisk) > m.trueRPT ? 'text-danger'
         : 'text-warning';
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
       const symColor  = cmp >= m.avgEntryPrice ? 'text-success' : 'text-danger';
@@ -403,7 +403,7 @@ const positionsModule = (() => {
               <span style="display:block;font-size:11px;font-weight:400;color:var(--text-muted)">${equity > 0 ? (m.exposure/equity*100).toFixed(1) : 0}% of AV</span></div></div>
             <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">
               <span class="prv-blur">₹${calc.formatNumber(m.trueRPT)}</span></div></div>
-            <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.initialRPT ? 'negative' : 'text-warning'}">
+            <div class="metric-item"><div class="metric-label">Open Risk ₹</div><div class="metric-value ${m.currentRisk >= 0 ? 'positive' : Math.abs(m.currentRisk) > m.trueRPT ? 'negative' : 'text-warning'}">
               <span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span>
               <span class="prv-pct">${m.currentRisk >= 0 ? '+' : ''}${equity > 0 ? (m.currentRisk/equity*100).toFixed(2) : 0}% AV</span></div></div>
             <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}">
