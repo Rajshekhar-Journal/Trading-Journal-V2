@@ -317,7 +317,7 @@ const dashboardModule = (() => {
         ? `<span class="badge badge-success" style="font-size:10px;padding:1px 5px;">L</span>`
         : `<span class="badge badge-danger"  style="font-size:10px;padding:1px 5px;">S</span>`;
       const rClass     = m.currentRisk >= 0 ? 'text-success'
-        : Math.abs(m.currentRisk) > m.initialRPT ? 'text-danger'
+        : Math.abs(m.currentRisk) > m.trueRPT ? 'text-danger'
         : 'text-warning';
       const dayBadge   = m.holdingDays >= 5 ? 'badge-warning' : 'badge-info';
       const activeAlerts = alertEngine.getActiveAlerts([trade]);
