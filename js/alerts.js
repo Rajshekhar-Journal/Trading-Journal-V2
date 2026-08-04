@@ -82,88 +82,136 @@ const alertEngine = (() => {
         const entryDate = trade.entries?.[0]?.date || todayStr;
         const holidays = settings.marketHolidays || '';
         const tradingDays = calc.getTradingDays(entryDate, todayStr, holidays);
-        if (tradingDays >= 5) _upsertAlert(alerts, ALERT_TYPES.DAY5_EXIT, 'Trade has been held for 5+ days without hitting target.', dirty);
+        if (tradingDays >= 5) _upsertAlert(alerts, ALERT_TYPES.DAY5_EXIT, 'Trade has been held for 5+ days without hitting target.', null, dirty);
       }
 
       // ── Dynamic Trailing Exit Alerts (Long Only for now) ─────────────────
       let activeDynamicAlert = null;
       let dynamicAlertMessage = '';
+      let dynamicGttPrices    = null; // { core, tranche } for high-water mark tracking
 
       if (trade.direction === 'Long' && ohlcMap[trade.symbol]) {
         const candles = ohlcMap[trade.symbol];
         if (candles.length >= 20) {
           const closes = candles.map(c => c.close);
-          const ema10 = calculateEMA(closes, 10);
-          const ema20 = calculateEMA(closes, 20);
-          const atr14 = calculateATR(candles, 14);
-          
+          const ema10  = calculateEMA(closes, 10);
+          const ema20  = calculateEMA(closes, 20);
+          const atr14  = calculateATR(candles, 14);
+
           const prevCandle = candles[candles.length - 2];
           const currCandle = candles[candles.length - 1];
-          const prevLow = prevCandle?.low || 0;
-          const dailyMove = currCandle.close - prevCandle.close;
-          
-          const cmp = trade.cmp || closes[closes.length - 1];
+          const prevLow    = prevCandle?.low || 0;  // yesterday's candle low
+          const currLow    = currCandle?.low || 0;  // today's candle low
+          const dailyMove  = currCandle.close - prevCandle.close; // close-to-close move
+
+          const cmp   = trade.cmp || closes[closes.length - 1];
           const entry = m.avgEntryPrice;
-          const risk = Math.abs(entry - trade.initialStop);
-          
-          const initialSize = (trade.entries || []).reduce((sum, e) => sum + Number(e.qty || 0), 0);
+          const risk  = Math.abs(entry - trade.initialStop);
+
+          // Include pyramids in boughtSize for correct openQty
+          const boughtSize = [...(trade.entries || []), ...(trade.pyramids || [])]
+                               .reduce((sum, e) => sum + Number(e.qty || 0), 0);
           const exitedSize = (trade.partialExits || []).reduce((sum, e) => sum + Number(e.qty || 0), 0);
-          const openQty = initialSize - exitedSize;
-          
+          const openQty    = boughtSize - exitedSize;
+
           if (risk > 0 && atr14 > 0 && openQty > 0) {
-            const target2R = entry + (2 * risk);
+            const target2R   = entry + (2 * risk);
             const target3ATR = entry + (3 * atr14);
             const target5ATR = entry + (5 * atr14);
-            
+
+            // High-water mark: carry over from any active dynamic alert (prices only rise)
+            const existingDynamic = alerts.find(a =>
+              [ALERT_TYPES.PHASE1, ALERT_TYPES.PHASE2, ALERT_TYPES.PHASE3].includes(a.type));
+            const prevHW = existingDynamic?.gttHW || { core: 0, tranche: 0 };
+
+            // Strong day: positive close-to-close move > 2 × ATR14
+            const isStrongDay = dailyMove > 2 * atr14;
+
             // Priority 2.0: Trend Broken (Exit Runner)
             if (ema10 && cmp < ema10 && cmp >= target3ATR) {
                activeDynamicAlert = ALERT_TYPES.TREND_BROKEN;
-               dynamicAlertMessage = `CMP < EMA10 (₹${_roundTick(ema10)}). Sell remaining runner position (${openQty} Qty).`;
+               dynamicAlertMessage = `EMA10 crossed below (₹${_roundTick(ema10)}). Exit remaining runner: Sell all ${openQty} Qty at market.`;
+               dynamicGttPrices = null;
             }
             // Priority 2.1: Phase 3 (5x ATR)
             else if (cmp >= target5ATR) {
                activeDynamicAlert = ALERT_TYPES.PHASE3;
-               const coreQty = Math.floor(initialSize * 0.40);
-               const trancheQty = openQty - coreQty;
-               
-               const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(ema10)} (EMA10). Trail ${trancheQty} Qty aggressively at Prev Low (₹${_roundTick(trancheGtt)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${_roundTick(atr14/2)})`;
-               dynamicAlertMessage = instruction;
-            } 
+               // Cap coreQty to openQty to prevent negative trancheQty
+               const coreQty    = Math.min(Math.floor(boughtSize * 0.40), openQty);
+               const trancheQty = Math.max(0, openQty - coreQty);
+
+               const rawCore    = ema10;
+               const rawTranche = isStrongDay
+                 ? Math.max(currLow + (dailyMove / 3), ema10) // today's low + 1/3 of move
+                 : Math.max(prevLow, ema10);                   // prev day low
+
+               // Apply high-water mark — GTT prices can only go up
+               const finalCore    = Math.max(rawCore,    prevHW.core    || 0);
+               const finalTranche = Math.max(rawTranche, prevHW.tranche || 0);
+
+               const trancheLabel = isStrongDay
+                 ? `₹${_roundTick(finalTranche)} (Day Low + 1/3 move — strong day)`
+                 : `₹${_roundTick(finalTranche)} (Prev Day Low — aggressive trail)`;
+
+               dynamicAlertMessage =
+                 `Cancel old GTT. Set GTT:\n` +
+                 `  Core    → ${coreQty} Qty at ₹${_roundTick(finalCore)} (EMA10 trail)\n` +
+                 `  Tranche → ${trancheQty} Qty at ${trancheLabel}`;
+               dynamicGttPrices = { core: parseFloat(_roundTick(finalCore)), tranche: parseFloat(_roundTick(finalTranche)) };
+            }
             // Priority 2.2: Phase 2 (3x ATR)
             else if (cmp >= target3ATR) {
                activeDynamicAlert = ALERT_TYPES.PHASE2;
-               const coreQty = Math.floor(initialSize * 0.60);
-               const trancheQty = openQty - coreQty;
-               
-               const trancheGtt = Math.max(prevLow, ema10); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(ema10)} (EMA10). Trail ${trancheQty} Qty at Prev Low (₹${_roundTick(trancheGtt)})`;
-               if (dailyMove > atr14) instruction += ` or jump trailing stop up by ATR/2 (₹${_roundTick(atr14/2)})`;
-               dynamicAlertMessage = instruction;
+               const coreQty    = Math.min(Math.floor(boughtSize * 0.60), openQty);
+               const trancheQty = Math.max(0, openQty - coreQty);
+
+               const rawCore    = ema10;
+               const rawTranche = isStrongDay
+                 ? Math.max(currLow + (dailyMove / 3), ema10)
+                 : Math.max(prevLow, ema10);
+
+               const finalCore    = Math.max(rawCore,    prevHW.core    || 0);
+               const finalTranche = Math.max(rawTranche, prevHW.tranche || 0);
+
+               const trancheLabel = isStrongDay
+                 ? `₹${_roundTick(finalTranche)} (Day Low + 1/3 move — strong day)`
+                 : `₹${_roundTick(finalTranche)} (Prev Day Low)`;
+
+               dynamicAlertMessage =
+                 `Cancel old GTT. Set GTT:\n` +
+                 `  Core    → ${coreQty} Qty at ₹${_roundTick(finalCore)} (EMA10 trail)\n` +
+                 `  Tranche → ${trancheQty} Qty at ${trancheLabel}`;
+               dynamicGttPrices = { core: parseFloat(_roundTick(finalCore)), tranche: parseFloat(_roundTick(finalTranche)) };
             }
             // Priority 2.3: Phase 1 (2R)
             else if (cmp >= target2R) {
                activeDynamicAlert = ALERT_TYPES.PHASE1;
-               const coreQty = Math.floor(initialSize * 0.80);
-               const trancheQty = openQty - coreQty;
-               
-               const coreGtt = Math.max(entry, ema20);
-               const trancheGtt = Math.max(target2R * 0.98, prevLow, coreGtt); // bound by core stop
-               let instruction = `Cancel old GTT. Create GTT: Trail ${coreQty} Qty at ₹${_roundTick(coreGtt)} [MAX(Breakeven, EMA20)]. Trail ${trancheQty} Qty at ₹${_roundTick(trancheGtt)} [MAX(2R-2%, PrevLow)].`;
-               dynamicAlertMessage = instruction;
+               const coreQty    = Math.min(Math.floor(boughtSize * 0.80), openQty);
+               const trancheQty = Math.max(0, openQty - coreQty);
+
+               const rawCore    = Math.max(entry, ema20 || 0);
+               const rawTranche = Math.max(target2R * 0.98, prevLow, rawCore);
+
+               const finalCore    = Math.max(rawCore,    prevHW.core    || 0);
+               const finalTranche = Math.max(rawTranche, prevHW.tranche || 0);
+
+               dynamicAlertMessage =
+                 `Cancel old GTT. Set GTT:\n` +
+                 `  Core    → ${coreQty} Qty at ₹${_roundTick(finalCore)} [MAX(Breakeven ₹${_roundTick(entry)}, EMA20 ₹${_roundTick(ema20 || entry)})]\n` +
+                 `  Tranche → ${trancheQty} Qty at ₹${_roundTick(finalTranche)} [MAX(2R−2% ₹${_roundTick(target2R * 0.98)}, Prev Low ₹${_roundTick(prevLow)})]`;
+               dynamicGttPrices = { core: parseFloat(_roundTick(finalCore)), tranche: parseFloat(_roundTick(finalTranche)) };
             }
           }
         }
       }
 
       // ── Resolve Priorities & Cleanup ──────────────────────────────────────
-      const isStopBreached = alertConfig.stopLossBreach?.enabled !== false && trade.cmp && 
+      const isStopBreached = alertConfig.stopLossBreach?.enabled !== false && trade.cmp &&
          (trade.direction === 'Long' ? trade.cmp <= m.currentStop : trade.cmp >= m.currentStop);
 
       // Priority 1: Stop Loss Breach overrides EVERYTHING
       if (isStopBreached) {
-         const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, dirty, isEndOfDay);
+         const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`, null, dirty, isEndOfDay);
          if (wasNew) _sendTelegram(settings, trade.symbol, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of ₹${m.currentStop}.`);
          activeDynamicAlert = null; // Suppress all dynamic exit phases
       } else {
@@ -182,7 +230,7 @@ const alertEngine = (() => {
 
       // Upsert the single winning dynamic alert (if any)
       if (activeDynamicAlert) {
-         const wasNew = _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dirty, isEndOfDay);
+         const wasNew = _upsertAlert(alerts, activeDynamicAlert, dynamicAlertMessage, dynamicGttPrices, dirty, isEndOfDay);
          if (wasNew) _sendTelegram(settings, trade.symbol, activeDynamicAlert, dynamicAlertMessage);
       }
 
@@ -196,49 +244,58 @@ const alertEngine = (() => {
     return updated;
   }
 
-  function _upsertAlert(alerts, type, message, dirty, isEndOfDay) {
+  function _upsertAlert(alerts, type, message, gttPrices, dirty, isEndOfDay) {
     const existing = alerts.find(a => a.type === type);
     const today = new Date().toISOString().split('T')[0];
 
     if (!existing) {
-      alerts.push({ 
-        type, 
-        status: ALERT_STATUS.TRIGGERED, 
-        message, 
+      const alertObj = {
+        type,
+        status: ALERT_STATUS.TRIGGERED,
+        message,
         triggeredAt: new Date().toISOString(),
         lastNotifiedDate: today,
         lastEodDate: isEndOfDay ? today : null
-      });
+      };
+      // Store initial GTT high-water mark
+      if (gttPrices) alertObj.gttHW = { core: gttPrices.core || 0, tranche: gttPrices.tranche || 0 };
+      alerts.push(alertObj);
       dirty.changed = true;
       return true;
     } else if (existing.status === ALERT_STATUS.PENDING || existing.message !== message) {
-      
+
       const oldMsg = existing.message || '';
       existing.message = message;
       dirty.changed = true;
-      
+
+      // Update high-water mark — GTT prices can only increase
+      if (gttPrices) {
+        const oldHW = existing.gttHW || { core: 0, tranche: 0 };
+        existing.gttHW = {
+          core:    Math.max(gttPrices.core    || 0, oldHW.core    || 0),
+          tranche: Math.max(gttPrices.tranche || 0, oldHW.tranche || 0)
+        };
+      }
+
       let shouldNotify = false;
-      
+
       // Rule B: End of day update (4:00 PM final fetch)
       if (isEndOfDay && existing.lastEodDate !== today) {
          shouldNotify = true;
          existing.lastEodDate = today;
       } else {
-         // Rule C: Intraday 1% move on any price mentioned in the alert
+         // Rule C: 1% upward move on any GTT price in the alert message
          const oldPrices = (oldMsg.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
          const newPrices = (message.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
-         
+
          for (let i=0; i < Math.min(oldPrices.length, newPrices.length); i++) {
             if (oldPrices[i] > 0) {
                const pctMove = (newPrices[i] - oldPrices[i]) / oldPrices[i];
-               if (pctMove >= 0.01) { // 1% upward move
-                  shouldNotify = true;
-                  break;
-               }
+               if (pctMove >= 0.01) { shouldNotify = true; break; } // 1% upward move
             }
          }
       }
-      
+
       if (shouldNotify || existing.status === ALERT_STATUS.PENDING) {
          existing.status = ALERT_STATUS.TRIGGERED;
          existing.triggeredAt = new Date().toISOString();
