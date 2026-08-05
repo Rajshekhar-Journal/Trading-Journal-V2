@@ -196,7 +196,7 @@ const settingsModule = (() => {
             <p>Your real-time command centre. Shows account health, open positions, and pending alerts at a glance.</p>
             <h4>Current State Row</h4><ul>
               <li><strong>Account Value:</strong> Net Deposits + Realized P&L. Shows % gain vs deposits.</li>
-              <li><strong>Portfolio Heat:</strong> Total &apos;at-risk&apos; money &divide; Equity &times; 100. Green = Safe, Yellow = Warning, Red = Max.</li>
+              <li><strong>Portfolio Heat:</strong> Total &apos;at-risk&apos; money &divide; Equity &times; 100. Excludes locked profit (stop above entry). Green = Safe, Yellow = Warning, Red = Max.</li>
               <li><strong>Remaining Capacity:</strong> How much more risk you can add before hitting the heat limit.</li>
               <li><strong>Market Health:</strong> Click &#9998; update to revise trend &amp; breadth. Click &#9432; for Market Breadth explanation.</li>
             </ul>
@@ -251,9 +251,26 @@ const settingsModule = (() => {
             </tbody></table>
           `)}
 
-          ${S('um2','&#128200;','Module 02 &mdash; Positions',`
+          ${S('um2','&#128200;','Module 02 &mdash; Positions (Open Trades)',`
             <p>The heart of the journal. Tracks every open trade in real time with live CMP, metrics, and alert cards.</p>
-            <h4>Position Table Columns</h4><p>Symbol, Type, Entry Date, Avg Entry, CMP, Open Risk ₹, Exposure, Unrealized P&L (+R), Alert badge.</p>
+            <h4>Position Table Columns</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Column</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Description</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Symbol</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Stock symbol with Long/Short badge. Green if CMP &gt; Entry, Red if below.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Type</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Equity, Intraday, or Futures.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Entry Date</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Date of first entry. Sortable.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Days</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Trading days held (excludes weekends and NSE holidays).</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Qty</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Current remaining shares after partial exits.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Avg Entry</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Weighted average entry price across all entries and pyramids.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Init Stop</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Initial stop loss price. Shows <em>% from Avg Entry</em> below (red = risk, green = above entry).</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Curr Stop</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Current trailing stop. Shows <em>% from Avg Entry</em> below. Green = locked profit (stop above entry).</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">CMP</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Current Market Price (auto-fetched every 3 min). Click &#9998; to update manually. Shows <em>% from Avg Entry</em>.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Chg%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Percentage change from Avg Entry to CMP. Sortable.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk &#8377;</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Rupees at risk if stop is hit. Negative = real risk, positive = locked profit (trailing stop above entry).</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Exposure</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Current market value of position (Avg Entry &times; Qty). Shows % of Account Value.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Unreal. P&amp;L (R)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Unrealized P&amp;L in &#8377; and R-multiple. R = Unrealized P&amp;L &divide; True RPT.</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);font-weight:600;">Net P&amp;L</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Realized P&amp;L from partial exits (if any).</td></tr>
+              <tr><td style="padding:5px 8px;font-weight:600;">Alert</td><td style="padding:5px 8px;">Alert badge. Shows count of triggered alerts. Click row to see full instructions.</td></tr>
+            </tbody></table>
             <h4>Adding a New Trade</h4><ol>
               <li>Click <strong>+ New Trade</strong>.</li>
               <li>Fill: Symbol, Sector, Type, Direction, <strong>Exchange (NSE/BSE)</strong>, Playbook, Date, Price, Stop Loss, Qty, RPT, Charges, CMP.</li>
@@ -262,18 +279,18 @@ const settingsModule = (() => {
             <h4>Quick Actions in Detail Panel</h4><ul>
               <li><strong>Partial Exit</strong> &mdash; reduce position size, record date/price/qty/charges.</li>
               <li><strong>Final Exit</strong> &mdash; close full remaining position. Trade moves to Closed History.</li>
-              <li><strong>Pyramid</strong> &mdash; add to position. Avg Entry updates automatically.</li>
-              <li><strong>Revise Stop</strong> &mdash; update trailing stop. Full history tracked.</li>
+              <li><strong>Pyramid</strong> &mdash; add to position. Avg Entry updates. Stop can be revised atomically in the same action.</li>
+              <li><strong>Revise Stop</strong> &mdash; update trailing stop. Full history tracked with old/new/source/notes.</li>
               <li><strong>Add Note</strong> &mdash; attach observations or reminders.</li>
               <li><strong>Update CMP</strong> &mdash; manual or auto-fetch from Yahoo Finance.</li>
             </ul>
             <h4>Detail Panel Tabs</h4><ul>
-              <li><strong>Lifecycle:</strong> All entries, pyramids, partial exits, final exit in order.</li>
-              <li><strong>Stop History:</strong> Every revision with old/new stop and reason.</li>
+              <li><strong>Lifecycle:</strong> All entries, pyramids, partial exits, final exit in chronological order.</li>
+              <li><strong>Stop History:</strong> Every revision with old/new stop, date, source, and reason. Editable/deletable.</li>
               <li><strong>Notes:</strong> All notes in date order.</li>
-              <li><strong>Chart:</strong> 2-year daily candlestick with entry/exit markers. NSE first, BSE fallback. TradingView link uses correct exchange prefix.</li>
+              <li><strong>Chart:</strong> 2-year daily candlestick with entry/exit markers, stop loss line, 20 EMA overlay (black). TradingView link uses correct exchange prefix (NSE/BSE).</li>
             </ul>
-            <h4>Alert Cards</h4><p>Appear at top of detail panel when engine fires. Show phase, timestamp, exact GTT instruction. Buttons: <strong>&checkmark; Done (GTT Set)</strong> and <strong>Dismiss</strong>.</p>
+            <h4>% From Entry Labels</h4><p>Init Stop, Curr Stop, and CMP columns all show a small <em>% from Avg Entry</em> label beneath the price. <strong style="color:#22c55e">Green</strong> = favourable (above entry for Long), <strong style="color:#ef4444">Red</strong> = adverse. Helps instantly gauge how far your stop or price has moved from your entry.</p>
             <h4>&#128260; Sync Live Data</h4><p>Top-right button. Runs live CMP fetch + alert engine immediately, bypassing all market-hours and holiday restrictions.</p>`)}
 
           ${S('um3','&#128203;','Module 03 &mdash; Trades (Closed History)',`
@@ -281,10 +298,11 @@ const settingsModule = (() => {
             <h4>Summary Cards</h4><p>Total Trades, Win Rate, Net P&L, Net R, Expectancy, Max Drawdown for selected filters and date range.</p>
             <h4>Closed Trades Table</h4><ul>
               <li>Columns: Symbol, Entry, Exit, Days, Setup, P&L, R, Result, Rule Followed, Review Status.</li>
+              <li>Init Stop, Avg Exit, and CMP all show <em>% from Avg Entry</em> labels.</li>
               <li>Click column headers to sort. Filter by Result, Setup, or Symbol search box.</li>
               <li>Click any row to open full Trade Detail Panel (lifecycle, stops, notes, chart).</li>
             </ul>
-            <h4>Views</h4><p><strong>Metrics View:</strong> table. <strong>Chart View:</strong> P&L visual over time.</p>`)}
+            <h4>Views</h4><p><strong>Metrics View:</strong> table. <strong>Chart View:</strong> All closed-trade charts stacked vertically with lazy-loading for fast scrolling.</p>`)}
 
           ${S('um4','&#128219;','Module 04 &mdash; Playbook',`
             <p>Your personal trading strategy library. Each playbook defines a specific setup with entry/exit rules and risk parameters.</p>
@@ -312,36 +330,116 @@ const settingsModule = (() => {
 
           ${S('um7','&#9881;','Module 07 &mdash; Settings (8 Sub-Pages)',`
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Page</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">What you configure</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#9881; General</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trader name, currency, timezone, date format, FY start, default startup page and date range. This User Manual.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#9881; General</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trader name, currency, timezone, date format, FY start, default startup page and date range, Privacy Mode toggle. This User Manual.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128202; Trading Defaults</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Default trade type, direction, max open positions, review status. RPT shown read-only (auto-computed from Risk Mgmt).</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128737; Risk Management</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Max Portfolio Heat %, Warning Heat %, Max RPT cap, Risk Mode (Dynamic % or Fixed &#8377;). Market Breadth &rarr; RPT guidance table.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128179; Charges &amp; Brokerage</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Broker, STT, brokerage, stamp duty, GST, SEBI charges. Auto-used in trade entry/exit calculations.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128276; Alerts &amp; Notifications</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Telegram Bot Token, Chat ID, alert type toggles. Paste credentials here to receive live GTT alerts on your phone.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128452; Data Management</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Export JSON backup, import from backup, clear all data. Manage NSE market holidays for alert engine exclusions.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">&#128241; Application</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Theme (Light/Dark), font size, local storage usage.</td></tr>
-              <tr><td style="padding:6px 10px;font-weight:600;">&#119891; Formula Manager</td><td style="padding:6px 10px;">View all calculation formulas: Avg Entry, Risk R, Expectancy, Portfolio Heat, RPT, ATR, EMA, CAGR, etc.</td></tr>
-            </tbody></table>`)}
-
-          ${S('um8','&#128276;','Alert Engine &mdash; How It Works',`
-            <p>Runs every <strong>3 minutes</strong>, 8:45 AM&ndash;4:03 PM IST, weekdays, excluding NSE public holidays. A 4:00 PM End-of-Day fetch also runs daily.</p>
-            <h4>Priority Waterfall</h4>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Priority</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Condition</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; current stop</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">EXIT entire position immediately.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ff9500;">&#9888; Trend Broken</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &lt; EMA10 while in &ge;3&times;ATR profit</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Sell remaining runner.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">Phase 3 (5&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 5&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 40% at EMA10, Tranche 60% at Prev Low.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">Phase 2 (3&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 3&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 60% at EMA10, Tranche 40% at Prev Low.</td></tr>
-              <tr><td style="padding:6px 10px;font-weight:700;color:#3fb950;">Phase 1 (2R)</td><td style="padding:6px 10px;">CMP &ge; Entry + 2&times;Risk</td><td style="padding:6px 10px;">Core 80% at MAX(BE, EMA20). Tranche 20% at MAX(2R-2%, PrevLow).</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:600;">&#119891; Formula Manager</td><td style="padding:6px 10px;">View all calculation formulas: Avg Entry, Risk R, Expectancy, Portfolio Heat, RPT, True RPT, ATR, EMA, CAGR, etc.</td></tr>
             </tbody></table>
-            <h4 style="margin-top:12px;">NSE Tick Size Rounding</h4>
-            <p>All GTT prices rounded to broker-compatible tick: &le;&#8377;250&rarr;0.05 | &le;&#8377;1k&rarr;0.10 | &le;&#8377;5k&rarr;0.50 | &le;&#8377;18k&rarr;1.00 | above&rarr;5.00</p>
-            <h4>Telegram Notification Rules</h4><ul>
-              <li><strong>Rule A:</strong> Instant alert on each new phase cross per day.</li>
-              <li><strong>Rule B:</strong> 4:00 PM IST final GTT summary, once daily.</li>
-              <li><strong>Rule C:</strong> Re-alert if trailing stop moves &ge;1% higher intraday.</li>
-              <li><strong>Spam Guard:</strong> No duplicate if alert type, qty, and stop price unchanged.</li>
-            </ul>`)}
+            <h4>&#128274; Privacy Mode</h4>
+            <p>Toggle in Settings &rarr; General or press <code>Ctrl+Shift+P</code>. Blurs all &#8377; amounts across the entire app. R-multiples and percentages remain visible. Safe for screen-sharing or screenshots.</p>`)}
 
-          ${S('um9','&#128172;','Telegram Bot Setup',`
+          ${S('um8','&#128276;','Alert Engine &mdash; Complete Guide',`
+            <p>The alert engine monitors all open trades and generates <strong>GTT (Good Till Triggered) instructions</strong> for your broker. It runs automatically and sends notifications to Telegram.</p>
+
+            <h4>How to Enable Alerts</h4><ol>
+              <li>Go to <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
+              <li>Enter your <strong>Telegram Bot Token</strong> and <strong>Chat ID</strong> (see Telegram Setup section below).</li>
+              <li>Toggle ON the alert types you want:
+                <ul>
+                  <li><strong>Stop Loss Breach</strong> &mdash; fires when CMP crosses your stop level.</li>
+                  <li><strong>Day-5 Exit</strong> &mdash; reminder when trade held 5+ trading days.</li>
+                  <li><strong>Dynamic Exit Phases</strong> &mdash; trailing exit system based on R-multiple and ATR (explained below).</li>
+                </ul>
+              </li>
+              <li>Click <strong>Save Changes</strong>. Alerts start running on the next 3-minute cycle.</li>
+            </ol>
+
+            <h4>When Does the Engine Run?</h4>
+            <p>Every <strong>3 minutes</strong>, Monday&ndash;Friday, 8:45 AM&ndash;4:03 PM IST, excluding NSE holidays. A special <strong>4:00 PM End-of-Day</strong> fetch runs daily for final Telegram summary. Click <strong>&#128260; Sync Live Data</strong> in Positions to force a manual run anytime.</p>
+
+            <h4>All 6 Alert Types</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Alert</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Trigger</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; Current Stop (Long) or CMP &ge; Current Stop (Short)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT entire position immediately.</strong> Overrides all other alerts.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#8b949e;">&#128197; Day-5 Exit Due</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trade held &ge; 5 trading days</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Reminder to review the position. Runs independently of dynamic phases.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#3fb950;">&#128994; Phase 1 (2R)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 2&times;Risk</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 80% at MAX(Breakeven, EMA20). Tranche 20% at MAX(2R&minus;2%, Prev Low).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">&#128992; Phase 2 (3&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 3&times;ATR14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 60% at EMA10. Tranche 40% at Prev Day Low.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">&#128995; Phase 3 (5&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 5&times;ATR14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 40% at EMA10. Tranche 60% at Prev Day Low (aggressive trail).</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:700;color:#ff9500;">&#9888; Trend Broken</td><td style="padding:6px 10px;">CMP &lt; EMA10 while in &ge;3&times;ATR profit</td><td style="padding:6px 10px;">Exit remaining runner position at market.</td></tr>
+            </tbody></table>
+
+            <h4>Priority Waterfall</h4>
+            <p>Only <strong>one dynamic alert</strong> is active per trade at a time. Higher-priority alerts suppress lower ones:</p>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
+              &#128680; Stop Loss Breach (P1 &mdash; overrides everything)<br>
+              &nbsp;&nbsp;&#8595; only if NOT breached<br>
+              &#9888; Trend Broken (P2.0)<br>
+              &#128995; Phase 3 &mdash; 5&times;ATR (P2.1)<br>
+              &#128992; Phase 2 &mdash; 3&times;ATR (P2.2)<br>
+              &#128994; Phase 1 &mdash; 2R (P2.3)<br>
+              <br>
+              &#128197; Day-5 Exit (independent &mdash; runs alongside any phase)
+            </p>
+
+            <h4>&#128200; Strong Day Adjustment (2&times;ATR Move)</h4>
+            <p>On days when the stock&rsquo;s <strong>close-to-close move exceeds 2&times; ATR14</strong> (positive direction only), the trailing stop for the <strong>tranche</strong> portion uses an aggressive formula instead of Prev Day Low:</p>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;">
+              <strong>Normal day:</strong> Tranche GTT = MAX(Prev Day Low, EMA10)<br>
+              <strong>Strong day (&gt;2&times;ATR):</strong> Tranche GTT = MAX(Today&rsquo;s Day Low + &frac13; &times; dailyMove, EMA10)
+            </p>
+            <p><em>dailyMove = Today&rsquo;s Close &minus; Yesterday&rsquo;s Close</em></p>
+            <p>This catches excess momentum: if a stock moves &#8377;45 on a &#8377;15 ATR day, the tranche stop jumps to Today&rsquo;s Low + &#8377;15 instead of waiting for EMA to catch up. Applies to Phase 2 and Phase 3 only.</p>
+
+            <h4>&#128274; GTT High-Water Mark (Prices Never Drop)</h4>
+            <p>Once the engine calculates a GTT price, it stores a <strong>high-water mark</strong> per alert. On subsequent 3-minute cycles, the GTT price can only go <strong>up</strong>, never down.</p>
+            <p>This prevents quiet-day EMA dips from showing lower stop levels than what you already set on your broker. The message in the UI will always show the highest GTT price ever computed for that phase.</p>
+            <p><strong>Phase carry-over:</strong> When a trade moves from Phase 2 &rarr; Phase 3, the Phase 2 high-water mark becomes the minimum floor for Phase 3. Your trailing stop never regresses across phase transitions.</p>
+
+            <h4>Alert Lifecycle &mdash; Full Flow</h4>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.9;">
+              1. Entry &rarr; Set initial GTT at [Initial Stop] for [All Qty]<br>
+              2. CMP drops to stop &rarr; &#128680; STOP BREACH &rarr; exit immediately<br>
+              3. CMP rises to 2R &rarr; &#128994; PHASE 1 &rarr; move stop to breakeven<br>
+              4. CMP rises to 3&times;ATR &rarr; &#128992; PHASE 2 &rarr; trail at EMA10 + Prev Low<br>
+              &nbsp;&nbsp;&nbsp;(strong day &gt;2&times;ATR? tranche = Day Low + &frac13; move)<br>
+              5. CMP rises to 5&times;ATR &rarr; &#128995; PHASE 3 &rarr; aggressive trail<br>
+              6. CMP &lt; EMA10 &rarr; &#9888; TREND BROKEN &rarr; sell runner at market
+            </p>
+
+            <h4>Qty Split per Phase</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Phase</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Qty</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Qty</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Stop</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Stop</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Phase 1 (2R)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">80%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(Breakeven, EMA20)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(2R&minus;2%, PrevLow)</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Phase 2 (3&times;ATR)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">60%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">40%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA10</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low (or Day Low + &frac13; move on strong day)</td></tr>
+              <tr><td style="padding:5px 8px;">Phase 3 (5&times;ATR)</td><td style="padding:5px 8px;">40%</td><td style="padding:5px 8px;">60%</td><td style="padding:5px 8px;">EMA10</td><td style="padding:5px 8px;">Prev Day Low (or Day Low + &frac13; move on strong day)</td></tr>
+            </tbody></table>
+            <p><em>Note: Qty is based on total bought size (entries + pyramids). Core Qty is capped to open qty after partial exits.</em></p>
+
+            <h4>NSE Tick Size Rounding</h4>
+            <p>All GTT prices are rounded to broker-compatible NSE tick sizes: &le;&#8377;250 &rarr; 0.05 | &le;&#8377;1k &rarr; 0.10 | &le;&#8377;5k &rarr; 0.50 | &le;&#8377;18k &rarr; 1.00 | above &rarr; 5.00</p>
+
+            <h4>Alert Cards in UI</h4>
+            <p>Active alerts appear at the top of the detail panel when you click a position. Each card shows: phase icon, label, triggered timestamp, exact GTT instruction. Buttons: <strong>&checkmark; Done (GTT Set)</strong> marks alert as completed. <strong>Dismiss</strong> silences it without action.</p>
+          `)}
+
+          ${S('um9','&#128276;','Telegram Notification Rules',`
+            <h4>Rule A &mdash; New Phase Alert</h4>
+            <p>Instant Telegram alert when a trade crosses into a <strong>new phase</strong> for the first time (e.g., Phase 1 &rarr; Phase 2). One notification per phase transition.</p>
+
+            <h4>Rule B &mdash; End-of-Day Summary</h4>
+            <p>At <strong>4:00 PM IST</strong>, if any alert&rsquo;s message has changed since the last EOD notification, a final daily Telegram message is sent with the latest GTT levels.</p>
+
+            <h4>Rule C &mdash; 1% Upward Move</h4>
+            <p>If any GTT price in the alert message increases by <strong>&ge;1%</strong> from the last notified value during intraday trading, a re-notification is sent. This only fires on <em>upward</em> moves &mdash; if prices drop (EMA dips on a quiet day), no notification is sent and the high-water mark keeps the message showing the highest-ever GTT price.</p>
+            <p>Example: For a &#8377;500 stock, the GTT must move at least &#8377;5 upward to trigger a re-notification.</p>
+
+            <h4>Spam Guard</h4>
+            <p>No duplicate notification if alert type, qty, and all stop prices are unchanged from the last notification. Combined with the 1% threshold, this prevents message flooding during active market hours.</p>
+          `)}
+
+          ${S('um10','&#128172;','Telegram Bot Setup',`
             <h4>Step 1 &mdash; Create Your Bot</h4><ol>
               <li>Open Telegram &rarr; search <strong>@BotFather</strong> (blue tick) &rarr; send <code>/newbot</code>.</li>
               <li>Enter display name (e.g., &quot;My Trading Alerts&quot;).</li>
@@ -359,17 +457,20 @@ const settingsModule = (() => {
               <li>Go to Positions &rarr; click <strong>&#128260; Sync Live Data</strong>. If an alert condition is met, your phone will notify within seconds.</li>
             </ol>`)}
 
-          ${S('um10','&#119891;','Key Calculations Reference',`
+          ${S('um11','&#119891;','Key Calculations Reference',`
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Metric</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Formula</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Avg Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(Price &times; Qty) &divide; &Sigma;(Qty)</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk ₹</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Entry &minus; Current Stop) &times; Open Qty &mdash; rupees at risk if stop is hit now</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Initial RPT (&#8377;)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">|Avg Entry &minus; Initial Stop| &times; Open Qty</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Unrealized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Avg Entry) &times; Open Qty &minus; Charges</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Realized P&L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Exit &minus; Avg Entry) &times; Exited Qty &minus; Charges</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Portfolio Heat (%)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(|Entry &minus; Stop| &times; Qty) &divide; Equity &times; 100</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Avg Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(Price &times; Qty) &divide; &Sigma;(Qty) &mdash; across all entries and pyramids</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Open Risk &#8377;</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Entry &minus; Current Stop) &times; Open Qty. Negative = real risk, Positive = locked profit.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Initial RPT (&#8377;)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">|Avg Entry &minus; Initial Stop| &times; Total Qty at first entry</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">True RPT (&#8377;)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">High-water mark of position risk committed at each lifecycle event (entries, pyramids, stop revisions). Exits do <strong>not</strong> change True RPT. Used as the R-multiple denominator so that actual losses honestly show R worse than &minus;1.0.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">R-Multiple</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">P&amp;L &divide; True RPT. Losing &gt;1R means you lost more than planned.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Unrealized P&amp;L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(CMP &minus; Avg Entry) &times; Open Qty &minus; Charges</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Realized P&amp;L</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(Avg Exit &minus; Avg Entry) &times; Exited Qty &minus; Charges</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Portfolio Heat (%)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">&Sigma;(|Entry &minus; Stop| &times; Qty) &divide; Equity &times; 100. Excludes locked profit (stop above entry).</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Expectancy (R)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">(WinRate &times; AvgWinR) + ((1 &minus; WinRate) &times; AvgLossR)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Trading Days</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Calendar days from entry to today, excluding weekends (Sat/Sun) and NSE holidays.</td></tr>
               <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">EMA (n-period)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">k = 2/(n+1); EMA = Close &times; k + EMA_prev &times; (1&minus;k)</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">ATR-14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">14-day EMA of: MAX(H&minus;L, |H&minus;PrevC|, |L&minus;PrevC|)</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">ATR-14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">14-day Wilder&rsquo;s smoothing of: MAX(H&minus;L, |H&minus;PrevC|, |L&minus;PrevC|)</td></tr>
               <tr><td style="padding:6px 10px;font-weight:600;">CAGR</td><td style="padding:6px 10px;">(Equity &divide; Starting Capital)^(1/Years) &minus; 1</td></tr>
             </tbody></table>`)}
 
