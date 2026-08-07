@@ -13,14 +13,16 @@ const positionsModule = (() => {
   let _cmpRefreshTimer = null;
 
   // ── Shared CMP fetch helper (uses Supabase Edge Function proxy) ──────────
+  const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+
   async function _fetchLiveCmp(symbol, includeOHLC = false) {
-    if (!window.SUPABASE_URL || !window.SUPABASE_KEY) return null;
     try {
       // If the symbol already includes a suffix, don't append .NS
       const hasSuffix = symbol.includes('.');
       const ticker = hasSuffix ? encodeURIComponent(symbol) : `${encodeURIComponent(symbol)}.NS`;
-      const url = `${window.SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}` + (includeOHLC ? '&interval=1d&range=1mo' : '');
-      const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${window.SUPABASE_KEY}` } });
+      const url = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}` + (includeOHLC ? '&interval=1d&range=1mo' : '');
+      const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${SUPABASE_KEY}` } });
       const data   = await resp.json();
       const result = data?.chart?.result?.[0];
       if (!result) return null;
