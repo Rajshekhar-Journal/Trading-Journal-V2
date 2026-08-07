@@ -334,12 +334,17 @@ const positionsModule = (() => {
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
     
     const phaseColors = {
-      'Stop Loss Breach':           { icon: '🚨', color: '#f85149', label: 'STOP LOSS BREACH' },
-      'Dynamic Exit: Trend Broken': { icon: '⚠️', color: '#ff9500', label: 'TREND BROKEN — EXIT RUNNER' },
-      'Dynamic Exit: Phase 3 (5 ATR)': { icon: '🟣', color: '#bf91f3', label: 'PHASE 3 — 5×ATR HIT' },
-      'Dynamic Exit: Phase 2 (3 ATR)': { icon: '🟠', color: '#ffa657', label: 'PHASE 2 — 3×ATR HIT' },
-      'Dynamic Exit: Phase 1 (2R)':    { icon: '🟢', color: '#3fb950', label: 'PHASE 1 — 2R HIT' },
-      'Day-5 Exit Due':                { icon: '📅', color: '#8b949e', label: 'DAY-5 EXIT DUE' },
+      'Stop Loss Breach':                  { icon: '🚨', color: '#f85149', label: 'STOP LOSS BREACH' },
+      'Checkpoint: 1R Confirmation':       { icon: '🟢', color: '#3fb950', label: '1R CHECKPOINT — ADD & TIGHTEN' },
+      'Extension: 4×ATR (20% Exit)':       { icon: '🔵', color: '#58a6ff', label: '4×ATR EXTENSION — EXIT 20%' },
+      'Extension: 8×ATR (40% Exit)':       { icon: '🟠', color: '#ffa657', label: '8×ATR EXTENSION — EXIT 20%' },
+      'Extension: 12×ATR (70% Exit)':      { icon: '🟣', color: '#bf91f3', label: '12×ATR EXTENSION — EXIT 30%' },
+      'Runner Mode (EMA20 Trail)':         { icon: '🏃', color: '#8b949e', label: 'RUNNER MODE — EMA20 TRAIL' },
+      'Warning: EMA20 Soft Breach':        { icon: '🟡', color: '#d29922', label: 'EMA20 SOFT BREACH — MONITORING' },
+      'Weakness: EMA20 Confirmed Exit':    { icon: '📉', color: '#f85149', label: 'EMA20 WEAKNESS — EXIT ALL' },
+      'Time-Based Stop (Day 6)':           { icon: '📅', color: '#8b949e', label: 'DAY-6 TIME EXIT' },
+      'Exit Triggered: Tranche GTT Hit':   { icon: '⬇️', color: '#f0883e', label: 'TRANCHE GTT HIT — EXIT NOW' },
+      'Exit Triggered: Core GTT Hit':      { icon: '⬇️', color: '#f85149', label: 'CORE GTT HIT — EXIT ALL' },
     };
 
     const alertHtml = alerts.map(a => {
@@ -381,6 +386,7 @@ const positionsModule = (() => {
               title="Full Screen — hides position table">
               ⛶
             </button>
+            <button class="btn btn-secondary btn-sm" onclick="positionsModule._showEditTradeModal('${tradeId}')" title="Edit Trade">Edit Trade</button>
             <button class="btn btn-danger btn-sm" onclick="positionsModule._deleteTrade('${tradeId}')" title="Delete Trade">Delete Trade</button>
             <button class="detail-close-btn" onclick="positionsModule._closePanel()" title="Close panel — return to position table">✕</button>
           </div>
@@ -1005,7 +1011,7 @@ const positionsModule = (() => {
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="exit-charges" value="0" step="0.01"></div>
       <div class="form-group form-full"><label class="form-label">Action Source</label>
         <select class="form-select" id="exit-source">
-          <option>Manual</option><option>Day-5 Rule</option><option>ATR Extension</option><option>EMA20 Exit</option><option>Stop Triggered</option><option>Target Reached</option>
+          <option>Manual Discretionary</option><option>Day-6 Time Exit</option><option>4×ATR Extension Exit</option><option>8×ATR Extension Exit</option><option>12×ATR Extension Exit</option><option>EMA20 Weakness Exit</option><option>Stop Loss Breached</option><option>1R Pyramid Add</option><option>Full Close</option>
         </select>
       </div>
     </div>`;
@@ -1064,12 +1070,23 @@ const positionsModule = (() => {
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label>
         <input class="form-input" type="date" id="pyr-date" value="${today}"></div>
+      <div class="form-group"><label class="form-label">Pyramid Type</label>
+        <select class="form-input" id="pyr-type" onchange="
+          if(this.value === 'rest50') { 
+            document.getElementById('pyr-qty').value = ${m.totalQty}; 
+            positionsModule._autoCalcPyramidCharges('${trade.tradeType}'); 
+          }
+        ">
+          <option value="manual">Manual Entry</option>
+          <option value="rest50">Add Rest 50% Position (${m.totalQty} Qty)</option>
+        </select>
+      </div>
       <div class="form-group"><label class="form-label">Entry Price (₹)</label>
         <input class="form-input" type="number" id="pyr-price" step="0.05"
           oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
       <div class="form-group"><label class="form-label">Qty</label>
         <input class="form-input" type="number" id="pyr-qty" min="1"
-          oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
+          oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}'); document.getElementById('pyr-type').value = 'manual';"></div>
       <div class="form-group"><label class="form-label">Charges (₹)</label>
         <input class="form-input" type="number" id="pyr-charges" value="0" step="0.01"></div>
       <div class="form-group">
@@ -1256,11 +1273,24 @@ const positionsModule = (() => {
         const cmp       = parseFloat(document.getElementById('nt-cmp').value) || price;
         const exchange   = document.getElementById('nt-exchange')?.value || 'NSE';
         if (!symbol || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
+
+        // Compute frozen entry-day indicators for extension-based exits
+        let entryATR = null, swingLow = null;
+        try {
+          const ohlcRes = await _fetchLiveCmp(symbol, true);
+          if (ohlcRes?.candles?.length >= 14) {
+            entryATR = alertEngine.calculateATR(ohlcRes.candles, 14);
+            const last10 = ohlcRes.candles.slice(-10);
+            swingLow = Math.min(...last10.map(c => c.open));
+          }
+        } catch (e) { console.warn('Could not compute entryATR/swingLow', e); }
+
         const pb = playbookId ? await db.getPlaybookById(playbookId) : null;
         const trade = {
           id: db.generateId('tr'), symbol, sector, tradeType, direction, exchange,
           playbookId, playbookVersion: playbookId ? pb?.currentVersion || '1.0' : '',
           initialStop: stop, currentStop: stop, rpt,
+          entryATR, swingLow,   // frozen entry-day ATR14 and swing low for exit strategy
           entries: [{ id: db.generateId('en'), date, price, qty, charges, notes:'' }],
           pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource:'Manual', notes:'Initial stop' }],
           partialExits: [], finalExit: null, notes: [], alerts: [],
@@ -1270,7 +1300,7 @@ const positionsModule = (() => {
         };
         await db.saveTrade(trade);
         app.closeModal();
-        app.toast(`Trade added: ${symbol}`, 'success');
+        app.toast(`Trade added: ${symbol}${entryATR ? ` | ATR ₹${entryATR.toFixed(2)} | SwingLow ₹${swingLow.toFixed(2)}` : ''}`, 'success');
         await init();
       }}
     ]);
@@ -1380,8 +1410,49 @@ const positionsModule = (() => {
     await init();
   }
 
+  async function _showEditTradeModal(tradeId) {
+    const trade = await db.getTradeById(tradeId);
+    if (!trade) return;
+
+    const content = `<div class="form-grid">
+      <div class="form-group"><label class="form-label">Initial Stop Loss (₹)</label>
+        <input class="form-input" type="number" id="edit-initial-stop" step="0.05" value="${trade.initialStop || ''}"></div>
+      <div class="form-group"><label class="form-label">Swing Low (₹)</label>
+        <input class="form-input" type="number" id="edit-swing-low" step="0.05" value="${trade.swingLow || ''}"></div>
+      <div class="form-group"><label class="form-label">Entry ATR (₹)</label>
+        <input class="form-input" type="number" id="edit-entry-atr" step="0.05" value="${trade.entryATR || ''}"></div>
+      <div class="form-full">
+        <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">
+          Note: Updating these values on legacy trades will allow the Alert Engine to accurately calculate extensions (e.g. 4×ATR).
+        </p>
+      </div>
+    </div>`;
+
+    app.openModal(`Edit Trade — ${trade.symbol}`, content, [
+      { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'save', label: 'Save Changes', class: 'btn-success', onClick: async () => {
+          const initStop = parseFloat(document.getElementById('edit-initial-stop').value);
+          const swingLow = parseFloat(document.getElementById('edit-swing-low').value);
+          const entryATR = parseFloat(document.getElementById('edit-entry-atr').value);
+          
+          if (!initStop) { app.toast('Initial stop is required', 'error'); return; }
+          
+          const updated = { ...trade, initialStop: initStop };
+          if (!isNaN(swingLow)) updated.swingLow = swingLow;
+          if (!isNaN(entryATR)) updated.entryATR = entryATR;
+          
+          await db.saveTrade(updated);
+          app.closeModal();
+          app.toast('Trade updated successfully', 'success');
+          await init();
+          positionsModule._onRowClick(tradeId);
+        }
+      }
+    ]);
+  }
+
   return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal,
-    _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges,
+    _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _showEditTradeModal, _autoCalcTrade, _autoCalcExitCharges,
     _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _editStopRow, _deleteStopRow,
     _deleteTrade, _sortTable, forceRefresh: () => _autoRefreshAllCmps(true) };
 })();
