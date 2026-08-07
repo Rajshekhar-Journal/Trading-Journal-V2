@@ -342,80 +342,114 @@ const settingsModule = (() => {
             <h4>&#128274; Privacy Mode</h4>
             <p>Toggle in Settings &rarr; General or press <code>Ctrl+Shift+P</code>. Blurs all &#8377; amounts across the entire app. R-multiples and percentages remain visible. Safe for screen-sharing or screenshots.</p>`)}
 
-          ${S('um8','&#128276;','Alert Engine &mdash; Complete Guide',`
+          ${S('um8','&#128276;','Alert Engine v2.2 &mdash; Complete Guide',`
             <p>The alert engine monitors all open trades and generates <strong>GTT (Good Till Triggered) instructions</strong> for your broker. It runs automatically and sends notifications to Telegram.</p>
+
+            <h4>Strategy v2.2 Overview &mdash; Phased Entry + Graduated Exits</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Feature</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Detail</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Phased: 50% at entry, +50% at 1R confirmation (via Pyramid).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">1R Checkpoint</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Alert fires at Entry + 1R. Action: Add remaining 50%, tighten stop to midpoint.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Extension Anchoring</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">All ATR targets from frozen SwingLow (MIN of last 10 candle opens at entry).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Frozen ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Entry-day ATR14 stored once. Never recalculated during the trade.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Tranche Trail</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Previous Day Candle Low (with High-Water Mark). Strong day: LOD + &frac12; &times; move.</td></tr>
+              <tr><td style="padding:6px 10px;font-weight:600;">Core Trail</td><td style="padding:6px 10px;">EMA20 with Soft Breach Rule (post-4&times;ATR only).</td></tr>
+            </tbody></table>
 
             <h4>How to Enable Alerts</h4><ol>
               <li>Go to <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
-              <li>Enter your <strong>Telegram Bot Token</strong> and <strong>Chat ID</strong> (see Telegram Setup section below).</li>
-              <li>Toggle ON the alert types you want:
-                <ul>
-                  <li><strong>Stop Loss Breach</strong> &mdash; fires when CMP crosses your stop level.</li>
-                  <li><strong>Day-5 Exit</strong> &mdash; reminder when trade held 5+ trading days.</li>
-                  <li><strong>Dynamic Exit Phases</strong> &mdash; trailing exit system based on R-multiple and ATR (explained below).</li>
-                </ul>
-              </li>
+              <li>Enter your <strong>Telegram Bot Token</strong> and <strong>Chat ID</strong>.</li>
+              <li>Toggle ON the alert types you want.</li>
               <li>Click <strong>Save Changes</strong>. Alerts start running on the next 3-minute cycle.</li>
             </ol>
 
             <h4>When Does the Engine Run?</h4>
             <p>Every <strong>3 minutes</strong>, Monday&ndash;Friday, 8:45 AM&ndash;4:03 PM IST, excluding NSE holidays. A special <strong>4:00 PM End-of-Day</strong> fetch runs daily for final Telegram summary. Click <strong>&#128260; Sync Live Data</strong> in Positions to force a manual run anytime.</p>
 
-            <h4>All 6 Alert Types</h4>
+            <h4>All Alert Types (v2.2)</h4>
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Alert</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Trigger</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; Current Stop (Long) or CMP &ge; Current Stop (Short)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT entire position immediately.</strong> Overrides all other alerts.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#8b949e;">&#128197; Day-5 Exit Due</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trade held &ge; 5 trading days</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Reminder to review the position. Runs independently of dynamic phases.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#3fb950;">&#128994; Phase 1 (2R)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 2&times;Risk</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 80% at MAX(Breakeven, EMA20). Tranche 20% at MAX(2R&minus;2%, Prev Low).</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">&#128992; Phase 2 (3&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 3&times;ATR14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 60% at EMA10. Tranche 40% at Prev Day Low.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">&#128995; Phase 3 (5&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 5&times;ATR14</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Core 40% at EMA10. Tranche 60% at Prev Day Low (aggressive trail).</td></tr>
-              <tr><td style="padding:6px 10px;font-weight:700;color:#ff9500;">&#9888; Trend Broken</td><td style="padding:6px 10px;">CMP &lt; EMA10 while in &ge;3&times;ATR profit</td><td style="padding:6px 10px;">Exit remaining runner position at market.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; Current Stop (Long)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT entire position immediately.</strong> Overrides all other alerts.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#3fb950;">&#128994; 1R Checkpoint</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 1&times;Risk (no pyramid yet)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Add remaining 50% position. Tighten stop to midpoint.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#58a6ff;">&#128309; 4&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 4&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit 20% PS. Set tranche GTT at PrevLow. Core at MAX(BE, EMA20).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">&#128992; 8&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 8&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit to 40% cumulative. Set tranche GTT at PrevLow. Core at EMA20.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">&#128995; 12&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 12&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit to 70% cumulative. Remaining 30% enters Runner Mode.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#8b949e;">&#127939; Runner Mode</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">After 12&times;ATR tranche completed</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trail remaining 30% with EMA20 only (soft breach rule applies).</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#d29922;">&#128993; EMA20 Soft Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &lt; EMA20, but close within 2% (post-4&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">WARNING only. Monitor next day. If gap-down or stays below &rarr; EXIT.</td></tr>
+              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128200; EMA20 Weakness Exit</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Confirmed EMA20 breach (next-day gap-down or &gt;2% below)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT ALL remaining position at market.</strong></td></tr>
+              <tr><td style="padding:6px 10px;font-weight:700;color:#8b949e;">&#128197; Day-6 Time Exit</td><td style="padding:6px 10px;">Trade held &ge; 6 trading days, no exits yet</td><td style="padding:6px 10px;">Exit 50% of open qty to reduce exposure.</td></tr>
             </tbody></table>
 
             <h4>Priority Waterfall</h4>
-            <p>Only <strong>one dynamic alert</strong> is active per trade at a time. Higher-priority alerts suppress lower ones:</p>
+            <p>Only <strong>one dynamic alert</strong> is active per trade at a time:</p>
             <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
               &#128680; Stop Loss Breach (P1 &mdash; overrides everything)<br>
               &nbsp;&nbsp;&#8595; only if NOT breached<br>
-              &#9888; Trend Broken (P2.0)<br>
-              &#128995; Phase 3 &mdash; 5&times;ATR (P2.1)<br>
-              &#128992; Phase 2 &mdash; 3&times;ATR (P2.2)<br>
-              &#128994; Phase 1 &mdash; 2R (P2.3)<br>
+              &#128200; EMA20 Weakness Exit (P2.0 &mdash; confirmed, post-4&times;ATR)<br>
+              &#128993; EMA20 Soft Breach Warning (P2.0b &mdash; monitoring)<br>
+              &#128995; 12&times;ATR Extension (P2.1 &mdash; cum 70%)<br>
+              &#128992; 8&times;ATR Extension (P2.2 &mdash; cum 40%)<br>
+              &#128309; 4&times;ATR Extension (P2.3 &mdash; cum 20%)<br>
+              &#127939; Runner Mode (after 12&times;ATR done)<br>
+              &#128994; 1R Checkpoint (P3 &mdash; advisory)<br>
               <br>
-              &#128197; Day-5 Exit (independent &mdash; runs alongside any phase)
+              &#128197; Day-6 Time Exit (independent &mdash; runs alongside any alert)
             </p>
 
-            <h4>&#128200; Strong Day Adjustment (2&times;ATR Move)</h4>
-            <p>On days when the stock&rsquo;s <strong>close-to-close move exceeds 2&times; ATR14</strong> (positive direction only), the trailing stop for the <strong>tranche</strong> portion uses an aggressive formula instead of Prev Day Low:</p>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;">
-              <strong>Normal day:</strong> Tranche GTT = MAX(Prev Day Low, EMA10)<br>
-              <strong>Strong day (&gt;2&times;ATR):</strong> Tranche GTT = MAX(Today&rsquo;s Day Low + &frac13; &times; dailyMove, EMA10)
+            <h4>EMA20 Soft Breach Rule (Post-4&times;ATR Only)</h4>
+            <p>After the 4&times;ATR exit is completed, EMA20 breaches get a <strong>2% tolerance buffer</strong> to avoid false shakeouts:</p>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
+              CMP dips below EMA20<br>
+              &nbsp;&nbsp;&#9500; Close &ge; EMA20 &times; 0.98? (within 2%)<br>
+              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;YES &rarr; &#128993; WARNING only. Monitor next day.<br>
+              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9500; Next day gap down below prev close? &rarr; &#128308; EXIT<br>
+              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9500; Next day stays below EMA20? &rarr; &#128308; EXIT<br>
+              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9492; Next day recovers above EMA20? &rarr; &#128994; Cancel warning<br>
+              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;NO (close &gt;2% below) &rarr; &#128308; EXIT immediately<br>
+              &nbsp;&nbsp;&#9492; Before 4&times;ATR? &rarr; &#128308; EXIT immediately (no tolerance)
             </p>
-            <p><em>dailyMove = Today&rsquo;s Close &minus; Yesterday&rsquo;s Close</em></p>
-            <p>This catches excess momentum: if a stock moves &#8377;45 on a &#8377;15 ATR day, the tranche stop jumps to Today&rsquo;s Low + &#8377;15 instead of waiting for EMA to catch up. Applies to Phase 2 and Phase 3 only.</p>
+
+            <h4>&#128200; Strong Day Adjustment (2.5&times;ATR Move)</h4>
+            <p>On days when the stock&rsquo;s close-to-close move exceeds <strong>2.5&times; ATR14</strong>, the tranche trailing stop uses:</p>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;">
+              <strong>Normal day:</strong> Tranche GTT = Prev Day Low (with HWM)<br>
+              <strong>Strong day (&gt;2.5&times;ATR):</strong> Tranche GTT = Day Low + &frac12; &times; move
+            </p>
+
+            <h4>Qty Exit per Extension Tier</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tier</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Exit %</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Cumul %</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Stop</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Stop</th></tr></thead><tbody>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">4&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(Breakeven, EMA20)</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">8&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">40%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA20</td></tr>
+              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">12&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">30%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">70%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA20</td></tr>
+              <tr><td style="padding:5px 8px;">Runner</td><td style="padding:5px 8px;">30%</td><td style="padding:5px 8px;">100%</td><td style="padding:5px 8px;">&mdash;</td><td style="padding:5px 8px;">EMA20 (with soft breach)</td></tr>
+            </tbody></table>
+            <p><em>Exit qty formula: exitQty = MIN(MAX(0, floor(PS &times; tierCumPct) &minus; totalExited), openQty). PS = total bought qty (entries + pyramids). Handles pyramids and discretionary exits automatically.</em></p>
 
             <h4>&#128274; GTT High-Water Mark (Prices Never Drop)</h4>
-            <p>Once the engine calculates a GTT price, it stores a <strong>high-water mark</strong> per alert. On subsequent 3-minute cycles, the GTT price can only go <strong>up</strong>, never down.</p>
-            <p>This prevents quiet-day EMA dips from showing lower stop levels than what you already set on your broker. The message in the UI will always show the highest GTT price ever computed for that phase.</p>
-            <p><strong>Phase carry-over:</strong> When a trade moves from Phase 2 &rarr; Phase 3, the Phase 2 high-water mark becomes the minimum floor for Phase 3. Your trailing stop never regresses across phase transitions.</p>
+            <p>Once the engine calculates a GTT price, it stores a <strong>high-water mark</strong> per alert. GTT prices can only go <strong>up</strong>, never down. Phase carry-over applies across tier transitions.</p>
 
-            <h4>Alert Lifecycle &mdash; Full Flow</h4>
+            <h4>Alert Lifecycle &mdash; Full Flow (v2.2)</h4>
             <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.9;">
-              1. Entry &rarr; Set initial GTT at [Initial Stop] for [All Qty]<br>
-              2. CMP drops to stop &rarr; &#128680; STOP BREACH &rarr; exit immediately<br>
-              3. CMP rises to 2R &rarr; &#128994; PHASE 1 &rarr; move stop to breakeven<br>
-              4. CMP rises to 3&times;ATR &rarr; &#128992; PHASE 2 &rarr; trail at EMA10 + Prev Low<br>
-              &nbsp;&nbsp;&nbsp;(strong day &gt;2&times;ATR? tranche = Day Low + &frac13; move)<br>
-              5. CMP rises to 5&times;ATR &rarr; &#128995; PHASE 3 &rarr; aggressive trail<br>
-              6. CMP &lt; EMA10 &rarr; &#9888; TREND BROKEN &rarr; sell runner at market
+              1. Entry (50%) &rarr; Set initial GTT at [Stop] for [50% Qty]<br>
+              2. CMP &ge; Entry + 1R &rarr; &#128994; 1R CHECKPOINT &rarr; Add 50%, tighten stop<br>
+              3. CMP &ge; SwingLow + 4&times;ATR &rarr; &#128309; 4&times;ATR &rarr; exit 20%, stop to BE<br>
+              4. CMP &ge; SwingLow + 8&times;ATR &rarr; &#128992; 8&times;ATR &rarr; exit to 40% cumulative<br>
+              &nbsp;&nbsp;&nbsp;(strong day &gt;2.5&times;ATR? tranche = Day Low + &frac12; move)<br>
+              5. CMP &ge; SwingLow + 12&times;ATR &rarr; &#128995; 12&times;ATR &rarr; exit to 70% cumulative<br>
+              6. Remaining 30% &rarr; &#127939; RUNNER MODE &rarr; EMA20 trail with soft breach<br>
+              7. EMA20 breached (confirmed) &rarr; &#128200; WEAKNESS EXIT &rarr; exit all
             </p>
 
-            <h4>Qty Split per Phase</h4>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Phase</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Qty</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Qty</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Stop</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Stop</th></tr></thead><tbody>
-              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Phase 1 (2R)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">80%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(Breakeven, EMA20)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(2R&minus;2%, PrevLow)</td></tr>
-              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Phase 2 (3&times;ATR)</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">60%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">40%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA10</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low (or Day Low + &frac13; move on strong day)</td></tr>
-              <tr><td style="padding:5px 8px;">Phase 3 (5&times;ATR)</td><td style="padding:5px 8px;">40%</td><td style="padding:5px 8px;">60%</td><td style="padding:5px 8px;">EMA10</td><td style="padding:5px 8px;">Prev Day Low (or Day Low + &frac13; move on strong day)</td></tr>
-            </tbody></table>
-            <p><em>Note: Qty is based on total bought size (entries + pyramids). Core Qty is capped to open qty after partial exits.</em></p>
+            <h4>Exit Reason Tracking</h4>
+            <p>When recording an exit (Partial or Final), select the exact reason from the dropdown:</p>
+            <ul style="font-size:12px;">
+              <li><strong>Manual Discretionary</strong> &mdash; Trader&rsquo;s own judgment</li>
+              <li><strong>Day-6 Time Exit</strong> &mdash; Time-based stop after 6 trading days</li>
+              <li><strong>4&times;ATR / 8&times;ATR / 12&times;ATR Extension Exit</strong> &mdash; Extension tier reached</li>
+              <li><strong>EMA20 Weakness Exit</strong> &mdash; Confirmed EMA20 breach</li>
+              <li><strong>Stop Loss Breached</strong> &mdash; Stop loss hit</li>
+              <li><strong>1R Pyramid Add</strong> &mdash; Related to 1R confirmation entry</li>
+              <li><strong>Full Close</strong> &mdash; Complete position closure</li>
+            </ul>
+            <p>Recording an exit automatically marks all triggered alerts as Completed.</p>
 
             <h4>NSE Tick Size Rounding</h4>
             <p>All GTT prices are rounded to broker-compatible NSE tick sizes: &le;&#8377;250 &rarr; 0.05 | &le;&#8377;1k &rarr; 0.10 | &le;&#8377;5k &rarr; 0.50 | &le;&#8377;18k &rarr; 1.00 | above &rarr; 5.00</p>
@@ -424,19 +458,33 @@ const settingsModule = (() => {
             <p>Active alerts appear at the top of the detail panel when you click a position. Each card shows: phase icon, label, triggered timestamp, exact GTT instruction. Buttons: <strong>&checkmark; Done (GTT Set)</strong> marks alert as completed. <strong>Dismiss</strong> silences it without action.</p>
           `)}
 
-          ${S('um9','&#128276;','Telegram Notification Rules',`
-            <h4>Rule A &mdash; New Phase Alert</h4>
-            <p>Instant Telegram alert when a trade crosses into a <strong>new phase</strong> for the first time (e.g., Phase 1 &rarr; Phase 2). One notification per phase transition.</p>
+          ${S('um9','&#128276;','Telegram Notification Rules (v2.2)',`
+            <h4>Rule A &mdash; New Alert</h4>
+            <p>Instant Telegram alert when a trade crosses a <strong>new tier</strong> for the first time (1R checkpoint, 4&times;ATR, 8&times;ATR, 12&times;ATR, Runner Mode, EMA20 Breach).</p>
 
             <h4>Rule B &mdash; End-of-Day Summary</h4>
             <p>At <strong>4:00 PM IST</strong>, if any alert&rsquo;s message has changed since the last EOD notification, a final daily Telegram message is sent with the latest GTT levels.</p>
 
             <h4>Rule C &mdash; 1% Upward Move</h4>
-            <p>If any GTT price in the alert message increases by <strong>&ge;1%</strong> from the last notified value during intraday trading, a re-notification is sent. This only fires on <em>upward</em> moves &mdash; if prices drop (EMA dips on a quiet day), no notification is sent and the high-water mark keeps the message showing the highest-ever GTT price.</p>
-            <p>Example: For a &#8377;500 stock, the GTT must move at least &#8377;5 upward to trigger a re-notification.</p>
+            <p>If any GTT price in the alert message increases by <strong>&ge;1%</strong> from the last notified value during intraday trading, a re-notification is sent. Only fires on <em>upward</em> moves.</p>
 
-            <h4>Spam Guard</h4>
-            <p>No duplicate notification if alert type, qty, and all stop prices are unchanged from the last notification. Combined with the 1% threshold, this prevents message flooding during active market hours.</p>
+            <h4>Telegram Message Format</h4>
+            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
+              &#128680; <strong>EXIT ALERT</strong> &#128680;<br><br>
+              <strong>Symbol:</strong> RELIANCE<br>
+              <strong>Phase:</strong> &#128309; 4&times;ATR Extension<br><br>
+              <strong>Action Required:</strong><br>
+              1. Set Tranche GTT: 200 Qty at &pound;562 (Prev Day Low)<br>
+              2. Set Core GTT: 800 Qty at &pound;555 (EMA20)<br><br>
+              Next target: 8&times;ATR at &pound;670
+            </p>
+
+            <h4>Telegram Setup</h4><ol>
+              <li>Search <strong>@BotFather</strong> on Telegram, send <code>/newbot</code>, follow steps to get your <strong>Bot Token</strong>.</li>
+              <li>Search <strong>@userinfobot</strong> on Telegram, send <code>/start</code> to get your <strong>Chat ID</strong>.</li>
+              <li>Paste both in <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
+              <li>Click <strong>Save</strong>. Send a test by clicking <strong>&#128260; Sync Live Data</strong> in Positions.</li>
+            </ol>
           `)}
 
           ${S('um10','&#128172;','Telegram Bot Setup',`
