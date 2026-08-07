@@ -899,7 +899,8 @@ const positionsModule = (() => {
         _addTargetLine(m.currentStop, '#ef4444', `SL ₹${calc.formatNumber(m.currentStop)}`);
         
         if (trade.direction === 'Long') {
-          _addTargetLine(m.avgEntryPrice + m.trueRPT, '#eab308', `1R ₹${calc.formatNumber(m.avgEntryPrice + m.trueRPT)}`);
+          const riskPerShare = m.avgEntryPrice - trade.initialStop;
+          _addTargetLine(m.avgEntryPrice + riskPerShare, '#eab308', `1R ₹${calc.formatNumber(m.avgEntryPrice + riskPerShare)}`);
           if (entryATR > 0) {
             _addTargetLine(swingLow + 4*entryATR, '#3b82f6', `4ATR ₹${calc.formatNumber(swingLow + 4*entryATR)}`);
             _addTargetLine(swingLow + 8*entryATR, '#f97316', `8ATR ₹${calc.formatNumber(swingLow + 8*entryATR)}`);
@@ -1484,9 +1485,11 @@ const positionsModule = (() => {
     const cmp = trade.cmp || m.avgEntryPrice;
     const swingLow = trade.swingLow || m.avgEntryPrice;
     const entryATR = trade.entryATR || 0;
-    const risk = m.trueRPT;
-
-    const t1R = m.avgEntryPrice + risk;
+    
+    // 1R = average entry price + risk per share
+    const riskPerShare = m.avgEntryPrice - trade.initialStop;
+    const t1R = m.avgEntryPrice + riskPerShare;
+    
     const t4 = swingLow + 4 * entryATR;
     const t8 = swingLow + 8 * entryATR;
     const t12 = swingLow + 12 * entryATR;
