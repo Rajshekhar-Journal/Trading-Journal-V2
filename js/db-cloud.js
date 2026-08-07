@@ -61,7 +61,7 @@ const db = (() => {
     const row = _tradeToRow(trade, uid);
 
     // Extended fields (require migration 002)
-    const extendedFields = ['sector','exchange','current_stop','rpt','chart_link','playbook_version','closed_at'];
+    const extendedFields = ['sector','exchange','current_stop','rpt','chart_link','playbook_version','closed_at','swing_low','entry_atr'];
 
     // Try full row first (works after migration 002)
     let { error } = await _sb().from('trades').upsert(row, { onConflict: 'id' });
@@ -97,6 +97,8 @@ const db = (() => {
       rpt:             row.rpt             || null,
       cmp:             row.cmp,
       chartLink:       row.chart_link      || null,
+      swingLow:        row.swing_low       || 0,
+      entryATR:        row.entry_atr       || 0,
       entries:         row.entries         || [],
       pyramids:        row.pyramids        || [],
       partialExits:    row.partial_exits   || [],
@@ -131,6 +133,8 @@ const db = (() => {
       rpt:             trade.rpt             || null,
       cmp:             trade.cmp             || null,
       chart_link:      trade.chartLink  || trade.chart_link  || null,
+      swing_low:       trade.swingLow   || trade.swing_low   || 0,
+      entry_atr:       trade.entryATR   || trade.entry_atr   || 0,
       entries:         trade.entries         || [],
       pyramids:        trade.pyramids        || [],
       partial_exits:   trade.partialExits    || trade.partial_exits  || [],
