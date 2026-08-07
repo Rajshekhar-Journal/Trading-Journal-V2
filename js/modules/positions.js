@@ -1309,8 +1309,9 @@ const positionsModule = (() => {
         try {
           const suffix = exchange === 'BSE' ? '.BO' : '.NS';
           const ohlcRes = await _fetchLiveCmp(symbol + suffix, true);
-          if (ohlcRes?.candles?.length >= 14) {
-            entryATR = alertEngine.calculateATR(ohlcRes.candles, 14);
+          if (ohlcRes?.candles?.length >= 2) {
+            const period = Math.min(14, ohlcRes.candles.length - 1);
+            entryATR = alertEngine.calculateATR(ohlcRes.candles, period);
             const last10 = ohlcRes.candles.slice(-10);
             swingLow = direction === 'Long' 
               ? Math.min(...last10.map(c => c.low))
