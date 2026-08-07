@@ -1494,7 +1494,16 @@ const positionsModule = (() => {
     const t8 = swingLow + 8 * entryATR;
     const t12 = swingLow + 12 * entryATR;
 
-    const _row = (label, formula, price, color) => {
+    const _row = (label, formula, price, color, isAtr) => {
+      if (isAtr && (!entryATR || entryATR <= 0)) {
+        return `
+          <tr>
+            <td><strong style="color:${color}">${label}</strong></td>
+            <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">${formula}</td>
+            <td style="color:#f59e0b;font-size:12px;"><span title="Edit trade to set Entry ATR" style="cursor:pointer">⚠️ Missing ATR</span></td>
+            <td>—</td>
+          </tr>`;
+      }
       if (price <= 0 || isNaN(price)) return '';
       const ach = cmp >= price;
       return `
@@ -1537,10 +1546,10 @@ const positionsModule = (() => {
               <td style="font-weight:600">₹${calc.formatNumber(m.currentStop)}</td>
               <td>—</td>
             </tr>
-            ${trade.direction === 'Long' ? _row('1R Checkpoint', 'Avg Entry + 1R', t1R, '#eab308') : ''}
-            ${trade.direction === 'Long' && entryATR > 0 ? _row('4×ATR Extension', 'Swing Low + 4×ATR', t4, '#3b82f6') : ''}
-            ${trade.direction === 'Long' && entryATR > 0 ? _row('8×ATR Extension', 'Swing Low + 8×ATR', t8, '#f97316') : ''}
-            ${trade.direction === 'Long' && entryATR > 0 ? _row('12×ATR Extension', 'Swing Low + 12×ATR', t12, '#a855f7') : ''}
+            ${trade.direction === 'Long' ? _row('1R Checkpoint', 'Avg Entry + 1R', t1R, '#eab308', false) : ''}
+            ${trade.direction === 'Long' ? _row('4×ATR Extension', 'Swing Low + 4×ATR', t4, '#3b82f6', true) : ''}
+            ${trade.direction === 'Long' ? _row('8×ATR Extension', 'Swing Low + 8×ATR', t8, '#f97316', true) : ''}
+            ${trade.direction === 'Long' ? _row('12×ATR Extension', 'Swing Low + 12×ATR', t12, '#a855f7', true) : ''}
           </tbody>
         </table>
 
