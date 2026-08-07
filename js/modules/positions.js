@@ -436,6 +436,7 @@ const positionsModule = (() => {
           <div class="detail-tab-bar">
             <button class="detail-tab-btn active" data-dtab="lifecycle">Lifecycle</button>
             <button class="detail-tab-btn" data-dtab="stops">Stop History</button>
+            <button class="detail-tab-btn" data-dtab="targets">Targets</button>
             <button class="detail-tab-btn" data-dtab="notes">Notes</button>
             <button class="detail-tab-btn" data-dtab="chart">Chart</button>
           </div>
@@ -452,6 +453,7 @@ const positionsModule = (() => {
         if (!tc) return;
         if (btn.dataset.dtab === 'lifecycle') tc.innerHTML = _renderLifecycleTab(t);
         else if (btn.dataset.dtab === 'stops')     tc.innerHTML = _renderStopsTab(t);
+        else if (btn.dataset.dtab === 'targets')   tc.innerHTML = _renderTargetsTab(t);
         else if (btn.dataset.dtab === 'notes')     tc.innerHTML = _renderNotesTab(t);
         else if (btn.dataset.dtab === 'chart')     tc.innerHTML = _renderChartTab(t);
       });
@@ -876,12 +878,34 @@ const positionsModule = (() => {
 
         candleSeries.setData(rawCandles);
 
-        // ── Stop Loss — horizontal dashed price line ──────────────
-        candleSeries.createPriceLine({
-          price: m.currentStop, color: '#ef4444',
-          lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed,
-          title: `SL ₹${calc.formatNumber(m.currentStop)}`
-        });
+        // ── Target & Stop Loss Lines (starting from entry date) ──
+        const entryDate = trade.entries?.[0]?.date?.split('T')[0];
+        const entryIndex = entryDate ? rawCandles.findIndex(c => c.time === entryDate) : 0;
+        const targetCandles = rawCandles.slice(Math.max(0, entryIndex));
+        
+        const _addTargetLine = (price, color, title) => {
+          if (!price || price <= 0) return;
+          const lineSeries = chart.addLineSeries({
+            color: color, lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
+            title: title, lastValueVisible: true, priceLineVisible: false,
+            crosshairMarkerVisible: false
+          });
+          lineSeries.setData(targetCandles.map(c => ({ time: c.time, value: price })));
+        };
+
+        const swingLow = trade.swingLow || m.avgEntryPrice;
+        const entryATR = trade.entryATR || 0;
+        
+        _addTargetLine(m.currentStop, '#ef4444', `SL ₹${calc.formatNumber(m.currentStop)}`);
+        
+        if (trade.direction === 'Long') {
+          _addTargetLine(m.avgEntryPrice + m.trueRPT, '#eab308', `1R ₹${calc.formatNumber(m.avgEntryPrice + m.trueRPT)}`);
+          if (entryATR > 0) {
+            _addTargetLine(swingLow + 4*entryATR, '#3b82f6', `4ATR ₹${calc.formatNumber(swingLow + 4*entryATR)}`);
+            _addTargetLine(swingLow + 8*entryATR, '#f97316', `8ATR ₹${calc.formatNumber(swingLow + 8*entryATR)}`);
+            _addTargetLine(swingLow + 12*entryATR, '#a855f7', `12ATR ₹${calc.formatNumber(swingLow + 12*entryATR)}`);
+          }
+        }
 
         // ── Entry & Exit markers on actual candles ────────────────
         const markers = [];
@@ -1454,8 +1478,84 @@ const positionsModule = (() => {
     ]);
   }
 
+  // ── Target Management Tab ────────────────────────────────────────────────
+  function _renderTargetsTab(trade) {
+    const m = calc.getTradeMetrics(trade);
+    const cmp = trade.cmp || m.avgEntryPrice;
+    const swingLow = trade.swingLow || m.avgEntryPrice;
+    const entryATR = trade.entryATR || 0;
+    const risk = m.trueRPT;
+
+    const t1R = m.avgEntryPrice + risk;
+    const t4 = swingLow + 4 * entryATR;
+    const t8 = swingLow + 8 * entryATR;
+    const t12 = swingLow + 12 * entryATR;
+
+    const _row = (label, formula, price, color) => {
+      if (price <= 0 || isNaN(price)) return '';
+      const ach = cmp >= price;
+      return `
+        <tr>
+          <td><strong style="color:${color}">${label}</strong></td>
+          <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">${formula}</td>
+          <td style="font-weight:600">₹${calc.formatNumber(price)}</td>
+          <td>${ach ? '<span class="badge badge-success">Achieved</span>' : '<span class="badge badge-muted">Pending</span>'}</td>
+        </tr>`;
+    };
+
+    let alertRows = '';
+    const validAlerts = (trade.alerts || []).sort((a,b) => new Date(b.triggeredAt||0) - new Date(a.triggeredAt||0));
+    if (validAlerts.length === 0) {
+      alertRows = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No alerts generated yet.</td></tr>`;
+    } else {
+      alertRows = validAlerts.map(a => {
+        const dt = a.triggeredAt ? new Date(a.triggeredAt).toLocaleString('en-IN') : '—';
+        return `
+          <tr>
+            <td style="white-space:nowrap;color:var(--text-muted)">${dt}</td>
+            <td style="font-weight:600">${a.type}</td>
+            <td style="font-family:monospace;font-size:11px;white-space:pre-wrap;">${a.message || '—'}</td>
+            <td><span class="badge ${a.status==='Completed' ? 'badge-success' : 'badge-warning'}">${a.status}</span></td>
+          </tr>`;
+      }).join('');
+    }
+
+    return `
+      <div style="margin-top:16px;">
+        <h4 style="margin:0 0 10px 0;font-size:14px;color:var(--text);">🎯 Target Matrix</h4>
+        <table class="data-table" style="margin-bottom:24px;">
+          <thead>
+            <tr><th>Milestone</th><th>Formula</th><th>Target Price</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong style="color:#ef4444">Current Stop Loss</strong></td>
+              <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">Active Trail</td>
+              <td style="font-weight:600">₹${calc.formatNumber(m.currentStop)}</td>
+              <td>—</td>
+            </tr>
+            ${trade.direction === 'Long' ? _row('1R Checkpoint', 'Avg Entry + 1R', t1R, '#eab308') : ''}
+            ${trade.direction === 'Long' && entryATR > 0 ? _row('4×ATR Extension', 'Swing Low + 4×ATR', t4, '#3b82f6') : ''}
+            ${trade.direction === 'Long' && entryATR > 0 ? _row('8×ATR Extension', 'Swing Low + 8×ATR', t8, '#f97316') : ''}
+            ${trade.direction === 'Long' && entryATR > 0 ? _row('12×ATR Extension', 'Swing Low + 12×ATR', t12, '#a855f7') : ''}
+          </tbody>
+        </table>
+
+        <h4 style="margin:0 0 10px 0;font-size:14px;color:var(--text);">🔔 Alert History</h4>
+        <table class="data-table">
+          <thead>
+            <tr><th>Date</th><th>Alert Type</th><th>Message / Instruction</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            ${alertRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal,
     _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _showEditTradeModal, _autoCalcTrade, _autoCalcExitCharges,
     _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _editStopRow, _deleteStopRow,
-    _deleteTrade, _sortTable, forceRefresh: () => _autoRefreshAllCmps(true) };
+    _deleteTrade, _sortTable, forceRefresh: () => _autoRefreshAllCmps(true), _renderTargetsTab };
 })();
