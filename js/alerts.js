@@ -436,31 +436,24 @@ const alertEngine = (() => {
       dirty.changed = true;
 
       // Update high-water mark — GTT prices can only increase
+      let shouldNotify = false;
       if (gttPrices) {
         const oldHW = existing.gttHW || { core: 0, tranche: 0 };
-        existing.gttHW = {
-          core:    Math.max(gttPrices.core    || 0, oldHW.core    || 0),
-          tranche: Math.max(gttPrices.tranche || 0, oldHW.tranche || 0)
-        };
-      }
+        const newCore = Math.max(gttPrices.core || 0, oldHW.core || 0);
+        const newTranche = Math.max(gttPrices.tranche || 0, oldHW.tranche || 0);
+        
+        // Notify if any GTT stop level increased (HWM bumped)
+        if (newCore > (oldHW.core || 0) || newTranche > (oldHW.tranche || 0)) {
+          shouldNotify = true;
+        }
 
-      let shouldNotify = false;
+        existing.gttHW = { core: newCore, tranche: newTranche };
+      }
 
       // Rule B: End of day update (4:00 PM final fetch)
       if (isEndOfDay && existing.lastEodDate !== today) {
         shouldNotify = true;
         existing.lastEodDate = today;
-      } else {
-        // Rule C: 1% upward move on any GTT price in the alert message
-        const oldPrices = (oldMsg.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
-        const newPrices = (message.match(/₹[\d.]+/g) || []).map(s => parseFloat(s.replace('₹','')));
-
-        for (let i = 0; i < Math.min(oldPrices.length, newPrices.length); i++) {
-          if (oldPrices[i] > 0) {
-            const pctMove = (newPrices[i] - oldPrices[i]) / oldPrices[i];
-            if (pctMove >= 0.01) { shouldNotify = true; break; }
-          }
-        }
       }
 
       if (shouldNotify || existing.status === ALERT_STATUS.PENDING) {
