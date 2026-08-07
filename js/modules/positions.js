@@ -347,7 +347,10 @@ const positionsModule = (() => {
       'Exit Triggered: Core GTT Hit':      { icon: '⬇️', color: '#f85149', label: 'CORE GTT HIT — EXIT ALL' },
     };
 
-    const alertHtml = alerts.map(a => {
+    // Bulletproof cleanup: strictly render only v2.2 alerts that exist in phaseColors mapping
+    const validUIAlerts = (trade.alerts || []).filter(a => !!phaseColors[a.type]);
+    
+    const alertHtml = validUIAlerts.map(a => {
       const cfg = phaseColors[a.type] || { icon: '🔔', color: '#8b949e', label: a.type };
       const triggered = a.triggeredAt ? new Date(a.triggeredAt).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
       return `
