@@ -74,7 +74,11 @@ const tradesModule = (() => {
     const allClosed = await db.getClosedTrades();
     const filtered  = calc.filterByDateRange(allClosed, _range);
     await _populateSetupFilter(allClosed);
-    _renderSummaryCards(filtered);
+
+    const capital = await db.getCapital();
+    const equity = calc.getCurrentEquity(capital, calc.getTotalPnl(allClosed));
+
+    _renderSummaryCards(filtered, equity);
     _renderTable(await _getFilteredTrades());
     _applyView();
     if (_currentView === 'chart') await _loadChartView();
@@ -399,21 +403,29 @@ const tradesModule = (() => {
       usedIds.map(id => { const pb = playbooks.find(p => p.id === id); return pb ? `<option value="${id}">${pb.name}</option>` : ''; }).join('');
   }
 
-  function _renderSummaryCards(trades) {
+  function _renderSummaryCards(trades, equity = 0) {
     const el = document.getElementById('trades-summary-cards');
     if (!el) return;
     const wr        = calc.getWinRate(trades);
-    const { avgWinR, avgLossR, winCount, lossCount } = calc.getAvgWinLoss(trades);
-    const netR      = calc.getTotalR(trades);
+    const { winCount, lossCount, avgWin, avgLoss } = calc.getAvgWinLoss(trades);
     const netPnl    = calc.getTotalPnl(trades);
     const ruleBreaks= trades.filter(t => !t.ruleFollowed).length;
-    const exp       = calc.getExpectancy(trades);
+    
+    // Calculate Expectancy in Currency, then convert to % AV
+    const lr = 1 - (wr / 100);
+    const expAmt = ((wr / 100) * avgWin) + (lr * avgLoss);
+    const expPct = equity > 0 ? (expAmt / equity * 100) : 0;
+
+    const netPct = equity > 0 ? (netPnl / equity * 100) : 0;
+    const avgWinPct = equity > 0 ? (avgWin / equity * 100) : 0;
+    const avgLossPct = equity > 0 ? (avgLoss / equity * 100) : 0;
+
     const cards = [
       { label:'Total Trades', value:trades.length, sub:`${winCount}W / ${lossCount}L`, icon:'📋' },
       { label:'Win Rate', value:`${wr.toFixed(1)}%`, sub:`Break-even: ${trades.length-winCount-lossCount}`, icon:'🎯', cls:wr>=40?'positive':'negative' },
-      { label:'Net P&L', value:calc.formatCurrency(netPnl), sub:`${calc.formatR(netR)}`, icon:'💰', cls:netPnl>=0?'positive':'negative' },
-      { label:'Expectancy', value:calc.formatR(exp), sub:'per trade', icon:'📊', cls:exp>=0?'positive':'negative' },
-      { label:'Avg Win / Loss', value:`${avgWinR.toFixed(2)}R`, sub:`Avg Loss: ${avgLossR.toFixed(2)}R`, icon:'⚖️' },
+      { label:'Net P&L', value:calc.formatCurrency(netPnl), sub:`${netPct >= 0 ? '+' : ''}${netPct.toFixed(2)}% AV`, icon:'💰', cls:netPnl>=0?'positive':'negative' },
+      { label:'Expectancy', value:`${expPct >= 0 ? '+' : ''}${expPct.toFixed(2)}% AV`, sub:'per trade', icon:'📊', cls:expPct>=0?'positive':'negative' },
+      { label:'Avg Win / Loss', value:`${avgWinPct.toFixed(2)}% AV`, sub:`Avg Loss: ${avgLossPct.toFixed(2)}% AV`, icon:'⚖️' },
       { label:'Rule Breaks', value:ruleBreaks, sub:`${trades.length>0?((ruleBreaks/trades.length)*100).toFixed(0):0}% of trades`, icon:'⚠️', cls:ruleBreaks>0?'negative':'positive' },
     ];
     el.innerHTML = cards.map(c => `
