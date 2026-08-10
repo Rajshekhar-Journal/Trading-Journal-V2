@@ -5,7 +5,20 @@
 
 const app = (() => {
   let _currentModule = 'dashboard';
-  const _modules = { dashboard: dashboardModule, watchlist: window.WatchlistModule, positions: positionsModule, trades: tradesModule, playbook: playbookModule, analytics: analyticsModule, capital: capitalModule, settings: settingsModule };
+  // Modules are resolved lazily so scripts loaded after app.js (like watchlist.js) are found.
+  function _getModule(id) {
+    const map = {
+      dashboard: dashboardModule,
+      watchlist:  window.WatchlistModule,
+      positions:  positionsModule,
+      trades:     tradesModule,
+      playbook:   playbookModule,
+      analytics:  analyticsModule,
+      capital:    capitalModule,
+      settings:   settingsModule
+    };
+    return map[id];
+  }
 
   // Phase 2: async init with auth guard
   async function init() {
@@ -22,7 +35,8 @@ const app = (() => {
   }
 
   function navigate(moduleId) {
-    if (!_modules[moduleId]) return;
+    const mod = _getModule(moduleId);
+    if (!mod) return;
     document.querySelectorAll('.module-page').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
     const page = document.getElementById(`mod-${moduleId}`);
@@ -32,7 +46,7 @@ const app = (() => {
     _currentModule = moduleId;
     // Phase 2: all module init() are async — fire and catch errors
     try {
-      const result = _modules[moduleId].init();
+      const result = mod.init();
       if (result && typeof result.catch === 'function') {
         result.catch(e => console.error(`Error in module: ${moduleId}`, e));
       }
