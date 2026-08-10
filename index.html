@@ -30,6 +30,7 @@
       <button class="nav-btn" data-module="watchlist">Watchlist</button>
       <button class="nav-btn" data-module="positions">Positions</button>
       <button class="nav-btn" data-module="trades">Trades</button>
+      <button class="nav-btn" data-module="paper">&#128196; Paper Trades</button>
       <button class="nav-btn" data-module="playbook">Playbook</button>
       <button class="nav-btn" data-module="analytics">Analytics</button>
       <button class="nav-btn" data-module="capital">Capital</button>
@@ -388,6 +389,38 @@
       </div>
     </div>
 
+    <!-- MODULE: PAPER TRADES -->
+    <div id="mod-paper" class="module-page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">&#128196; Paper Trades</h1>
+          <p class="page-subtitle">Simulated trades — auto-tracked by your strategy engine</p>
+        </div>
+      </div>
+      <div class="stats-row" id="pt-overview-cards"></div>
+      <div class="split-view" id="pt-split-view">
+        <div class="split-left" id="pt-table-panel">
+          <div class="card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header">
+              <span class="card-title">All Paper Trades</span>
+              <span class="card-subtitle" id="pt-count" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
+            <div class="table-wrap" style="flex:1;overflow-y:auto">
+              <table class="data-table" id="pt-table">
+                <thead><tr>
+                  <th>Symbol</th><th>Sector</th><th>Entry Date</th>
+                  <th>Entry Price</th><th>Stop</th><th>Open Qty</th>
+                  <th>Sim. P&amp;L</th><th>Status</th>
+                </tr></thead>
+                <tbody id="pt-table-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="split-right hidden" id="pt-detail-panel"></div>
+      </div>
+    </div>
+
   </main>
 
 
@@ -419,6 +452,7 @@
   <script src="js/modules/analytics.js?v=2.2.1"></script>
   <script src="js/modules/capital.js?v=2.2.1"></script>
   <script src="js/modules/settings.js?v=2.2.1"></script>
+  <script src="js/modules/paper-trades.js?v=2.2.1"></script>
   <!-- 5. App router (last — kicks off auth check then init) -->
   <script src="js/app.js?v=2.2.1"></script>
 </body>
