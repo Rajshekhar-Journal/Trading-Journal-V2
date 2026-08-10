@@ -12,6 +12,7 @@ const app = (() => {
       watchlist:  window.WatchlistModule,
       positions:  positionsModule,
       trades:     tradesModule,
+      paper:      window.PaperTradesModule,
       playbook:   playbookModule,
       analytics:  analyticsModule,
       capital:    capitalModule,
