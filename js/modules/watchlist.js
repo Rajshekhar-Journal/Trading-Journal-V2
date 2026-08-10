@@ -52,11 +52,11 @@ window.WatchlistModule = (function() {
 
       html += `
         <tr>
-          <td style="font-weight:600">${item.symbol}</td>
-          <td>${calc.formatCurrency(trigger)}</td>
-          <td>${calc.formatCurrency(sl)}</td>
-          <td>${calc.formatCurrency(riskPerShare)}</td>
-          <td>${initialQty}</td>
+          <td><strong style="color:var(--text-primary)">${item.symbol}</strong></td>
+          <td class="font-mono">₹${calc.formatNumber(trigger)}</td>
+          <td class="font-mono">₹${calc.formatNumber(sl)}</td>
+          <td class="font-mono">₹${calc.formatNumber(riskPerShare)}</td>
+          <td class="font-mono">${initialQty}</td>
           <td>${statusBadge}</td>
           <td style="text-align:right">
             <button class="btn btn-secondary btn-sm" onclick="WatchlistModule.deleteItem('${item.id}')" title="Delete">🗑</button>
