@@ -297,12 +297,26 @@
           <p class="page-subtitle">Performance intelligence &amp; trading insights</p>
         </div>
         <div class="page-actions">
-          <div class="date-filter-group" id="anl-date-filter">
-            <button class="filter-btn" data-range="Last 20">Last 20</button>
-            <button class="filter-btn" data-range="Monthly">Month</button>
-            <button class="filter-btn" data-range="Quarterly">Quarter</button>
-            <button class="filter-btn active" data-range="YTD">YTD</button>
-            <button class="filter-btn" data-range="All">All</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <!-- Mode Toggle -->
+            <div style="display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg-secondary)">
+              <button id="anl-mode-real" class="btn btn-sm" onclick="analyticsModule.setMode('real')"
+                style="border-radius:0;border:none;padding:6px 14px;font-size:12px;font-weight:600;background:var(--accent);color:#fff">
+                &#128202; Real Trades
+              </button>
+              <button id="anl-mode-paper" class="btn btn-sm" onclick="analyticsModule.setMode('paper')"
+                style="border-radius:0;border:none;padding:6px 14px;font-size:12px;font-weight:600;background:transparent;color:var(--text-muted)">
+                &#128196; Paper Trades
+              </button>
+            </div>
+            <!-- Date Filters -->
+            <div class="date-filter-group" id="anl-date-filter">
+              <button class="filter-btn" data-range="Last 20">Last 20</button>
+              <button class="filter-btn" data-range="Monthly">Month</button>
+              <button class="filter-btn" data-range="Quarterly">Quarter</button>
+              <button class="filter-btn active" data-range="YTD">YTD</button>
+              <button class="filter-btn" data-range="All">All</button>
+            </div>
           </div>
         </div>
       </div>
@@ -313,6 +327,10 @@
         <button class="tab-btn" data-tab="risk">Risk Analytics</button>
         <button class="tab-btn" data-tab="discipline">Discipline</button>
         <button class="tab-btn" data-tab="simulator">Growth Simulator</button>
+      </div>
+      <!-- Paper Mode Banner — hidden by default -->
+      <div id="anl-paper-banner" style="display:none;align-items:center;gap:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);border-radius:10px;padding:10px 16px;margin-bottom:12px;color:#818cf8;font-size:13px;font-weight:600">
+        &#128196; <span>Paper Trade Mode — Simulated results. These are <em>not</em> real trades.</span>
       </div>
       <div id="anl-content"></div>
     </div>
