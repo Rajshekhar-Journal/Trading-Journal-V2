@@ -458,6 +458,44 @@ const db = (() => {
     };
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // WATCHLIST
+  // ════════════════════════════════════════════════════════════════════════
+
+  async function getWatchlist() {
+    const { data, error } = await _sb().from('watchlist').select('*').order('created_at', { ascending: false });
+    if (error) { console.error('getWatchlist:', error); return []; }
+    return data || [];
+  }
+
+  async function saveWatchlistItem(item) {
+    if (!item.id) item.id = _generateId();
+    const payload = {
+      id: item.id,
+      symbol: item.symbol,
+      trigger_price: item.trigger_price,
+      stop_loss: item.stop_loss,
+      status: item.status || 'monitoring',
+      created_at: item.created_at || new Date().toISOString()
+    };
+    const { error } = await _sb().from('watchlist').upsert(payload);
+    if (error) {
+      console.error('saveWatchlistItem:', error);
+      throw new Error(error.message);
+    }
+    _trigger('watchlist_updated');
+    return payload;
+  }
+
+  async function deleteWatchlistItem(id) {
+    const { error } = await _sb().from('watchlist').delete().eq('id', id);
+    if (error) {
+      console.error('deleteWatchlistItem:', error);
+      throw new Error(error.message);
+    }
+    _trigger('watchlist_updated');
+  }
+
   // ── Utility ───────────────────────────────────────────────────────────────
   function generateId(prefix = 'id') { return _generateId(prefix); }
 
@@ -474,6 +512,8 @@ const db = (() => {
     getMarketHealth, saveMarketHealth,
     // Equity Snapshots
     getEquitySnapshots, saveEquitySnapshot,
+    // Watchlist
+    getWatchlist, saveWatchlistItem, deleteWatchlistItem,
     // Compatibility
     isSeeded, markSeeded, clearAll, resetAllData, on, off, generateId,
   };
