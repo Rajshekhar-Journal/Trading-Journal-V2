@@ -422,8 +422,105 @@ const alertEngine = (() => {
         }
       }
     }
+    // ── 3. Simulate Paper Trades (same exit rules applied automatically) ──
+    await _simulatePaperTrades(ohlcMap, settings);
 
     return updated;
+  }
+
+  // ── Paper Trade Simulation (runs after main loop) ──────────────────
+  async function _simulatePaperTrades(ohlcMap, settings) {
+    if (!window.db || !db.getOpenPaperTrades) return;
+    const paperTrades = await db.getOpenPaperTrades();
+    if (!paperTrades || !paperTrades.length) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const calc  = window.calc || {};
+
+    for (const trade of paperTrades) {
+      const candles = ohlcMap[trade.symbol] || ohlcMap[trade.symbol + '.NS'];
+      if (!candles || candles.length < 2) continue;
+
+      let m;
+      if (calc.getTradeMetrics) {
+        m = calc.getTradeMetrics(trade);
+      } else {
+        const ins = [...(trade.entries || []), ...(trade.pyramids || [])];
+        let tq = 0, tc = 0;
+        for (const e of ins) { tq += e.qty; tc += (e.price * e.qty); }
+        const outs = (trade.partialExits || []).reduce((s,e) => s + e.qty, 0);
+        m = { openQty: tq - outs, avgEntryPrice: tq > 0 ? tc/tq : 0, currentStop: trade.currentStop || trade.initialStop };
+      }
+
+      if (m.openQty <= 0) continue;
+
+      const entryPrice   = m.avgEntryPrice;
+      const riskPerShare = Math.abs(entryPrice - trade.initialStop);
+      const updated      = { ...trade };
+      let changed        = false;
+
+      // Check each new candle chronologically
+      for (const candle of candles) {
+        const { high, low, close, time } = candle;
+        const candleDate = time ? new Date(time * 1000).toISOString().split('T')[0] : today;
+
+        // a) Stop Loss hit
+        if (low <= m.currentStop && updated.finalExit === null) {
+          updated.finalExit = { id: db.generateId('pe'), date: candleDate, price: m.currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper)' };
+          changed = true; break;
+        }
+
+        // b) 1R Partial Exit (50% at +1R)
+        const target1R = trade.direction === 'Short' ? entryPrice - riskPerShare : entryPrice + riskPerShare;
+        const already1R = (updated.partialExits || []).some(e => e.actionSource && e.actionSource.includes('1R'));
+        if (!already1R && (trade.direction === 'Short' ? low <= target1R : high >= target1R)) {
+          const exitQty = Math.floor(m.openQty / 2);
+          if (exitQty > 0) {
+            updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: candleDate, price: target1R, qty: exitQty, charges: 0, actionSource: '1R Partial Exit (Paper)' }];
+            // Trail stop to breakeven after 1R
+            updated.currentStop = entryPrice;
+            updated.stopRevisions = [...(updated.stopRevisions || []), { id: db.generateId('sr'), date: candleDate, oldStop: m.currentStop, newStop: entryPrice, actionSource: '1R Breakeven Trail (Paper)', notes: '' }];
+            changed = true;
+          }
+        }
+
+        // c) ATR-based extension exits (4×, 8×, 12×)
+        if (trade.entryATR && trade.swingLow) {
+          const atr = trade.entryATR;
+          const ext4  = trade.direction === 'Short' ? trade.swingLow - 4*atr : trade.swingLow + 4*atr;
+          const ext8  = trade.direction === 'Short' ? trade.swingLow - 8*atr : trade.swingLow + 8*atr;
+          const ext12 = trade.direction === 'Short' ? trade.swingLow - 12*atr : trade.swingLow + 12*atr;
+          const remaining = m.openQty - (updated.partialExits || []).reduce((s,e) => s+e.qty, 0);
+
+          [[ext4,'4×ATR Extension Exit (Paper)',0.5],[ext8,'8×ATR Extension Exit (Paper)',0.5],[ext12,'12×ATR Extension Exit (Paper)',1.0]].forEach(([target, src, fraction]) => {
+            const alreadyDone = (updated.partialExits || []).some(e => e.actionSource && e.actionSource.includes(src.split(' ')[0]));
+            if (!alreadyDone && remaining > 0) {
+              const hit = trade.direction === 'Short' ? low <= target : high >= target;
+              if (hit) {
+                const qty = fraction >= 1 ? remaining : Math.floor(remaining * fraction);
+                if (qty > 0) {
+                  updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: candleDate, price: target, qty, charges: 0, actionSource: src }];
+                  changed = true;
+                }
+              }
+            }
+          });
+        }
+      }
+
+      // d) Day-6 Time Stop
+      const entryDate   = new Date(trade.entries?.[0]?.date || today);
+      const holdingDays = Math.floor((new Date() - entryDate) / (1000*60*60*24));
+      if (holdingDays >= 6 && updated.finalExit === null) {
+        const lastClose = candles[candles.length-1]?.close || entryPrice;
+        updated.finalExit = { id: db.generateId('pe'), date: today, price: lastClose, qty: m.openQty, charges: 0, actionSource: 'Day-6 Time Stop (Paper)' };
+        changed = true;
+      }
+
+      if (changed) {
+        try { await db.savePaperTrade(updated); } catch(e) { console.warn('Paper trade sim save failed:', e); }
+      }
+    }
   }
 
   // ── Watchlist Monitor ───────────────────────────────────────────────
