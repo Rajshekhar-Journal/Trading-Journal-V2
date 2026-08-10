@@ -97,6 +97,16 @@ const alertEngine = (() => {
       let m = { openQty: 0, avgEntryPrice: 0, currentStop: trade.initialStop };
       if (calc.getTradeMetrics) {
         m = calc.getTradeMetrics(trade);
+      } else {
+        // Fallback for background engine where window.calc is missing
+        const _allIns = [...(trade.entries || []), ...(trade.pyramids || [])];
+        let totalQty = 0, totalCost = 0;
+        for (const e of _allIns) { totalQty += e.qty; totalCost += (e.price * e.qty); }
+        m.avgEntryPrice = totalQty > 0 ? totalCost / totalQty : 0;
+        const _allOuts = (trade.partialExits || []).reduce((s, e) => s + e.qty, 0);
+        m.openQty = totalQty - _allOuts;
+        const lastStopRev = (trade.stopRevisions || []).slice(-1)[0];
+        m.currentStop = lastStopRev ? lastStopRev.newStop : trade.initialStop;
       }
       
       const tradeUpdates = {};
@@ -416,6 +426,7 @@ const alertEngine = (() => {
     const existing = alerts.find(a => a.type === type);
     const today = new Date().toISOString().split('T')[0];
 
+    // Rule 1: New Alert / New Phase - Fire immediately
     if (!existing) {
       const alertObj = {
         type,
@@ -429,40 +440,59 @@ const alertEngine = (() => {
       alerts.push(alertObj);
       dirty.changed = true;
       return true;
-    } else if (existing.status === ALERT_STATUS.PENDING || existing.message !== message) {
+    } 
+    
+    // Evaluate Notification Rules for Existing Alerts
+    let shouldNotify = false;
 
-      const oldMsg = existing.message || '';
-      existing.message = message;
-      dirty.changed = true;
+    // Rule 2: First Sync of the Day
+    if (existing.lastNotifiedDate !== today) {
+      shouldNotify = true;
+    }
 
-      // Update high-water mark — GTT prices can only increase
-      let shouldNotify = false;
-      if (gttPrices) {
-        const oldHW = existing.gttHW || { core: 0, tranche: 0 };
-        const newCore = Math.max(gttPrices.core || 0, oldHW.core || 0);
-        const newTranche = Math.max(gttPrices.tranche || 0, oldHW.tranche || 0);
-        
-        // Notify if any GTT stop level increased (HWM bumped)
-        if (newCore > (oldHW.core || 0) || newTranche > (oldHW.tranche || 0)) {
-          shouldNotify = true;
-        }
+    // Rule 3: Meaningful GTT Increase (>= 1%) from last notified HWM
+    let newCore = 0, newTranche = 0;
+    if (gttPrices) {
+      const oldHW = existing.gttHW || { core: 0, tranche: 0 };
+      newCore = Math.max(gttPrices.core || 0, oldHW.core || 0);
+      newTranche = Math.max(gttPrices.tranche || 0, oldHW.tranche || 0);
+      
+      const coreIncreased = newCore >= (oldHW.core * 1.01);
+      const trancheIncreased = newTranche >= (oldHW.tranche * 1.01);
 
-        existing.gttHW = { core: newCore, tranche: newTranche };
-      }
-
-      // Rule B: End of day update (4:00 PM final fetch)
-      if (isEndOfDay && existing.lastEodDate !== today) {
+      if (coreIncreased || trancheIncreased) {
         shouldNotify = true;
-        existing.lastEodDate = today;
-      }
-
-      if (shouldNotify || existing.status === ALERT_STATUS.PENDING) {
-        existing.status = ALERT_STATUS.TRIGGERED;
-        existing.triggeredAt = new Date().toISOString();
-        existing.lastNotifiedDate = today;
-        return true;
       }
     }
+
+    // End of day final fetch rule
+    if (isEndOfDay && existing.lastEodDate !== today) {
+      shouldNotify = true;
+      existing.lastEodDate = today;
+    }
+
+    // Always fire if the status is still pending (e.g. user reset it or it missed firing)
+    if (existing.status === ALERT_STATUS.PENDING) {
+      shouldNotify = true;
+    }
+
+    // UI Synchronization: We ONLY update the message string and HWM in the UI 
+    // when Telegram is actually going to fire. This keeps them 100% synced.
+    if (shouldNotify) {
+      if (existing.message !== message) {
+        existing.message = message;
+      }
+      if (gttPrices) {
+        existing.gttHW = { core: newCore, tranche: newTranche };
+      }
+      
+      existing.status = ALERT_STATUS.TRIGGERED;
+      existing.triggeredAt = new Date().toISOString();
+      existing.lastNotifiedDate = today;
+      dirty.changed = true;
+      return true;
+    }
+
     return false;
   }
 
