@@ -122,23 +122,30 @@
           <button class="btn btn-primary" id="btn-add-watchlist">+ Add to Watchlist</button>
         </div>
       </div>
-      <div class="table-wrap" style="flex:1;overflow-y:auto">
-        <table class="data-table" id="watchlist-table">
-          <thead>
-            <tr>
-              <th>Symbol</th>
-              <th>Trigger Buy</th>
-              <th>Stop Loss</th>
-              <th>Risk/Share</th>
-              <th>Initial Qty</th>
-              <th>Status</th>
-              <th style="width:100px;text-align:right">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="watchlist-tbody">
-            <!-- Rendered via JS -->
-          </tbody>
-        </table>
+      <div class="split-view">
+        <div class="split-left" style="flex: 1; max-width: 100%;">
+          <div class="card" style="height:100%;display:flex;flex-direction:column">
+            <div class="card-header"><span class="card-title">Active Watchlist</span></div>
+            <div class="table-wrap" style="flex:1;overflow-y:auto">
+              <table class="data-table" id="watchlist-table">
+                <thead>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Trigger Buy</th>
+                    <th>Stop Loss</th>
+                    <th>Risk/Share</th>
+                    <th>Initial Qty</th>
+                    <th>Status</th>
+                    <th style="width:100px;text-align:right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="watchlist-tbody">
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
