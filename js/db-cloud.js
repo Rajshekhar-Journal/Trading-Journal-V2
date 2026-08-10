@@ -471,29 +471,66 @@ const db = (() => {
   async function saveWatchlistItem(item) {
     if (!item.id) item.id = _generateId();
     const payload = {
-      id: item.id,
-      symbol: item.symbol,
+      id:            item.id,
+      symbol:        item.symbol,
+      sector:        item.sector        || null,
       trigger_price: item.trigger_price,
-      stop_loss: item.stop_loss,
-      status: item.status || 'monitoring',
-      created_at: item.created_at || new Date().toISOString()
+      stop_loss:     item.stop_loss,
+      notes:         item.notes         || null,
+      status:        item.status        || 'monitoring',
+      created_at:    item.created_at    || new Date().toISOString()
     };
     const { error } = await _sb().from('watchlist').upsert(payload);
-    if (error) {
-      console.error('saveWatchlistItem:', error);
-      throw new Error(error.message);
-    }
-    _trigger('watchlist_updated');
+    if (error) { console.error('saveWatchlistItem:', error); throw new Error(error.message); }
+    _notifyChange('watchlist_updated');
     return payload;
   }
 
   async function deleteWatchlistItem(id) {
     const { error } = await _sb().from('watchlist').delete().eq('id', id);
-    if (error) {
-      console.error('deleteWatchlistItem:', error);
-      throw new Error(error.message);
-    }
-    _trigger('watchlist_updated');
+    if (error) { console.error('deleteWatchlistItem:', error); throw new Error(error.message); }
+    _notifyChange('watchlist_updated');
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // PAPER TRADES  (same JSON shape as real trades — all calc.* functions work)
+  // ════════════════════════════════════════════════════════════════════════
+
+  async function getPaperTrades() {
+    const uid = _uid();
+    if (!uid) return [];
+    const { data, error } = await _sb().from('paper_trades').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+    if (error) { console.error('getPaperTrades:', error); return []; }
+    return (data || []).map(_rowToTrade); // reuse same deserialiser as real trades
+  }
+
+  async function getOpenPaperTrades() {
+    const all = await getPaperTrades();
+    return all.filter(t => getTradeRemainingQty(t) > 0);
+  }
+
+  async function getPaperTradeById(id) {
+    const uid = _uid();
+    if (!uid) return null;
+    const { data, error } = await _sb().from('paper_trades').select('*').eq('id', id).eq('user_id', uid).single();
+    if (error || !data) return null;
+    return _rowToTrade(data);
+  }
+
+  async function savePaperTrade(trade) {
+    const uid = _uid();
+    if (!uid) throw new Error('Not authenticated');
+    const row = _tradeToRow(trade); // reuse same serialiser as real trades
+    row.user_id = uid;
+    const { error } = await _sb().from('paper_trades').upsert(row);
+    if (error) { console.error('savePaperTrade:', error); throw new Error(error.message); }
+    _notifyChange('paper_trades_updated');
+  }
+
+  async function deletePaperTrade(id) {
+    const { error } = await _sb().from('paper_trades').delete().eq('id', id);
+    if (error) { console.error('deletePaperTrade:', error); throw new Error(error.message); }
+    _notifyChange('paper_trades_updated');
   }
 
   // ── Utility ───────────────────────────────────────────────────────────────
@@ -514,6 +551,8 @@ const db = (() => {
     getEquitySnapshots, saveEquitySnapshot,
     // Watchlist
     getWatchlist, saveWatchlistItem, deleteWatchlistItem,
+    // Paper Trades
+    getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility
     isSeeded, markSeeded, clearAll, resetAllData, on, off, generateId,
   };
