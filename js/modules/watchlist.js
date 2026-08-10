@@ -1,18 +1,14 @@
 ﻿/**
  * watchlist.js — Watchlist Module
  * Mirrors the coding style of positions.js exactly.
- * Track setup stocks with trigger/stop, auto-calc position size.
  */
 const WatchlistModule = (() => {
-  let _selectedItemId = null;
-
-  // ── Init (called by app.navigate) ─────────────────────────────────────────
+  // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
     await _renderTable();
     _setupAddBtn();
   }
 
-  // ── Setup "Add to Watchlist" button — cloned to clear stale listeners ─────
   function _setupAddBtn() {
     const btn = document.getElementById('btn-add-watchlist');
     if (!btn) return;
@@ -52,9 +48,21 @@ const WatchlistModule = (() => {
       const totalQty     = riskPerShare > 0 ? Math.floor(rpt / riskPerShare) : 0;
       const initialQty   = Math.floor(totalQty / 2);
 
-      const statusBadge = item.status === 'triggered'
-        ? `<span class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#9889; Triggered</span>`
-        : `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#128065; Monitoring</span>`;
+      let statusCell, actionsCell;
+
+      if (item.status === 'executed') {
+        statusCell = `<span class="badge" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#10003; Executed</span>`;
+        actionsCell = `<button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
+      } else if (item.status === 'triggered') {
+        statusCell = `<span class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#9889; Triggered</span>`;
+        actionsCell = `
+          <button class="btn btn-primary btn-sm" onclick="WatchlistModule._showExecuteModal('${item.id}')" title="Execute as real trade" style="margin-right:4px">&#9654; Execute</button>
+          <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._createPaperTrade('${item.id}')" title="Simulate as paper trade" style="margin-right:4px">&#128196; Paper</button>
+          <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
+      } else {
+        statusCell = `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#128065; Monitoring</span>`;
+        actionsCell = `<button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
+      }
 
       return `<tr>
         <td><strong>${item.symbol}</strong>${item.sector ? ` <span class="badge badge-muted" style="font-size:10px">${item.sector}</span>` : ''}</td>
@@ -62,10 +70,8 @@ const WatchlistModule = (() => {
         <td class="font-mono">&#8377;${calc.formatNumber(sl)}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(riskPerShare)}</td>
         <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(50% of ${totalQty})</span></td>
-        <td>${statusBadge}</td>
-        <td style="text-align:right">
-          <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>
-        </td>
+        <td>${statusCell}</td>
+        <td style="text-align:right;white-space:nowrap">${actionsCell}</td>
       </tr>`;
     }).join('');
   }
@@ -113,7 +119,7 @@ const WatchlistModule = (() => {
           const stop    = parseFloat(document.getElementById('wl-stop')?.value);
           const sector  = document.getElementById('wl-sector')?.value;
           const notes   = document.getElementById('wl-notes')?.value;
-          if (!symbol)              { app.toast('Symbol is required', 'error'); return; }
+          if (!symbol)                  { app.toast('Symbol is required', 'error'); return; }
           if (!trigger || trigger <= 0) { app.toast('Trigger Buy Price is required', 'error'); return; }
           if (!stop    || stop    <= 0) { app.toast('Stop Loss is required', 'error'); return; }
           if (stop >= trigger)          { app.toast('Stop Loss must be below Trigger price', 'error'); return; }
@@ -123,6 +129,156 @@ const WatchlistModule = (() => {
           await _renderTable();
       }}
     ]);
+  }
+
+  // ── Execute Real Trade (pre-fills the New Trade modal) ────────────────────
+  async function _showExecuteModal(itemId) {
+    const watchlist = await db.getWatchlist();
+    const item = watchlist.find(w => w.id === itemId);
+    if (!item) return;
+
+    const playbooks = (await db.getPlaybooks()).filter(p => p.status === 'Active');
+    const today     = new Date().toISOString().split('T')[0];
+    const settings  = await db.getSettings();
+    const capList   = await db.getCapital();
+    const closedT   = await db.getClosedTrades();
+    const realPnl   = calc.getTotalPnl(closedT);
+    const equity    = calc.getCurrentEquity(capList, realPnl);
+    const defRPT    = calc.getCurrentR(equity, settings);
+
+    const trigger      = Number(item.trigger_price) || 0;
+    const sl           = Number(item.stop_loss)     || 0;
+    const riskPerShare = Math.abs(trigger - sl);
+    const totalQty     = riskPerShare > 0 ? Math.floor(defRPT / riskPerShare) : 0;
+    const initialQty   = Math.floor(totalQty / 2);
+
+    // Mirror _showNewTradeModal but with pre-filled values from watchlist item
+    const sectorOptions = ['Banking','IT','Energy','Pharma','FMCG','Auto','Telecom','Chemicals','NBFC','Consumer','Cement','Other']
+      .map(s => `<option${s === item.sector ? ' selected' : ''}>${s}</option>`).join('');
+
+    const content = `
+      <div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#fbbf24">
+        &#9889; <strong>Watchlist Triggered:</strong> ${item.symbol} — Pre-filled from your watchlist setup. Review and confirm.
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Symbol *</label>
+          <input class="form-input" id="nt-symbol" value="${item.symbol}" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="form-group"><label class="form-label">Sector</label>
+          <select class="form-select" id="nt-sector">${sectorOptions}</select></div>
+        <div class="form-group"><label class="form-label">Trade Type</label>
+          <select class="form-select" id="nt-type" onchange="positionsModule._autoCalcTrade('type')">
+            <option>Equity</option><option>Intraday</option><option>Futures</option></select></div>
+        <div class="form-group"><label class="form-label">Direction</label>
+          <select class="form-select" id="nt-direction"><option>Long</option><option>Short</option></select></div>
+        <div class="form-group"><label class="form-label">Exchange</label>
+          <select class="form-select" id="nt-exchange"><option value="NSE" selected>NSE</option><option value="BSE">BSE</option></select></div>
+        <div class="form-group"><label class="form-label">Playbook</label>
+          <select class="form-select" id="nt-playbook">
+            <option value="">&#8212; None &#8212;</option>
+            ${playbooks.map(p => `<option value="${p.id}">${p.name} (v${p.currentVersion})</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label class="form-label">Entry Date *</label>
+          <input class="form-input" type="date" id="nt-date" value="${today}"></div>
+        <div class="form-group"><label class="form-label">Entry Price (&#8377;) *</label>
+          <input class="form-input" type="number" id="nt-price" step="0.05" value="${trigger}" oninput="positionsModule._autoCalcTrade('price')"></div>
+        <div class="form-group"><label class="form-label">Initial Stop Loss (&#8377;) *</label>
+          <input class="form-input" type="number" id="nt-stop" step="0.05" value="${sl}" oninput="positionsModule._autoCalcTrade('stop')"></div>
+        <div class="form-group"><label class="form-label">Qty *</label>
+          <input class="form-input" type="number" id="nt-qty" min="1" value="${initialQty}" oninput="positionsModule._autoCalcTrade('qty')"></div>
+        <div class="form-group"><label class="form-label">RPT (&#8377;) <span style="color:var(--text-muted);font-weight:400">(auto / default: ${calc.formatCurrency(defRPT)})</span></label>
+          <input class="form-input" type="number" id="nt-rpt" placeholder="${defRPT.toFixed(0)}" oninput="positionsModule._autoCalcTrade('rpt')"></div>
+        <div class="form-group"><label class="form-label">Charges (&#8377;)</label>
+          <input class="form-input" type="number" id="nt-charges" value="0"></div>
+        <div class="form-group"><label class="form-label">CMP <span style="font-size:11px;color:var(--text-muted);font-weight:400">&#8212; auto-fetched on save</span></label>
+          <input class="form-input" type="number" id="nt-cmp" step="0.05" placeholder="${trigger}"></div>
+      </div>`;
+
+    // Reuse positions module's save logic by caching settings
+    positionsModule._cachedSettings  = settings;
+    positionsModule._cachedDefRPT    = defRPT;
+
+    app.openModal(`Execute Trade &#8212; ${item.symbol}`, content, [
+      { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'save',   label: '&#9654; Confirm Trade', class: 'btn-primary', onClick: async () => {
+          const sym     = document.getElementById('nt-symbol').value.trim().toUpperCase();
+          const sector  = document.getElementById('nt-sector').value;
+          const ttType  = document.getElementById('nt-type').value;
+          const dir     = document.getElementById('nt-direction').value;
+          const exch    = document.getElementById('nt-exchange').value;
+          const pbId    = document.getElementById('nt-playbook').value;
+          const date    = document.getElementById('nt-date').value;
+          const price   = parseFloat(document.getElementById('nt-price').value);
+          const qty     = parseInt(document.getElementById('nt-qty').value);
+          const stop    = parseFloat(document.getElementById('nt-stop').value);
+          const rpt     = parseFloat(document.getElementById('nt-rpt').value) || Math.abs((price - stop) * qty) || defRPT;
+          const charges = parseFloat(document.getElementById('nt-charges').value) || 0;
+          const cmp     = parseFloat(document.getElementById('nt-cmp').value) || price;
+
+          if (!sym || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
+
+          const pb = pbId ? await db.getPlaybookById(pbId) : null;
+          const trade = {
+            id: db.generateId('tr'), symbol: sym, sector, tradeType: ttType, direction: dir, exchange: exch,
+            playbookId: pbId, playbookVersion: pbId ? pb?.currentVersion || '1.0' : '',
+            initialStop: stop, currentStop: stop, rpt,
+            entryATR: null, swingLow: null,
+            entries:      [{ id: db.generateId('en'), date, price, qty, charges, notes: `From Watchlist: ${item.symbol}` }],
+            pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource: 'Manual', notes: 'Initial stop from Watchlist trigger' }],
+            partialExits: [], finalExit: null, notes: [], alerts: [],
+            ruleFollowed: true, reviewStatus: 'Pending', rating: 0,
+            chartLink: `https://www.tradingview.com/chart/?symbol=${exch}:${sym}`, tags: [sector],
+            cmp, createdAt: date, closedAt: null
+          };
+          await db.saveTrade(trade);
+          // Mark watchlist item as executed
+          await db.saveWatchlistItem({ ...item, status: 'executed' });
+          app.closeModal();
+          app.toast(`Trade executed: ${sym}`, 'success');
+          await _renderTable();
+      }}
+    ]);
+  }
+
+  // ── Create Paper Trade (no modal — instant simulation record) ────────────
+  async function _createPaperTrade(itemId) {
+    const watchlist = await db.getWatchlist();
+    const item = watchlist.find(w => w.id === itemId);
+    if (!item) return;
+
+    const settings     = await db.getSettings();
+    const capList      = await db.getCapital();
+    const closedT      = await db.getClosedTrades();
+    const realPnl      = calc.getTotalPnl(closedT);
+    const equity       = calc.getCurrentEquity(capList, realPnl);
+    const defRPT       = calc.getCurrentR(equity, settings);
+    const trigger      = Number(item.trigger_price) || 0;
+    const sl           = Number(item.stop_loss)     || 0;
+    const riskPerShare = Math.abs(trigger - sl);
+    const totalQty     = riskPerShare > 0 ? Math.floor(defRPT / riskPerShare) : 0;
+    const initialQty   = Math.floor(totalQty / 2);
+    const today        = new Date().toISOString().split('T')[0];
+
+    if (initialQty <= 0) { app.toast('Cannot compute position size — check RPT and price levels', 'error'); return; }
+
+    const paperTrade = {
+      id: db.generateId('pt'), symbol: item.symbol, sector: item.sector || 'Other',
+      tradeType: 'Equity', direction: 'Long', exchange: 'NSE',
+      playbookId: '', playbookVersion: '',
+      initialStop: sl, currentStop: sl, rpt: defRPT,
+      entryATR: null, swingLow: null,
+      entries:      [{ id: db.generateId('en'), date: today, price: trigger, qty: initialQty, charges: 0, notes: `Paper trade from Watchlist: ${item.symbol}` }],
+      pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date: today, oldStop: 0, newStop: sl, actionSource: 'Auto', notes: 'Auto-created from Watchlist trigger' }],
+      partialExits: [], finalExit: null, notes: [], alerts: [],
+      ruleFollowed: true, reviewStatus: 'Paper', rating: 0,
+      chartLink: `https://www.tradingview.com/chart/?symbol=NSE:${item.symbol}`, tags: [item.sector || 'Other'],
+      cmp: trigger, createdAt: today, closedAt: null
+    };
+
+    await db.savePaperTrade(paperTrade);
+    // Mark watchlist item as executed
+    await db.saveWatchlistItem({ ...item, status: 'executed' });
+    app.toast(`&#128196; Paper trade created for ${item.symbol} — simulation running`, 'success');
+    await _renderTable();
   }
 
   // ── Live Qty Calculator ───────────────────────────────────────────────────
@@ -159,7 +315,7 @@ const WatchlistModule = (() => {
     await _renderTable();
   }
 
-  return { init, _renderTable, _showAddModal, _calcQty, _deleteItem };
+  return { init, _renderTable, _showAddModal, _showExecuteModal, _createPaperTrade, _calcQty, _deleteItem };
 })();
 
 window.WatchlistModule = WatchlistModule;
