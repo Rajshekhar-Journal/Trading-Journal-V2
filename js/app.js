@@ -5,7 +5,7 @@
 
 const app = (() => {
   let _currentModule = 'dashboard';
-  const _modules = { dashboard: dashboardModule, positions: positionsModule, trades: tradesModule, playbook: playbookModule, analytics: analyticsModule, capital: capitalModule, settings: settingsModule };
+  const _modules = { dashboard: dashboardModule, watchlist: window.WatchlistModule, positions: positionsModule, trades: tradesModule, playbook: playbookModule, analytics: analyticsModule, capital: capitalModule, settings: settingsModule };
 
   // Phase 2: async init with auth guard
   async function init() {
