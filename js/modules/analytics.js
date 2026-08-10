@@ -67,19 +67,17 @@ const analyticsModule = (() => {
   // ── Mode Toggle (Real ↔ Paper) ──────────────────────────────────────────────
   async function setMode(mode) {
     _mode = mode;
-    // Update button styles
     const realBtn  = document.getElementById('anl-mode-real');
     const paperBtn = document.getElementById('anl-mode-paper');
     if (realBtn && paperBtn) {
       if (mode === 'real') {
-        realBtn.style.background  = 'var(--accent)'; realBtn.style.color  = '#fff';
-        paperBtn.style.background = 'transparent';   paperBtn.style.color = 'var(--text-muted)';
+        realBtn.style.background  = '#4f46e5'; realBtn.style.color  = '#ffffff'; realBtn.style.fontWeight = '700';
+        paperBtn.style.background = 'transparent'; paperBtn.style.color = '#a5b4fc'; paperBtn.style.fontWeight = '600';
       } else {
-        paperBtn.style.background = 'var(--accent)'; paperBtn.style.color  = '#fff';
-        realBtn.style.background  = 'transparent';   realBtn.style.color  = 'var(--text-muted)';
+        paperBtn.style.background = '#4f46e5'; paperBtn.style.color  = '#ffffff'; paperBtn.style.fontWeight = '700';
+        realBtn.style.background  = 'transparent'; realBtn.style.color  = '#a5b4fc'; realBtn.style.fontWeight = '600';
       }
     }
-    // Show paper mode banner
     const banner = document.getElementById('anl-paper-banner');
     if (banner) banner.style.display = mode === 'paper' ? 'flex' : 'none';
     await _renderTab(_activeTab);
