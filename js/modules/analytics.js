@@ -5,6 +5,7 @@
 const analyticsModule = (() => {
   let _range = 'YTD';
   let _activeTab = 'performance';
+  let _mode = 'real'; // 'real' | 'paper'
   let _charts = [];
 
   async function init() {
@@ -44,7 +45,16 @@ const analyticsModule = (() => {
     _charts = [];
     const el = document.getElementById('anl-content');
     if (!el) return;
-    const closedTrades = await db.getClosedTrades();
+
+    // Mode-aware data source
+    let closedTrades;
+    if (_mode === 'paper') {
+      const all = await db.getPaperTrades();
+      closedTrades = all.filter(t => db.getTradeRemainingQty(t) <= 0);
+    } else {
+      closedTrades = await db.getClosedTrades();
+    }
+
     const trades = calc.filterByDateRange(closedTrades, _range);
     if (tab === 'performance') await _tabPerformance(el, trades);
     else if (tab === 'trade-analytics') _tabTradeAnalytics(el, trades);
@@ -52,6 +62,27 @@ const analyticsModule = (() => {
     else if (tab === 'risk') await _tabRisk(el, trades);
     else if (tab === 'discipline') _tabDiscipline(el, trades);
     else if (tab === 'simulator') await _tabSimulator(el, trades);
+  }
+
+  // ── Mode Toggle (Real ↔ Paper) ──────────────────────────────────────────────
+  async function setMode(mode) {
+    _mode = mode;
+    // Update button styles
+    const realBtn  = document.getElementById('anl-mode-real');
+    const paperBtn = document.getElementById('anl-mode-paper');
+    if (realBtn && paperBtn) {
+      if (mode === 'real') {
+        realBtn.style.background  = 'var(--accent)'; realBtn.style.color  = '#fff';
+        paperBtn.style.background = 'transparent';   paperBtn.style.color = 'var(--text-muted)';
+      } else {
+        paperBtn.style.background = 'var(--accent)'; paperBtn.style.color  = '#fff';
+        realBtn.style.background  = 'transparent';   realBtn.style.color  = 'var(--text-muted)';
+      }
+    }
+    // Show paper mode banner
+    const banner = document.getElementById('anl-paper-banner');
+    if (banner) banner.style.display = mode === 'paper' ? 'flex' : 'none';
+    await _renderTab(_activeTab);
   }
 
   // ── TAB 1: Performance ─────────────────────────────────────────────────────
@@ -617,5 +648,5 @@ const analyticsModule = (() => {
     });
   }
 
-  return { init, _simRecalc, _simUpdateBucket, _simAddRow, _simDeleteRow, _simAutoFill, _switchCumChart };
+  return { init, setMode, _simRecalc, _simUpdateBucket, _simAddRow, _simDeleteRow, _simAutoFill, _switchCumChart };
 })();
