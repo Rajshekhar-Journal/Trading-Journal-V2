@@ -122,8 +122,8 @@
           <button class="btn btn-primary" id="btn-add-watchlist">+ Add to Watchlist</button>
         </div>
       </div>
-      <div class="split-view">
-        <div class="split-left" style="flex: 1; max-width: 100%;">
+      <div class="split-view" id="watchlist-split-view">
+        <div class="split-left" id="watchlist-table-panel">
           <div class="card" style="height:100%;display:flex;flex-direction:column">
             <div class="card-header"><span class="card-title">Active Watchlist</span></div>
             <div class="table-wrap" style="flex:1;overflow-y:auto">
@@ -136,7 +136,6 @@
                     <th>Risk/Share</th>
                     <th>Initial Qty</th>
                     <th>Status</th>
-                    <th style="width:100px;text-align:right">Actions</th>
                   </tr>
                 </thead>
                 <tbody id="watchlist-tbody">
@@ -145,6 +144,9 @@
               </table>
             </div>
           </div>
+        </div>
+        <div class="split-right hidden" id="watchlist-detail-panel">
+          <!-- Detail panel for Watchlist actions will render here -->
         </div>
       </div>
     </div>
@@ -372,10 +374,10 @@
 
     <!-- WATCHLIST MODAL -->
     <div id="watchlist-modal" class="modal-overlay hidden">
-      <div class="modal">
+      <div class="modal-container">
         <div class="modal-header">
-          <h2 class="modal-title">Add to Watchlist</h2>
-          <button class="btn-close" id="btn-close-watchlist-modal">&times;</button>
+          <h3 class="modal-title">Add to Watchlist</h3>
+          <button class="modal-close" id="btn-close-watchlist-modal">✕</button>
         </div>
         <div class="modal-body">
           <form id="watchlist-form">
