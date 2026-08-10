@@ -27,6 +27,7 @@
     </div>
     <div class="nav-modules">
       <button class="nav-btn" data-module="dashboard">Dashboard</button>
+      <button class="nav-btn" data-module="watchlist">Watchlist</button>
       <button class="nav-btn" data-module="positions">Positions</button>
       <button class="nav-btn" data-module="trades">Trades</button>
       <button class="nav-btn" data-module="playbook">Playbook</button>
@@ -107,6 +108,37 @@
             </table>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- MODULE 01B: WATCHLIST -->
+    <div id="mod-watchlist" class="module-page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Watchlist</h1>
+          <p class="page-subtitle">Track setups and trigger alerts for execution</p>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="btn-add-watchlist">+ New Alert</button>
+        </div>
+      </div>
+      <div class="card" style="padding:0">
+        <table class="data-table" id="watchlist-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Trigger Buy</th>
+              <th>Stop Loss</th>
+              <th>Risk/Share</th>
+              <th>Initial Qty</th>
+              <th>Status</th>
+              <th style="width:100px;text-align:right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="watchlist-tbody">
+            <!-- Rendered via JS -->
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -331,6 +363,38 @@
 
   </main>
 
+    <!-- WATCHLIST MODAL -->
+    <div id="watchlist-modal" class="modal-overlay">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 class="modal-title">Add to Watchlist</h2>
+          <button class="btn-close" id="btn-close-watchlist-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="watchlist-form">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Symbol <span class="required">*</span></label>
+                <input type="text" id="wl-symbol" class="form-control" required placeholder="e.g. RELIANCE.NS" style="text-transform:uppercase">
+              </div>
+              <div class="form-group">
+                <label>Trigger Buy Price <span class="required">*</span></label>
+                <input type="number" step="0.05" id="wl-trigger" class="form-control" required>
+              </div>
+              <div class="form-group">
+                <label>Pre-defined Stop Loss <span class="required">*</span></label>
+                <input type="number" step="0.05" id="wl-stop" class="form-control" required>
+              </div>
+            </div>
+            <div class="modal-footer" style="margin-top:20px;">
+              <button type="button" class="btn btn-secondary" id="btn-cancel-watchlist">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save to Watchlist</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
   <!-- GLOBAL MODAL -->
   <div id="modal-overlay" class="modal-overlay hidden">
     <div id="modal-container" class="modal-container"></div>
@@ -352,6 +416,7 @@
   <script src="js/charts.js?v=2.2.1"></script>
   <!-- 4. Module view-controllers -->
   <script src="js/modules/dashboard.js?v=2.2.1"></script>
+  <script src="js/modules/watchlist.js?v=2.2.1"></script>
   <script src="js/modules/positions.js?v=2.2.1"></script>
   <script src="js/modules/trades.js?v=2.2.1"></script>
   <script src="js/modules/playbook.js?v=2.2.1"></script>
