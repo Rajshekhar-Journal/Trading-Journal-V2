@@ -81,13 +81,18 @@ const alertEngine = (() => {
   }
 
   // ── Main Entry Point ────────────────────────────────────────────────
-  async function checkAllAlerts(trades, customSettings = null, customOhlcMap = null, isEndOfDay = false) {
-    if (!trades || !trades.length) return false;
+  async function checkAllAlerts(trades, customSettings = null, customOhlcMap = null, isEndOfDay = false, activeWatchlist = []) {
+    if (!trades?.length && !activeWatchlist?.length) return false;
     const settings = customSettings || await db.getSettings();
     const alertConfig = settings?.alerts || {};
     const ohlcMap = customOhlcMap || {};
     const updated = [];
     const calc = window.calc || {};
+
+    // ── 1. Monitor Watchlist ──────────────────────────────────────────
+    if (activeWatchlist && activeWatchlist.length > 0) {
+      await _monitorWatchlist(activeWatchlist, ohlcMap, settings);
+    }
 
     for (const trade of trades) {
       // ── Legacy v2.0 Alert Cleanup ──
@@ -419,6 +424,31 @@ const alertEngine = (() => {
     }
 
     return updated;
+  }
+
+  // ── Watchlist Monitor ───────────────────────────────────────────────
+  async function _monitorWatchlist(activeWatchlist, ohlcMap, settings) {
+    for (const item of activeWatchlist) {
+      const candles = ohlcMap[item.symbol];
+      if (!candles || candles.length === 0) continue;
+      
+      const lastCandle = candles[candles.length - 1];
+      const cmp = lastCandle.close; // Assuming live CMP is pushed to last candle close
+      const trigger = Number(item.trigger_price) || 0;
+
+      if (cmp >= trigger) {
+        const message = `WATCHLIST TRIGGERED: ${item.symbol}\nCMP: ₹${cmp} >= Trigger: ₹${trigger}\nAction: Open App to Execute or Paper Trade`;
+        
+        // Update DB
+        item.status = 'triggered';
+        await db.saveWatchlistItem(item);
+
+        // Telegram
+        if (settings.telegramBotToken && settings.telegramChatId) {
+           await _sendTelegram(settings, item.symbol, "WATCHLIST TRIGGER", message);
+        }
+      }
+    }
   }
 
   // ── Upsert Alert (create or update) ──────────────────────────────────
