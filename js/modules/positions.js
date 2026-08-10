@@ -88,28 +88,36 @@ const positionsModule = (() => {
     }
 
     const openTrades = await db.getOpenTrades();
-    if (!openTrades.length) return;
+    const watchlist = (await db.getWatchlist()) || [];
+    const activeWatchlist = watchlist.filter(w => w.status === 'monitoring');
+
+    if (!openTrades.length && !activeWatchlist.length) return;
     let updated = false;
     const ohlcMap = {}; // { 'RELIANCE': [{open,high,low,close}, ...] }
 
+    const allSymbols = [...new Set([...openTrades.map(t => t.symbol), ...activeWatchlist.map(w => w.symbol)])];
+
     // Fetch live price + historical candles for alerts
-    await Promise.all(openTrades.map(async trade => {
-      const res = await _fetchLiveCmp(trade.symbol, true); // true = get full OHLC
+    await Promise.all(allSymbols.map(async symbol => {
+      const res = await _fetchLiveCmp(symbol, true); // true = get full OHLC
       if (!res) return;
       const { price, candles } = res;
-      ohlcMap[trade.symbol] = candles;
+      ohlcMap[symbol] = candles;
       
-      if (price && Math.abs(price - (trade.cmp || 0)) > 0.01) {
-        await db.saveTrade({ ...trade, cmp: price });
-        updated = true;
-        const cell = document.querySelector(`[data-cmp-cell="${trade.id}"]`);
-        if (cell) cell.textContent = `₹${calc.formatNumber(price)}`;
+      const tradesWithSym = openTrades.filter(t => t.symbol === symbol);
+      for (const trade of tradesWithSym) {
+        if (price && Math.abs(price - (trade.cmp || 0)) > 0.01) {
+          await db.saveTrade({ ...trade, cmp: price });
+          updated = true;
+          const cell = document.querySelector(`[data-cmp-cell="${trade.id}"]`);
+          if (cell) cell.textContent = `₹${calc.formatNumber(price)}`;
+        }
       }
     }));
 
     // Re-fetch trades in case cmp was updated, then run advanced alert engine
     const currentTrades = await db.getOpenTrades();
-    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, settings, ohlcMap, isEndOfDay);
+    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, settings, ohlcMap, isEndOfDay, activeWatchlist);
     if (alertsUpdated?.length) updated = true;
 
     // Refresh UI if necessary
