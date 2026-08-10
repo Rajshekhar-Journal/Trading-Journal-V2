@@ -69,11 +69,11 @@ window.WatchlistModule = (function() {
 
   function _openModal() {
     document.getElementById('watchlist-form').reset();
-    document.getElementById('watchlist-modal').classList.add('show');
+    document.getElementById('watchlist-modal').classList.remove('hidden');
   }
 
   function _closeModal() {
-    document.getElementById('watchlist-modal').classList.remove('show');
+    document.getElementById('watchlist-modal').classList.add('hidden');
   }
 
   async function _handleSave(e) {
