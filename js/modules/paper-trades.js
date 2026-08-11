@@ -6,6 +6,20 @@
 const PaperTradesModule = (() => {
   let _selectedId = null;
 
+  // ── CMP Fetch Helper ─────────────────────────────────────────────────────
+  const _SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+
+  async function _fetchCmp(symbol) {
+    try {
+      const ticker = symbol.includes('.') ? encodeURIComponent(symbol) : `${encodeURIComponent(symbol)}.NS`;
+      const resp = await fetch(`${_SB_URL}/functions/v1/yahoo-finance?ticker=${ticker}`,
+        { headers: { 'Authorization': `Bearer ${_SB_KEY}` } });
+      const data = await resp.json();
+      return data?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+    } catch { return null; }
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   async function init() {
     await _renderOverviewCards();
@@ -73,7 +87,7 @@ const PaperTradesModule = (() => {
     if (count) count.textContent = `${all.length} simulation${all.length !== 1 ? 's' : ''}`;
 
     if (!all.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:48px 0;color:var(--text-muted)">
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:48px 0;color:var(--text-muted)">
         <div style="font-size:36px;margin-bottom:10px">&#128196;</div>
         <div style="font-weight:600;margin-bottom:4px">No paper trades yet</div>
         <div style="font-size:12px">Go to <strong>Watchlist</strong> and click <strong>&#128196; Paper</strong> on a triggered stock to start a simulation.</div>
@@ -98,8 +112,9 @@ const PaperTradesModule = (() => {
         <td><span class="badge badge-muted" style="font-size:10px">${trade.sector || '—'}</span></td>
         <td>${entryDate}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(entryPrice)}</td>
+        <td id="pt-cmp-${trade.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">${isOpen ? '&#8230;' : '<span style="color:var(--text-muted)">Closed</span>'}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(stop)}</td>
-        <td class="font-mono">${isOpen ? m.openQty : '<span style="color:var(--text-muted)">Closed</span>'}</td>
+        <td class="font-mono">${isOpen ? m.openQty : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td class="font-mono" style="color:${pnlColor};font-weight:600">
           ${pnl !== 0 ? (pnl > 0 ? '+' : '') + '&#8377;' + calc.formatNumber(Math.abs(pnl)) : '&#8212;'}
           ${r !== 0 ? `<span style="font-size:11px;opacity:0.75">&nbsp;(${r > 0 ? '+' : ''}${r.toFixed(2)}R)</span>` : ''}
