@@ -1,0 +1,408 @@
+﻿/**
+ * mobile.css — TradeJournal Mobile Layout
+ * Only active on screens <= 767px. Desktop unchanged.
+ */
+
+/* ── Bottom Nav ─────────────────────────────────────────────────── */
+#mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+
+  /* ── Global resets ─────────────────────────────────────────────── */
+  body {
+    padding-bottom: 72px !important; /* space for bottom nav */
+  }
+
+  /* ── Hide desktop nav ──────────────────────────────────────────── */
+  .topnav {
+    display: none !important;
+  }
+
+  /* ── Main content padding ──────────────────────────────────────── */
+  .main-content {
+    padding: 12px 12px 0 12px !important;
+  }
+
+  /* ── Module page header ────────────────────────────────────────── */
+  .module-page > h1,
+  .module-page > .page-header {
+    font-size: 20px !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* ── Hide desktop tables ───────────────────────────────────────── */
+  .data-table {
+    display: none !important;
+  }
+
+  /* ── Hide split-right (detail panel) on mobile by default ─────── */
+  .split-right {
+    display: none !important;
+  }
+
+  /* ── Hide desktop action buttons not needed on mobile ─────────── */
+  #btn-new-trade,
+  #btn-add-watchlist,
+  .btn-new-paper-trade {
+    display: none !important;
+  }
+
+  /* ── Stats cards — horizontal scroll ──────────────────────────── */
+  .stats-row,
+  #pos-overview-cards,
+  #pt-overview-cards {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    gap: 10px !important;
+    padding-bottom: 8px !important;
+    scrollbar-width: none !important;
+  }
+  .stats-row::-webkit-scrollbar { display: none; }
+
+  .stat-card {
+    min-width: 140px !important;
+    flex-shrink: 0 !important;
+    padding: 12px !important;
+  }
+
+  /* ── Mobile Cards Container ────────────────────────────────────── */
+  .mobile-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  /* ── Trade Card ────────────────────────────────────────────────── */
+  .mobile-trade-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .mobile-trade-card:active {
+    transform: scale(0.98);
+    border-color: var(--accent);
+  }
+
+  .mobile-trade-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 14px 0 0 14px;
+  }
+
+  .mobile-trade-card.card-loss::before { background: #ef4444; }
+  .mobile-trade-card.card-profit::before { background: #10b981; }
+  .mobile-trade-card.card-neutral::before { background: var(--text-muted); }
+
+  .mobile-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-symbol {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: 0.3px;
+  }
+
+  .mobile-card-sector {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .mobile-card-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+
+  .mobile-card-mid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .mobile-card-field {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .mobile-card-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .mobile-card-value {
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+  }
+
+  .mobile-card-bottom {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .mobile-alert-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-alert-pill.alert-stop {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+
+  .mobile-alert-pill.alert-ok {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--text-muted);
+    border-color: transparent;
+    font-weight: 400;
+  }
+
+  /* ── Bottom Sheet (detail view) ────────────────────────────────── */
+  #mobile-bottom-sheet {
+    position: fixed;
+    bottom: 72px; /* above bottom nav */
+    left: 0; right: 0;
+    background: var(--surface-elevated, #1a1d2e);
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid var(--border);
+    z-index: 1000;
+    max-height: 80vh;
+    overflow-y: auto;
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 0 16px 24px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #mobile-bottom-sheet.sheet-open {
+    transform: translateY(0);
+  }
+
+  .sheet-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 12px auto 16px;
+  }
+
+  .sheet-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .sheet-close-btn {
+    background: var(--border);
+    border: none;
+    color: var(--text-muted);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sheet-section {
+    margin-bottom: 16px;
+  }
+
+  .sheet-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .sheet-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .sheet-field {
+    background: var(--surface);
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+
+  .sheet-field-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .sheet-field-value {
+    font-size: 15px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-primary);
+  }
+
+  /* ── Alert detail in sheet ─────────────────────────────────────── */
+  .sheet-alert-box {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary, #a0a8c0);
+    white-space: pre-wrap;
+  }
+
+  .sheet-alert-box.alert-stop {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.25);
+  }
+
+  /* ── Bottom Sheet Backdrop ─────────────────────────────────────── */
+  #mobile-sheet-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 999;
+  }
+
+  #mobile-sheet-backdrop.active { display: block; }
+
+  /* ── Bottom Navigation ─────────────────────────────────────────── */
+  #mobile-bottom-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 64px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    z-index: 998;
+    align-items: stretch;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .mobile-nav-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    transition: color 0.2s;
+    position: relative;
+    padding: 0;
+  }
+
+  .mobile-nav-tab.active {
+    color: var(--accent, #5b6af0);
+  }
+
+  .mobile-nav-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 25%; right: 25%;
+    height: 2px;
+    background: var(--accent, #5b6af0);
+    border-radius: 0 0 2px 2px;
+  }
+
+  .mobile-nav-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .mobile-nav-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .mobile-nav-badge {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 16px);
+    background: #ef4444;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
+  }
+
+  /* ── Empty states ──────────────────────────────────────────────── */
+  .mobile-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-muted);
+  }
+
+  .mobile-empty-icon { font-size: 40px; margin-bottom: 12px; }
+  .mobile-empty-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+  .mobile-empty-sub { font-size: 12px; }
+
+  /* ── Watchlist card variant ────────────────────────────────────── */
+  .mobile-trade-card.card-triggered::before { background: #f59e0b; }
+  .mobile-trigger-pct {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 10px;
+  }
+
+}
