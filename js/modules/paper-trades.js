@@ -112,7 +112,7 @@ const PaperTradesModule = (() => {
         <td><span class="badge badge-muted" style="font-size:10px">${trade.sector || '—'}</span></td>
         <td>${entryDate}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(entryPrice)}</td>
-        <td id="pt-cmp-${trade.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">${isOpen ? '&#8230;' : '<span style="color:var(--text-muted)">Closed</span>'}</td>
+        <td id="pt-cmp-${trade.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">${isOpen ? '&#8230;' : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(stop)}</td>
         <td class="font-mono">${isOpen ? m.openQty : '<span style="color:var(--text-muted)">—</span>'}</td>
         <td class="font-mono" style="color:${pnlColor};font-weight:600">
@@ -122,6 +122,21 @@ const PaperTradesModule = (() => {
         <td>${status}</td>
       </tr>`;
     }).join('');
+
+    // Fetch live CMP for open paper trades and fill in asynchronously
+    all.filter(t => db.getTradeRemainingQty(t) > 0).forEach(async trade => {
+      const cell = document.getElementById(`pt-cmp-${trade.id}`);
+      if (!cell) return;
+      const entryPrice = trade.entries?.[0]?.price || 0;
+      const cmp = await _fetchCmp(trade.symbol);
+      if (cmp === null) { cell.innerHTML = '<span style="color:var(--text-muted)">—</span>'; return; }
+      const isShort = trade.direction === 'Short';
+      const profit  = isShort ? cmp < entryPrice : cmp > entryPrice;
+      const pctDiff = entryPrice > 0 ? (((cmp - entryPrice) / entryPrice) * 100).toFixed(1) : 0;
+      const sign    = pctDiff >= 0 ? '+' : '';
+      const color   = profit ? '#10b981' : '#ef4444';
+      cell.innerHTML = `<span style="color:${color};font-weight:600">&#8377;${calc.formatNumber(cmp)}</span><span style="font-size:10px;color:${color};opacity:0.8">&nbsp;${sign}${pctDiff}%</span>`;
+    });
   }
 
   // ── Row Click → Open Detail Panel ─────────────────────────────────────────
