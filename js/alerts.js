@@ -633,7 +633,21 @@ const alertEngine = (() => {
     if (!settings.telegramBotToken || !settings.telegramChatId) return;
     try {
       const url = `https://api.telegram.org/bot${settings.telegramBotToken}/sendMessage`;
-      const text = `🚨 *EXIT ALERT* 🚨\n\n*Symbol:* ${symbol}\n*Phase:* ${phase}\n\n*Action Required:*\n${instruction}`;
+
+      // Choose header and emoji based on alert type
+      let header, emoji;
+      const p = (phase || '').toUpperCase();
+      if (p.includes('WATCHLIST')) {
+        emoji  = '📋'; header = 'WATCHLIST ALERT';
+      } else if (p.includes('STOP')) {
+        emoji  = '🛑'; header = 'STOP LOSS ALERT';
+      } else if (p.includes('GTT') || p.includes('TRANCHE')) {
+        emoji  = '🎯'; header = 'TARGET HIT ALERT';
+      } else {
+        emoji  = '🚨'; header = 'EXIT ALERT';
+      }
+
+      const text = `${emoji} *${header}* ${emoji}\n\n*Symbol:* ${symbol}\n*Phase:* ${phase}\n\n*Action Required:*\n${instruction}`;
       await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
