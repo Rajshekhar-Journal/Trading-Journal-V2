@@ -473,7 +473,7 @@ const db = (() => {
   async function saveWatchlistItem(item) {
     const uid = _uid();
     if (!uid) { console.error('saveWatchlistItem: not logged in'); return null; }
-    if (!item.id) item.id = _generateId('wl');
+    if (!item.id) item.id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : _generateId('wl');
     const payload = {
       id:            item.id,
       user_id:       uid,
