@@ -382,47 +382,173 @@ const alertEngine = (() => {
     return updated;
   }
 
+  // ── CMP Fetch for Paper Trade Simulation ──────────────────────────────
+  const _PT_SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const _PT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+
+  async function _fetchPaperCmp(symbol) {
+    try {
+      const ticker = symbol.includes('.') ? encodeURIComponent(symbol) : `${encodeURIComponent(symbol)}.NS`;
+      const resp = await fetch(
+        `${_PT_SB_URL}/functions/v1/yahoo-finance?ticker=${ticker}`,
+        { headers: { 'Authorization': `Bearer ${_PT_SB_KEY}` } }
+      );
+      const data = await resp.json();
+      return data?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+    } catch { return null; }
+  }
+
+  // ── Paper Trade Simulation (intraday-aware, mirrors positions engine) ──
   async function _simulatePaperTrades(ohlcMap, settings) {
     if (!window.db || !db.getOpenPaperTrades) return;
     const paperTrades = await db.getOpenPaperTrades();
     if (!paperTrades || !paperTrades.length) return;
-    const today = new Date().toISOString().split('T')[0];
-    const calc  = window.calc || {};
+
+    const today   = new Date().toISOString().split('T')[0];
+    const calc    = window.calc || {};
+
+    // Fetch live CMP for all paper trade symbols in parallel (intraday check)
+    const symbols  = [...new Set(paperTrades.map(t => t.symbol))];
+    const cmpCache = {};
+    await Promise.all(symbols.map(async sym => {
+      cmpCache[sym] = await _fetchPaperCmp(sym);
+    }));
+
     for (const trade of paperTrades) {
-      const candles = ohlcMap[trade.symbol] || ohlcMap[trade.symbol + '.NS'];
-      if (!candles || candles.length < 2) continue;
+      // ── Compute metrics ────────────────────────────────────────────────
       let m;
-      if (calc.getTradeMetrics) m = calc.getTradeMetrics(trade);
-      else {
+      if (calc.getTradeMetrics) {
+        m = calc.getTradeMetrics(trade);
+      } else {
         const ins = [...(trade.entries || []), ...(trade.pyramids || [])];
-        let tq = 0, tc = 0; for (const e of ins) { tq += e.qty; tc += (e.price * e.qty); }
-        const outs = (trade.partialExits || []).reduce((s,e) => s + e.qty, 0);
-        m = { openQty: tq - outs, avgEntryPrice: tq > 0 ? tc/tq : 0, currentStop: trade.currentStop || trade.initialStop };
+        let tq = 0, tc = 0;
+        for (const e of ins) { tq += e.qty; tc += (e.price * e.qty); }
+        const outs = (trade.partialExits || []).reduce((s, e) => s + e.qty, 0);
+        m = { openQty: tq - outs, avgEntryPrice: tq > 0 ? tc / tq : 0, currentStop: trade.currentStop || trade.initialStop };
       }
       if (m.openQty <= 0) continue;
+
       const entryPrice   = m.avgEntryPrice;
+      const currentStop  = m.currentStop || trade.initialStop;
       const riskPerShare = Math.abs(entryPrice - trade.initialStop);
+      const isShort      = trade.direction === 'Short';
       const updated      = { ...trade };
-      let changed        = false;
-      for (const candle of candles) {
+      let   changed      = false;
+
+      // ── ATR extension targets (same as real trade engine) ──────────────
+      const atr      = trade.entryATR || 0;
+      const swingLow = trade.swingLow || entryPrice;
+      const target4  = isShort ? swingLow - 4  * atr : swingLow + 4  * atr;
+      const target8  = isShort ? swingLow - 8  * atr : swingLow + 8  * atr;
+      const target12 = isShort ? swingLow - 12 * atr : swingLow + 12 * atr;
+      const target1R = isShort ? entryPrice - riskPerShare : entryPrice + riskPerShare;
+
+      // Helper: has this exit already been recorded?
+      const hasExit = (src) => (updated.partialExits || []).some(e => e.actionSource?.includes(src));
+
+      // ── PASS 1: Historical candles — fill in any missed past exits ─────
+      const histCandles = ohlcMap[trade.symbol] || ohlcMap[trade.symbol + '.NS'] || [];
+      for (const candle of histCandles) {
+        if (updated.finalExit) break;
         const { high, low, time } = candle;
         const candleDate = time ? new Date(time * 1000).toISOString().split('T')[0] : today;
-        const isShort    = trade.direction === 'Short';
-        if ((isShort ? high >= m.currentStop : low <= m.currentStop) && updated.finalExit === null) {
-          updated.finalExit = { id: db.generateId('pe'), date: candleDate, price: m.currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper)' };
+        if (candleDate >= today) continue; // today handled by live CMP below
+
+        // Stop loss
+        if (isShort ? high >= currentStop : low <= currentStop) {
+          updated.finalExit = { id: db.generateId('pe'), date: candleDate, price: currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper)' };
           changed = true; break;
         }
-        const target1R = isShort ? entryPrice - riskPerShare : entryPrice + riskPerShare;
-        if (!(updated.partialExits || []).some(e => e.actionSource?.includes('1R')) && (isShort ? low <= target1R : high >= target1R)) {
+        // 1R partial exit
+        if (!hasExit('1R') && (isShort ? low <= target1R : high >= target1R)) {
           const exitQty = Math.floor(m.openQty / 2);
           if (exitQty > 0) {
             updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: candleDate, price: target1R, qty: exitQty, charges: 0, actionSource: '1R Partial Exit (Paper)' }];
-            updated.currentStop = entryPrice;
+            updated.currentStop  = entryPrice; // trail to BE
+            m.openQty -= exitQty;
             changed = true;
           }
         }
+        // ATR extension exits
+        if (atr > 0) {
+          const remaining = m.openQty;
+          const extChecks = [
+            { target: target4,  src: '4×ATR',  fraction: 0.20, label: '4×ATR Extension Exit (Paper)' },
+            { target: target8,  src: '8×ATR',  fraction: 0.40, label: '8×ATR Extension Exit (Paper)' },
+            { target: target12, src: '12×ATR', fraction: 1.00, label: '12×ATR Extension Exit (Paper)' },
+          ];
+          for (const ext of extChecks) {
+            if (!hasExit(ext.src) && remaining > 0 && (isShort ? low <= ext.target : high >= ext.target)) {
+              const qty = ext.fraction >= 1 ? remaining : Math.floor(remaining * ext.fraction);
+              if (qty > 0) {
+                updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: candleDate, price: ext.target, qty, charges: 0, actionSource: ext.label }];
+                m.openQty -= qty;
+                changed = true;
+              }
+            }
+          }
+        }
       }
-      if (changed) try { await db.savePaperTrade(updated); } catch(e) { console.warn(e); }
+
+      // ── PASS 2: Live intraday CMP — check TODAY's moves ───────────────
+      if (!updated.finalExit) {
+        const cmp = cmpCache[trade.symbol];
+        if (cmp) {
+          // Update cmp on trade object so UI shows current price
+          if (Math.abs(cmp - (updated.cmp || 0)) > 0.01) {
+            updated.cmp = cmp;
+            changed = true;
+          }
+          // Stop loss hit intraday
+          if (isShort ? cmp >= currentStop : cmp <= currentStop) {
+            updated.finalExit = { id: db.generateId('pe'), date: today, price: currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper — Intraday)' };
+            changed = true;
+          }
+          // 1R hit intraday
+          if (!updated.finalExit && !hasExit('1R') && (isShort ? cmp <= target1R : cmp >= target1R)) {
+            const exitQty = Math.floor(m.openQty / 2);
+            if (exitQty > 0) {
+              updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: today, price: target1R, qty: exitQty, charges: 0, actionSource: '1R Partial Exit (Paper — Intraday)' }];
+              updated.currentStop  = entryPrice;
+              m.openQty -= exitQty;
+              changed = true;
+            }
+          }
+          // ATR extension hits intraday
+          if (!updated.finalExit && atr > 0) {
+            const extChecks = [
+              { target: target4,  src: '4×ATR',  fraction: 0.20, label: '4×ATR Exit (Paper — Intraday)' },
+              { target: target8,  src: '8×ATR',  fraction: 0.40, label: '8×ATR Exit (Paper — Intraday)' },
+              { target: target12, src: '12×ATR', fraction: 1.00, label: '12×ATR Exit (Paper — Intraday)' },
+            ];
+            for (const ext of extChecks) {
+              if (!hasExit(ext.src) && m.openQty > 0 && (isShort ? cmp <= ext.target : cmp >= ext.target)) {
+                const qty = ext.fraction >= 1 ? m.openQty : Math.floor(m.openQty * ext.fraction);
+                if (qty > 0) {
+                  updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: today, price: ext.target, qty, charges: 0, actionSource: ext.label }];
+                  m.openQty -= qty;
+                  changed = true;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // ── Day-6 Time Stop ───────────────────────────────────────────────
+      if (!updated.finalExit && m.openQty > 0) {
+        const entryDate   = trade.entries?.[0]?.date || today;
+        const tradingDays = calc.getTradingDays
+          ? calc.getTradingDays(entryDate, today, settings?.marketHolidays || '')
+          : Math.floor((new Date() - new Date(entryDate)) / (1000 * 60 * 60 * 24));
+        if (tradingDays >= 6) {
+          const lastClose = (histCandles[histCandles.length - 1]?.close) || cmpCache[trade.symbol] || entryPrice;
+          updated.finalExit = { id: db.generateId('pe'), date: today, price: lastClose, qty: m.openQty, charges: 0, actionSource: 'Day-6 Time Stop (Paper)' };
+          changed = true;
+        }
+      }
+
+      if (changed) try { await db.savePaperTrade(updated); } catch(e) { console.warn('Paper sim save failed:', e); }
     }
   }
 
