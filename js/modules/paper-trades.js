@@ -1,4 +1,4 @@
-﻿/**
+/**
  * paper-trades.js — Paper Trades Module
  * Shows all simulated paper trades with split-view detail panel.
  * Mirrors positions.js coding style exactly.
@@ -158,15 +158,18 @@ const PaperTradesModule = (() => {
     const targets = [];
     if (isOpen) {
       if (!(trade.partialExits || []).some(p => p.actionSource?.includes('1R'))) targets.push({ label: '1R Target', price: target1R, color: '#f59e0b' });
-      if (trade.entryATR && trade.swingLow) {
-        const base = trade.direction === 'Short' ? trade.swingLow : trade.swingLow;
-        [[4,'#3b82f6'],[8,'#f97316'],[12,'#a855f7']].forEach(([mult, col]) => {
-          const price = trade.swingLow + mult * trade.entryATR;
-          if (!(trade.partialExits || []).some(p => p.actionSource?.includes(mult + '×'))) {
-            targets.push({ label: `${mult}×ATR Target`, price, color: col });
-          }
-        });
-      }
+        if (trade.entryATR && trade.swingLow) {
+          const atr   = trade.entryATR;
+          const isShort = trade.direction === 'Short';
+          [[4,'#3b82f6'],[8,'#f97316'],[12,'#a855f7']].forEach(([mult, col]) => {
+            const price = isShort
+              ? trade.swingLow - mult * atr
+              : trade.swingLow + mult * atr;
+            if (!(trade.partialExits || []).some(p => p.actionSource?.includes(mult + '×'))) {
+              targets.push({ label: `${mult}×ATR Target`, price, color: col });
+            }
+          });
+        }
       targets.push({ label: 'Day-6 Time Stop', price: null, color: '#6b7280', note: `Day ${holdDays} of 6` });
     }
 
@@ -279,14 +282,21 @@ const PaperTradesModule = (() => {
   // ── Helpers ───────────────────────────────────────────────────────────────
   function _simPnl(trade) {
     const entryPrice = trade.entries?.[0]?.price || 0;
+    const isShort    = trade.direction === 'Short';
     let pnl = 0;
-    (trade.partialExits || []).forEach(p => { pnl += (p.price - entryPrice) * p.qty; });
-    if (trade.finalExit) pnl += (trade.finalExit.price - entryPrice) * trade.finalExit.qty;
+    (trade.partialExits || []).forEach(p => {
+      pnl += isShort ? (entryPrice - p.price) * p.qty : (p.price - entryPrice) * p.qty;
+    });
+    if (trade.finalExit) {
+      pnl += isShort
+        ? (entryPrice - trade.finalExit.price) * trade.finalExit.qty
+        : (trade.finalExit.price - entryPrice) * trade.finalExit.qty;
+    }
     return pnl;
   }
 
   function _simR(trade) {
-    const riskPS = Math.abs((trade.entries?.[0]?.price || 0) - (trade.initialStop || 0));
+    const riskPS   = Math.abs((trade.entries?.[0]?.price || 0) - (trade.initialStop || 0));
     if (!riskPS) return 0;
     const totalQty = (trade.entries || []).reduce((s, e) => s + e.qty, 0);
     const totalRisk = riskPS * totalQty;
