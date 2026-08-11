@@ -1,4 +1,4 @@
-﻿/**
+/**
  * watchlist.js — Watchlist Module
  * Mirrors the coding style of positions.js exactly.
  */
@@ -17,6 +17,20 @@ const WatchlistModule = (() => {
     fresh.addEventListener('click', () => _showAddModal());
   }
 
+  // ── CMP Fetch Helper (Supabase Edge Function proxy) ─────────────────────
+  const _SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
+  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+
+  async function _fetchCmp(symbol) {
+    try {
+      const ticker = symbol.includes('.') ? encodeURIComponent(symbol) : `${encodeURIComponent(symbol)}.NS`;
+      const resp = await fetch(`${_SB_URL}/functions/v1/yahoo-finance?ticker=${ticker}`,
+        { headers: { 'Authorization': `Bearer ${_SB_KEY}` } });
+      const data = await resp.json();
+      return data?.chart?.result?.[0]?.meta?.regularMarketPrice || null;
+    } catch { return null; }
+  }
+
   // ── Render Table ──────────────────────────────────────────────────────────
   async function _renderTable() {
     const tbody = document.getElementById('watchlist-tbody');
@@ -33,7 +47,7 @@ const WatchlistModule = (() => {
     const rpt          = equity * (riskPct / 100);
 
     if (!watchlist || !watchlist.length) {
-      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px 0;color:var(--text-muted)">
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px 0;color:var(--text-muted)">
         <div style="font-size:32px;margin-bottom:8px">&#128065;</div>
         <div style="font-weight:600;margin-bottom:4px">No stocks in Watchlist</div>
         <div style="font-size:12px">Click <strong>+ Add to Watchlist</strong> to track your next setup.</div>
@@ -41,6 +55,7 @@ const WatchlistModule = (() => {
       return;
     }
 
+    // Render immediately with loading spinners for CMP
     tbody.innerHTML = watchlist.map(item => {
       const trigger      = Number(item.trigger_price) || 0;
       const sl           = Number(item.stop_loss)     || 0;
@@ -51,22 +66,23 @@ const WatchlistModule = (() => {
       let statusCell, actionsCell;
 
       if (item.status === 'executed') {
-        statusCell = `<span class="badge" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#10003; Executed</span>`;
+        statusCell  = `<span class="badge" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#10003; Executed</span>`;
         actionsCell = `<button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
       } else if (item.status === 'triggered') {
-        statusCell = `<span class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#9889; Triggered</span>`;
+        statusCell  = `<span class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#9889; Triggered</span>`;
         actionsCell = `
           <button class="btn btn-primary btn-sm" onclick="WatchlistModule._showExecuteModal('${item.id}')" title="Execute as real trade" style="margin-right:4px">&#9654; Execute</button>
           <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._createPaperTrade('${item.id}')" title="Simulate as paper trade" style="margin-right:4px">&#128196; Paper</button>
           <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
       } else {
-        statusCell = `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#128065; Monitoring</span>`;
+        statusCell  = `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#128065; Monitoring</span>`;
         actionsCell = `<button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
       }
 
       return `<tr>
         <td><strong>${item.symbol}</strong>${item.sector ? ` <span class="badge badge-muted" style="font-size:10px">${item.sector}</span>` : ''}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(trigger)}</td>
+        <td id="wl-cmp-${item.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">&#8230;</td>
         <td class="font-mono">&#8377;${calc.formatNumber(sl)}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(riskPerShare)}</td>
         <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(50% of ${totalQty})</span></td>
@@ -74,6 +90,21 @@ const WatchlistModule = (() => {
         <td style="text-align:right;white-space:nowrap">${actionsCell}</td>
       </tr>`;
     }).join('');
+
+    // Fetch CMPs in parallel and fill them in
+    watchlist.forEach(async item => {
+      const cell = document.getElementById(`wl-cmp-${item.id}`);
+      if (!cell) return;
+      const trigger = Number(item.trigger_price) || 0;
+      const cmp = await _fetchCmp(item.symbol);
+      if (cmp === null) { cell.textContent = '—'; return; }
+      const above   = cmp >= trigger;
+      const pctDiff = trigger > 0 ? (((cmp - trigger) / trigger) * 100).toFixed(1) : 0;
+      const sign    = pctDiff >= 0 ? '+' : '';
+      const color   = above ? '#f59e0b' : '#10b981'; // amber if at/above trigger, green if below (safe)
+      cell.innerHTML = `<span style="color:${color};font-weight:600">&#8377;${calc.formatNumber(cmp)}</span>
+        <span style="font-size:10px;color:${color};opacity:0.8">&nbsp;${sign}${pctDiff}%</span>`;
+    });
   }
 
   // ── Add to Watchlist Modal ────────────────────────────────────────────────
