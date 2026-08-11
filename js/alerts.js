@@ -82,7 +82,9 @@ const alertEngine = (() => {
 
   // ── Main Entry Point ────────────────────────────────────────────────
   async function checkAllAlerts(trades, customSettings = null, customOhlcMap = null, isEndOfDay = false, activeWatchlist = []) {
-    if (!trades?.length && !activeWatchlist?.length) return false;
+    // Don't skip if paper trades exist even when no real trades or watchlist items
+    const openPaperCount = (window.db && db.getOpenPaperTrades) ? (await db.getOpenPaperTrades()).length : 0;
+    if (!trades?.length && !activeWatchlist?.length && openPaperCount === 0) return false;
     const settings = customSettings || await db.getSettings();
     const alertConfig = settings?.alerts || {};
     const ohlcMap = customOhlcMap || {};
@@ -93,6 +95,7 @@ const alertEngine = (() => {
     if (activeWatchlist && activeWatchlist.length > 0) {
       await _monitorWatchlist(activeWatchlist, ohlcMap, settings);
     }
+
 
     for (const trade of trades) {
       // ── Legacy v2.0 Alert Cleanup ──
@@ -464,8 +467,10 @@ const alertEngine = (() => {
         const { high, low, close, time } = candle;
         const candleDate = time ? new Date(time * 1000).toISOString().split('T')[0] : today;
 
-        // a) Stop Loss hit
-        if (low <= m.currentStop && updated.finalExit === null) {
+        // a) Stop Loss hit — direction-aware
+        const isShort    = trade.direction === 'Short';
+        const stopHit    = isShort ? high >= m.currentStop : low <= m.currentStop;
+        if (stopHit && updated.finalExit === null) {
           updated.finalExit = { id: db.generateId('pe'), date: candleDate, price: m.currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper)' };
           changed = true; break;
         }
