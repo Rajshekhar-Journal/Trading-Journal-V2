@@ -463,15 +463,19 @@ const db = (() => {
   // ════════════════════════════════════════════════════════════════════════
 
   async function getWatchlist() {
-    const { data, error } = await _sb().from('watchlist').select('*').order('created_at', { ascending: false });
+    const uid = _uid();
+    if (!uid) return [];
+    const { data, error } = await _sb().from('watchlist').select('*').eq('user_id', uid).order('created_at', { ascending: false });
     if (error) { console.error('getWatchlist:', error); return []; }
     return data || [];
   }
 
   async function saveWatchlistItem(item) {
+    const uid = _uid();
     if (!item.id) item.id = _generateId();
     const payload = {
       id:            item.id,
+      user_id:       uid,
       symbol:        item.symbol,
       sector:        item.sector        || null,
       trigger_price: item.trigger_price,
