@@ -137,7 +137,14 @@ const app = (() => {
       ${actionsHtml ? `<div class="modal-footer">${actionsHtml}</div>` : ''}`;
     overlay.classList.remove('hidden');
     actions.forEach(a => {
-      document.getElementById(`modal-action-${a.id}`)?.addEventListener('click', () => { a.onClick?.(); });
+      document.getElementById(`modal-action-${a.id}`)?.addEventListener('click', async () => {
+        try {
+          await a.onClick?.();
+        } catch(err) {
+          console.error('Modal action error:', err);
+          if (window.app?.toast) app.toast(err.message || 'An error occurred', 'error');
+        }
+      });
     });
   }
 
