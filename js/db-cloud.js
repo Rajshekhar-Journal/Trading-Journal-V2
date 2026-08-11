@@ -472,7 +472,8 @@ const db = (() => {
 
   async function saveWatchlistItem(item) {
     const uid = _uid();
-    if (!item.id) item.id = _generateId();
+    if (!uid) { console.error('saveWatchlistItem: not logged in'); return null; }
+    if (!item.id) item.id = _generateId('wl');
     const payload = {
       id:            item.id,
       user_id:       uid,
@@ -484,14 +485,19 @@ const db = (() => {
       status:        item.status        || 'monitoring',
       created_at:    item.created_at    || new Date().toISOString()
     };
-    const { error } = await _sb().from('watchlist').upsert(payload);
-    if (error) { console.error('saveWatchlistItem:', error); throw new Error(error.message); }
+    const { error } = await _sb().from('watchlist').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.error('saveWatchlistItem:', error);
+      if (window.app?.toast) app.toast('Save failed: ' + error.message, 'error');
+      throw new Error(error.message);
+    }
     _notifyChange('watchlist_updated');
     return payload;
   }
 
   async function deleteWatchlistItem(id) {
-    const { error } = await _sb().from('watchlist').delete().eq('id', id);
+    const uid = _uid();
+    const { error } = await _sb().from('watchlist').delete().eq('id', id).eq('user_id', uid);
     if (error) { console.error('deleteWatchlistItem:', error); throw new Error(error.message); }
     _notifyChange('watchlist_updated');
   }
