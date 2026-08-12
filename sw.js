@@ -1,76 +1,60 @@
 ﻿/**
- * sw.js — TradeJournal Service Worker
- * Strategy: Cache-first for static assets, network-first for API calls.
- * Offline: serve cached app shell silently.
+ * sw.js — TradeJournal Service Worker (minimal, bulletproof)
+ * Only caches the app shell. Network-first for everything else.
+ * A failing cache.addAll() kills SW install — keep the list tiny.
  */
-const CACHE_NAME = 'tj-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/login.html',
-  '/css/style.css',
-  '/css/components.css',
-  '/css/modules.css',
-  '/css/mobile.css',
-  '/js/app.js',
-  '/js/auth.js',
-  '/js/calc.js',
-  '/js/db-cloud.js',
-  '/js/alerts.js',
-  '/js/mobile.js',
-  '/js/modules/dashboard.js',
-  '/js/modules/positions.js',
-  '/js/modules/watchlist.js',
-  '/js/modules/paper-trades.js',
-  '/js/modules/trades.js',
-  '/js/modules/analytics.js',
-  '/js/modules/capital.js',
-  '/js/modules/playbook.js',
-  '/js/modules/settings.js',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/manifest.json'
-];
+const CACHE = 'tj-shell-v1';
 
-// Install: cache all static assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+    caches.open(CACHE)
+      .then(cache => cache.addAll(['/index.html', '/manifest.json']))
       .then(() => self.skipWaiting())
+      .catch(e => { console.warn('[SW] Install cache failed:', e); self.skipWaiting(); })
   );
 });
 
-// Activate: remove old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch strategy
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Always go network-first for Supabase API calls
-  if (url.hostname.includes('supabase.co') || url.hostname.includes('googleapis')) {
+  // Always network-first for Supabase API calls (live data)
+  if (url.hostname.includes('supabase.co')) {
+    event.respondWith(fetch(event.request).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' }})));
+    return;
+  }
+
+  // Network-first for navigation (HTML pages)
+  if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } }))
+      fetch(event.request)
+        .then(resp => {
+          const clone = resp.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, clone));
+          return resp;
+        })
+        .catch(() => caches.match('/index.html'))
     );
     return;
   }
 
-  // Cache-first for static assets
+  // Cache-first for static assets (JS, CSS, images)
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
-      return fetch(event.request).then(response => {
-        if (response && response.status === 200 && event.request.method === 'GET') {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      return fetch(event.request).then(resp => {
+        if (resp && resp.status === 200 && event.request.method === 'GET') {
+          const clone = resp.clone();
+          caches.open(CACHE).then(cache => cache.put(event.request, clone));
         }
-        return response;
+        return resp;
       }).catch(() => caches.match('/index.html'));
     })
   );
