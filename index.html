@@ -466,7 +466,17 @@
   <!-- 5. App router (last — kicks off auth check then init) -->
   <script src="js/app.js?v=2.2.1"></script>
   <!-- 6. Mobile module (PWA + card layout, activates only on ≤767px) -->
-  <script src="js/mobile.js?v=1.0"></script>
+  <script src="js/mobile.js?v=1.1"></script>
+  <!-- 7. Service Worker — registered eagerly so Chrome qualifies app as installable PWA -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(reg => console.log('[SW] Registered, scope:', reg.scope))
+          .catch(err => console.warn('[SW] Registration failed:', err));
+      });
+    }
+  </script>
   <!-- Mobile bottom nav container -->
   <div id="mobile-bottom-nav"></div>
 </body>
