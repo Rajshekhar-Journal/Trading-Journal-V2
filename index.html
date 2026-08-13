@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -476,6 +476,17 @@
           .catch(err => console.warn('[SW] Registration failed:', err));
       });
     }
+
+    // Debugging PWA Installability
+    window.addEventListener('beforeinstallprompt', (e) => {
+      console.log('✅ [PWA] Chrome fired beforeinstallprompt! App is fully installable.');
+      // Create a visual indicator on screen
+      const indicator = document.createElement('div');
+      indicator.innerHTML = `🌟 PWA Ready to Install! (Check browser menu)`;
+      indicator.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:9999;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+      document.body.appendChild(indicator);
+      setTimeout(() => indicator.remove(), 8000);
+    });
   </script>
   <!-- Mobile bottom nav container -->
   <div id="mobile-bottom-nav"></div>
