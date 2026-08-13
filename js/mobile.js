@@ -1,4 +1,4 @@
-﻿/**
+/**
  * mobile.js - TradeJournal Mobile Module v1.1
  * Activated only on screens <= 767px.
  * Works WITH app.navigate() - injects card views into existing module pages.
@@ -18,12 +18,11 @@ const MobileModule = (() => {
   let _currentTab = 'positions';
 
   // ── Bootstrap ──────────────────────────────────────────────────────────
-  function init() {
+  function init(initialTab = 'positions') {
     if (!IS_MOBILE()) return;
     _injectBottomNav();
     _injectBottomSheet();
-    _registerServiceWorker();
-    switchTab('positions');
+    switchTab(initialTab);
   }
 
   // ── Service Worker ─────────────────────────────────────────────────────
@@ -523,22 +522,4 @@ const MobileModule = (() => {
 
 })();
 
-// Auto-init: wait for db + calc to be ready, then boot
-(function _mobileBoot() {
-  if (!window || window.innerWidth > 767) return;
-
-  function _tryBoot(attempts) {
-    if (attempts <= 0) return;
-    if (window.db && window.calc && window.app) {
-      MobileModule.init();
-    } else {
-      setTimeout(() => _tryBoot(attempts - 1), 300);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => _tryBoot(30));
-  } else {
-    _tryBoot(30);
-  }
-})();
+// Auto-boot removed to allow app.js to initialize it after authentication.
