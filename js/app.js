@@ -1,5 +1,5 @@
 /**
- * app.js — Application Router, Navigation & Global State
+ * app.js â€” Application Router, Navigation & Global State
  * Initializes the app, handles module switching, toasts, modals.
  */
 
@@ -53,7 +53,7 @@ const app = (() => {
     if (page) page.classList.add('active');
     if (btn)  btn.classList.add('active');
     _currentModule = moduleId;
-    // Phase 2: all module init() are async — fire and catch errors
+    // Phase 2: all module init() are async â€” fire and catch errors
     try {
       const result = mod.init();
       if (result && typeof result.catch === 'function') {
@@ -75,12 +75,12 @@ const app = (() => {
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeModal();
-      // Ctrl+Shift+P — toggle privacy mode
+      // Ctrl+Shift+P â€” toggle privacy mode
       if (e.ctrlKey && e.shiftKey && e.key === 'P') { e.preventDefault(); togglePrivacyMode(); }
     });
     // Phase 2: logout button
     document.getElementById('btn-logout')?.addEventListener('click', () => auth.signOut());
-    // Settings change listener — re-apply privacy mode & trader name
+    // Settings change listener â€” re-apply privacy mode & trader name
     db.on('settings', async () => {
       await _updateTraderName();
       const s = await db.getSettings();
@@ -95,7 +95,7 @@ const app = (() => {
     if (el) el.textContent = name;
   }
 
-  // ── Privacy Mode ───────────────────────────────────────────────────────────
+  // â”€â”€ Privacy Mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _applyPrivacyClass(on) {
     document.body.classList.toggle('privacy-mode', !!on);
   }
@@ -114,23 +114,23 @@ const app = (() => {
   async function togglePrivacyMode() {
     const isOn = document.body.classList.contains('privacy-mode');
     await applyPrivacyMode(!isOn);
-    toast(isOn ? '🔓 Privacy mode off' : '🔒 Privacy mode on — amounts blurred', isOn ? 'info' : 'success', 2000);
+    toast(isOn ? 'ðŸ”“ Privacy mode off' : 'ðŸ”’ Privacy mode on â€” amounts blurred', isOn ? 'info' : 'success', 2000);
   }
 
-  // ── Toast ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function toast(message, type = 'success', duration = 3000) {
     const container = document.getElementById('toast-container');
     if (!container) return;
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
-    const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
-    t.innerHTML = `<span class="toast-icon">${icons[type] || '✓'}</span><span class="toast-msg">${message}</span>`;
+    const icons = { success: 'âœ“', error: 'âœ•', warning: 'âš ', info: 'â„¹' };
+    t.innerHTML = `<span class="toast-icon">${icons[type] || 'âœ“'}</span><span class="toast-msg">${message}</span>`;
     container.appendChild(t);
     requestAnimationFrame(() => t.classList.add('show'));
     setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, duration);
   }
 
-  // ── Modal ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function openModal(title, content, actions = []) {
     const overlay = document.getElementById('modal-overlay');
     const container = document.getElementById('modal-container');
@@ -139,7 +139,7 @@ const app = (() => {
     container.innerHTML = `
       <div class="modal-header">
         <h3 class="modal-title">${title}</h3>
-        <button class="modal-close" onclick="app.closeModal()">✕</button>
+        <button class="modal-close" onclick="app.closeModal()">âœ•</button>
       </div>
       <div class="modal-body">${content}</div>
       ${actionsHtml ? `<div class="modal-footer">${actionsHtml}</div>` : ''}`;
@@ -161,7 +161,7 @@ const app = (() => {
     document.getElementById('modal-container').innerHTML = '';
   }
 
-  // ── Market Health Modal (premium chart-based) ─────────────────────────────
+  // â”€â”€ Market Health Modal (premium chart-based) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   let _mhCharts = [];
 
   async function showMarketHealthModal() {
@@ -189,57 +189,57 @@ const app = (() => {
             ${mh.trend === 'Uptrend' ? 'Price > EMA20 > EMA50' : mh.trend === 'Downtrend' ? 'Price < EMA20 < EMA50' : 'Mixed EMA signals'}
           </div>
           <div style="font-size:10px;margin-top:3px;font-weight:600;color:${mh.trend === 'Uptrend' ? '#22c55e' : mh.trend === 'Downtrend' ? '#ef4444' : '#f59e0b'};">
-            ${mh.trend === 'Uptrend' ? '→ Add exposure' : mh.trend === 'Downtrend' ? '→ Reduce exposure' : '→ Wait for clarity'}
+            ${mh.trend === 'Uptrend' ? 'â†’ Add exposure' : mh.trend === 'Downtrend' ? 'â†’ Reduce exposure' : 'â†’ Wait for clarity'}
           </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Breadth</div>
           <div style="font-size:17px;font-weight:700;color:#5b6af0;">${mh.breadthClassification || 'Unknown'}</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px;">Ratio: ${mh.breadthValue ? mh.breadthValue + 'x' : '—'} (above÷below EMA20)</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px;">Ratio: ${mh.breadthValue ? mh.breadthValue + 'x' : 'â€”'} (aboveÃ·below EMA20)</div>
           <div style="font-size:10px;margin-top:3px;color:#64748b;">${mh.guidance || 'Run Auto Fetch'}</div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">RSI (14)</div>
-          <div style="font-size:17px;font-weight:700;color:${rsiColor};">${rsiVal != null ? rsiVal.toFixed(1) : '—'}</div>
+          <div style="font-size:17px;font-weight:700;color:${rsiColor};">${rsiVal != null ? rsiVal.toFixed(1) : 'â€”'}</div>
           <div style="font-size:10px;color:#64748b;margin-top:2px;">${rsiStatus}</div>
           <div style="font-size:10px;color:#64748b;margin-top:2px;line-height:1.3;">
-            ${rsiVal == null ? 'Run Auto Fetch' : rsiVal > thr.rsiOB ? 'Correction risk — avoid new longs' : rsiVal < thr.rsiOS ? 'Bounce likely — watch reversals' : 'Momentum balanced'}
+            ${rsiVal == null ? 'Run Auto Fetch' : rsiVal > thr.rsiOB ? 'Correction risk â€” avoid new longs' : rsiVal < thr.rsiOS ? 'Bounce likely â€” watch reversals' : 'Momentum balanced'}
           </div>
         </div>
         <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
           <div style="font-size:10px;color:#94a3b8;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Breadth %</div>
-          <div style="font-size:17px;font-weight:700;color:${bColor};">${bPct != null ? bPct.toFixed(1) + '%' : '—'}</div>
+          <div style="font-size:17px;font-weight:700;color:${bColor};">${bPct != null ? bPct.toFixed(1) + '%' : 'â€”'}</div>
           <div style="font-size:10px;color:#64748b;margin-top:2px;">${bStatus}</div>
           <div style="font-size:10px;color:#64748b;margin-top:2px;line-height:1.3;">
-            ${bPct == null ? 'Run Auto Fetch' : bPct > thr.breadthOB ? 'Market overextended — reversal risk' : bPct < thr.breadthOS ? 'Market washed out — watch for bounce' : 'Healthy broad participation'}
+            ${bPct == null ? 'Run Auto Fetch' : bPct > thr.breadthOB ? 'Market overextended â€” reversal risk' : bPct < thr.breadthOS ? 'Market washed out â€” watch for bounce' : 'Healthy broad participation'}
           </div>
         </div>
       </div>
 
       <div style="font-size:11px;color:#5b6af0;margin-bottom:14px;margin-top:-6px;">
         <a href="#" onclick="app.closeModal();app.navigate('settings');event.preventDefault();" style="color:#5b6af0;text-decoration:none;">
-          ℹ Learn how to read these metrics →
+          â„¹ Learn how to read these metrics â†’
         </a>
-        <span style="color:#64748b;margin-left:8px;">(Settings → General → User Manual → Market Health)</span>
+        <span style="color:#64748b;margin-left:8px;">(Settings â†’ General â†’ User Manual â†’ Market Health)</span>
       </div>
 
       <div style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div style="font-size:11px;font-weight:700;color:#f59e0b;letter-spacing:1px;">RSI (14) — NIFTY 500 INDEX</div>
+          <div style="font-size:11px;font-weight:700;color:#f59e0b;letter-spacing:1px;">RSI (14) â€” NIFTY 500 INDEX</div>
           <div style="font-size:10px;color:#64748b;">OB <span style="color:#ef4444;">${thr.rsiOB}</span>&nbsp;|&nbsp;OS <span style="color:#22c55e;">${thr.rsiOS}</span></div>
         </div>
         <div id="mh-rsi-chart" style="height:195px;border-radius:8px;overflow:hidden;background:#0f172a;${noRsiData ? 'display:flex;align-items:center;justify-content:center;' : ''}">
-          ${noRsiData ? '<span style="color:#64748b;font-size:12px;">No history yet — click Auto Fetch to load</span>' : ''}
+          ${noRsiData ? '<span style="color:#64748b;font-size:12px;">No history yet â€” click Auto Fetch to load</span>' : ''}
         </div>
       </div>
 
       <div style="margin-bottom:18px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <div style="font-size:11px;font-weight:700;color:#22c55e;letter-spacing:1px;">% STOCKS ABOVE 20 EMA — NIFTY 500</div>
+          <div style="font-size:11px;font-weight:700;color:#22c55e;letter-spacing:1px;">% STOCKS ABOVE 20 EMA â€” NIFTY 500</div>
           <div style="font-size:10px;color:#64748b;">OB <span style="color:#ef4444;">${thr.breadthOB}%</span>&nbsp;|&nbsp;OS <span style="color:#22c55e;">${thr.breadthOS}%</span></div>
         </div>
         <div id="mh-breadth-chart" style="height:195px;border-radius:8px;overflow:hidden;background:#0f172a;${noBreadthData ? 'display:flex;align-items:center;justify-content:center;' : ''}">
-          ${noBreadthData ? '<span style="color:#64748b;font-size:12px;">No history yet — click Auto Fetch to load</span>' : ''}
+          ${noBreadthData ? '<span style="color:#64748b;font-size:12px;">No history yet â€” click Auto Fetch to load</span>' : ''}
         </div>
       </div>
 
@@ -319,7 +319,7 @@ const app = (() => {
 
     let rsiChart = null, bChart = null;
 
-    // ── RSI Chart ──────────────────────────────────────────────────────────
+    // â”€â”€ RSI Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const rsiEl = document.getElementById('mh-rsi-chart');
     if (rsiEl && (mh.rsiHistory?.length ?? 0) > 0) {
       rsiChart = LightweightCharts.createChart(rsiEl, { ...baseOpts, height: 195, width: rsiEl.offsetWidth || 800 });
@@ -333,7 +333,7 @@ const app = (() => {
       _mhCharts.push(rsiChart);
     }
 
-    // ── Breadth % Chart ────────────────────────────────────────────────────
+    // â”€â”€ Breadth % Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const bEl = document.getElementById('mh-breadth-chart');
     if (bEl && (mh.breadthHistory?.length ?? 0) > 0) {
       bChart = LightweightCharts.createChart(bEl, { ...baseOpts, height: 195, width: bEl.offsetWidth || 800 });
@@ -347,7 +347,7 @@ const app = (() => {
       _mhCharts.push(bChart);
     }
 
-    // ── Bidirectional time-scale sync (calendar-date based, not bar-index) ────
+    // â”€â”€ Bidirectional time-scale sync (calendar-date based, not bar-index) â”€â”€â”€â”€
     // Using subscribeVisibleTimeRangeChange + setVisibleRange so both charts
     // always show the same calendar window regardless of data density differences.
     if (rsiChart && bChart) {
@@ -368,7 +368,7 @@ const app = (() => {
   }
 
   async function updateMarketHealthAuto() {
-    toast('Fetching Nifty 500 data… ~30s', 'info', 35000);
+    toast('Fetching Nifty 500 dataâ€¦ ~30s', 'info', 35000);
     try {
       const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
       const res = await fetch('https://zopskuwqlbteyiypwnid.supabase.co/functions/v1/market-health', {
