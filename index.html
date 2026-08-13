@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TradeJournal Ã¢â‚¬â€ Advanced Trading Journal</title>
+  <title>TradeJournal — Advanced Trading Journal</title>
   <meta name="description" content="Professional trading journal for systematic traders. Track positions, analyze performance, manage risk.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +30,7 @@
   <!-- TOP NAVIGATION -->
   <nav class="topnav">
     <div class="nav-brand">
-      <div class="brand-logo">Ã°Å¸â€œË†</div>
+      <div class="brand-logo">📈</div>
       <span class="brand-name">TradeJournal</span>
     </div>
     <div class="nav-modules">
@@ -45,12 +45,12 @@
       <button class="nav-btn" data-module="settings">Settings</button>
     </div>
     <div class="nav-right">
-      <button class="market-health-btn" id="btn-market-health" title="Update Market Health">Ã°Å¸Å’Â¡ Market Health</button>
+      <button class="market-health-btn" id="btn-market-health" title="Update Market Health">🌡 Market Health</button>
       <div class="trader-chip">
         <div class="trader-avatar" id="trader-avatar">T</div>
         <span id="trader-name">Trader</span>
       </div>
-      <button class="btn-logout" id="btn-logout" title="Sign out">Ã¢ÂÂ» Logout</button>
+      <button class="btn-logout" id="btn-logout" title="Sign out">⏻ Logout</button>
     </div>
   </nav>
 
@@ -87,7 +87,7 @@
         <div class="card chart-card" style="flex:1">
           <div class="card-header">
             <span class="card-title">Risk : Reward Plot</span>
-            <span class="card-subtitle">Individual trades Ã¢â‚¬â€ bubble size = |R|</span>
+            <span class="card-subtitle">Individual trades — bubble size = |R|</span>
           </div>
           <div class="chart-wrap" style="height:220px"><canvas id="chart-rr-bubble"></canvas></div>
         </div>
@@ -170,7 +170,7 @@
           <p class="page-subtitle">Open position monitoring &amp; risk management</p>
         </div>
         <div class="page-actions">
-          <button class="btn btn-secondary" onclick="positionsModule.forceRefresh()">Ã°Å¸â€â€ž Sync Live Data</button>
+          <button class="btn btn-secondary" onclick="positionsModule.forceRefresh()">🔄 Sync Live Data</button>
           <button class="btn btn-primary" id="btn-new-trade">+ New Trade</button>
         </div>
       </div>
@@ -234,13 +234,13 @@
             <div class="table-wrap" style="flex:1;overflow-y:auto">
               <table class="data-table" id="trades-table">
                 <thead><tr>
-                  <th data-sort="symbol">Symbol Ã¢â€ â€¢</th>
-                  <th data-sort="entryDate">Entry Ã¢â€ â€¢</th>
-                  <th data-sort="exitDate">Exit Ã¢â€ â€¢</th>
-                  <th data-sort="holdingDays">Days Ã¢â€ â€¢</th>
+                  <th data-sort="symbol">Symbol ↕</th>
+                  <th data-sort="entryDate">Entry ↕</th>
+                  <th data-sort="exitDate">Exit ↕</th>
+                  <th data-sort="holdingDays">Days ↕</th>
                   <th>Setup</th>
-                  <th data-sort="pnl">P&amp;L Ã¢â€ â€¢</th>
-                  <th data-sort="profitR">R Ã¢â€ â€¢</th>
+                  <th data-sort="pnl">P&amp;L ↕</th>
+                  <th data-sort="profitR">R ↕</th>
                   <th>Result</th>
                   <th>Rules</th>
                   <th>Review</th>
@@ -339,9 +339,9 @@
         <button class="tab-btn" data-tab="discipline">Discipline</button>
         <button class="tab-btn" data-tab="simulator">Growth Simulator</button>
       </div>
-      <!-- Paper Mode Banner Ã¢â‚¬â€ hidden by default -->
+      <!-- Paper Mode Banner — hidden by default -->
       <div id="anl-paper-banner" style="display:none;align-items:center;gap:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);border-radius:10px;padding:10px 16px;margin-bottom:12px;color:#818cf8;font-size:13px;font-weight:600">
-        &#128196; <span>Paper Trade Mode Ã¢â‚¬â€ Simulated results. These are <em>not</em> real trades.</span>
+        &#128196; <span>Paper Trade Mode — Simulated results. These are <em>not</em> real trades.</span>
       </div>
       <div id="anl-content"></div>
     </div>
@@ -375,7 +375,7 @@
         <div class="card-header"><span class="card-title">Capital Ledger</span></div>
         <div class="table-wrap">
           <table class="data-table">
-            <thead><tr><th>Date</th><th>Type</th><th>Amount (Ã¢â€šÂ¹)</th><th>Balance (Ã¢â€šÂ¹)</th><th>Account</th><th>Remarks</th><th></th></tr></thead>
+            <thead><tr><th>Date</th><th>Type</th><th>Amount (₹)</th><th>Balance (₹)</th><th>Account</th><th>Remarks</th><th></th></tr></thead>
             <tbody id="cap-ledger-body"></tbody>
           </table>
         </div>
@@ -392,7 +392,7 @@
       </div>
       <div class="settings-layout">
         <div class="settings-sidebar">
-          <input class="form-input" id="settings-search" placeholder="Ã°Å¸â€Â Search settings..." style="margin-bottom:12px;width:100%">
+          <input class="form-input" id="settings-search" placeholder="🔍 Search settings..." style="margin-bottom:12px;width:100%">
           <nav id="settings-nav-list"></nav>
         </div>
         <div class="settings-content" id="settings-content"></div>
@@ -404,7 +404,7 @@
       <div class="page-header">
         <div>
           <h1 class="page-title">&#128196; Paper Trades</h1>
-          <p class="page-subtitle">Simulated trades Ã¢â‚¬â€ auto-tracked by your strategy engine</p>
+          <p class="page-subtitle">Simulated trades — auto-tracked by your strategy engine</p>
         </div>
       </div>
       <div class="stats-row" id="pt-overview-cards"></div>
@@ -442,7 +442,7 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <!-- SCRIPTS Ã¢â‚¬â€ Phase 2 load order -->
+  <!-- SCRIPTS — Phase 2 load order -->
   <!-- 0. TradingView Lightweight Charts (open-source candlestick library) -->
   <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
   <!-- 1. Auth (must load before db-cloud) -->
@@ -463,32 +463,21 @@
   <script src="js/modules/capital.js?v=2.2.1"></script>
   <script src="js/modules/settings.js?v=2.2.1"></script>
   <script src="js/modules/paper-trades.js?v=2.2.1"></script>
-  <!-- 5. App router (last Ã¢â‚¬â€ kicks off auth check then init) -->
-  <script src="js/app.js?v=2.2.2"></script>
-  <!-- 6. Mobile module (PWA + card layout, activates only on Ã¢â€°Â¤767px) -->
+  <!-- 5. App router (last — kicks off auth check then init) -->
+  <script src="js/app.js?v=2.2.1"></script>
+  <!-- 6. Mobile module (PWA + card layout, activates only on <=767px) -->
   <script src="js/mobile.js?v=1.2"></script>
-  <!-- 7. Service Worker Ã¢â‚¬â€ registered eagerly so Chrome qualifies app as installable PWA -->
+  <!-- Mobile bottom nav container (injected by mobile.js) -->
+  <div id="mobile-bottom-nav"></div>
+  <!-- Service Worker registration -->
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
+      window.addEventListener('load', function() {
         navigator.serviceWorker.register('/sw.js', { scope: '/' })
-          .then(reg => console.log('[SW] Registered, scope:', reg.scope))
-          .catch(err => console.warn('[SW] Registration failed:', err));
+          .then(function(reg) { console.log('[SW] Registered, scope:', reg.scope); })
+          .catch(function(err) { console.warn('[SW] Registration failed:', err); });
       });
     }
-
-    // Debugging PWA Installability
-    window.addEventListener('beforeinstallprompt', (e) => {
-      console.log('âœ… [PWA] Chrome fired beforeinstallprompt! App is fully installable.');
-      // Create a visual indicator on screen
-      const indicator = document.createElement('div');
-      indicator.innerHTML = `ðŸŒŸ PWA Ready to Install! (Check browser menu)`;
-      indicator.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;z-index:9999;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.3);';
-      document.body.appendChild(indicator);
-      setTimeout(() => indicator.remove(), 8000);
-    });
   </script>
-  <!-- Mobile bottom nav container -->
-  <div id="mobile-bottom-nav"></div>
 </body>
 </html>
