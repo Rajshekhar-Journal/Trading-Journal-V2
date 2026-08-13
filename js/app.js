@@ -33,6 +33,14 @@ const app = (() => {
     _applyPrivacyClass(settings?.general?.privacyMode || false);
     navigate(startModule);
     await _updateTraderName();
+
+    // Mobile initialization after auth & render
+    if (window.MobileModule && window.innerWidth <= 767) {
+      // Map dashboard -> dashboard, etc. If startModule is trades, default to positions
+      const validMobileTabs = ['positions', 'watchlist', 'paper', 'dashboard'];
+      const mTab = validMobileTabs.includes(startModule) ? startModule : 'positions';
+      MobileModule.init(mTab);
+    }
   }
 
   function navigate(moduleId) {
