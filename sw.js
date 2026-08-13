@@ -1,14 +1,14 @@
 ﻿/**
  * sw.js — TradeJournal Service Worker (minimal, bulletproof)
  * Only caches the app shell. Network-first for everything else.
- * A failing cache.addAll() kills SW install — keep the list tiny.
  */
-const CACHE = 'tj-shell-v1';
+const CACHE = 'tj-shell-v2';
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE)
-      .then(cache => cache.addAll(['/index.html', '/manifest.json']))
+      // Cache BOTH explicit paths so Chrome offline validation always succeeds
+      .then(cache => cache.addAll(['/', '/index.html', '/manifest.json']))
       .then(() => self.skipWaiting())
       .catch(e => { console.warn('[SW] Install cache failed:', e); self.skipWaiting(); })
   );
@@ -25,17 +25,20 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Always network-first for Supabase API calls (live data)
+  // Always network-first for Supabase API calls
   if (url.hostname.includes('supabase.co')) {
-    event.respondWith(fetch(event.request).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' }})));
+    event.respondWith(
+      fetch(event.request).catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' }}))
+    );
     return;
   }
 
-  // Network-first for navigation (HTML pages)
+  // Network-first for navigation (HTML pages) - guarantees a 200 response
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then(resp => {
+          if (!resp.ok) throw new Error('Offline or 404');
           const clone = resp.clone();
           caches.open(CACHE).then(cache => cache.put(event.request, clone));
           return resp;
@@ -45,7 +48,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Cache-first for static assets (JS, CSS, images)
+  // Cache-first for static assets
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -55,7 +58,7 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE).then(cache => cache.put(event.request, clone));
         }
         return resp;
-      }).catch(() => caches.match('/index.html'));
+      }).catch(() => new Response('', { status: 404 })); // Prevents unhandled promise rejection
     })
   );
 });
