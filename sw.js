@@ -1,4 +1,4 @@
-﻿/**
+/**
  * sw.js — TradeJournal Service Worker (minimal, bulletproof)
  * Only caches the app shell. Network-first for everything else.
  */
