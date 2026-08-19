@@ -1,5 +1,5 @@
 /**
- * alerts.js â€” Alert Engine v2.3 (Smart Alert Throttling)
+ * alerts.js Ã¢â‚¬â€ Alert Engine v2.3 (Smart Alert Throttling)
  */
 const alertEngine = (() => {
 
@@ -7,9 +7,9 @@ const alertEngine = (() => {
     DAY6_TIME_EXIT:    'Time-Based Stop (Day 6)',
     STOP_BREACH:       'Stop Loss Breach',
     CHECKPOINT_1R:     'Checkpoint: 1R Confirmation',
-    EXT_4ATR:          'Extension: 4Ã—ATR (20% Exit)',
-    EXT_8ATR:          'Extension: 8Ã—ATR (40% Exit)',
-    EXT_12ATR:         'Extension: 12Ã—ATR (70% Exit)',
+    EXT_4ATR:          'Extension: 4Ãƒâ€”ATR (20% Exit)',
+    EXT_8ATR:          'Extension: 8Ãƒâ€”ATR (40% Exit)',
+    EXT_12ATR:         'Extension: 12Ãƒâ€”ATR (70% Exit)',
     RUNNER_MODE:       'Runner Mode (EMA20 Trail)',
     SOFT_BREACH_WARN:  'Warning: EMA20 Soft Breach',
     WEAKNESS_EXIT:     'Weakness: EMA20 Confirmed Exit',
@@ -19,17 +19,17 @@ const alertEngine = (() => {
 
   const ALERT_STATUS = { PENDING: 'Pending', TRIGGERED: 'Triggered', COMPLETED: 'Completed', DISMISSED: 'Dismissed' };
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   // Smart Alert Throttle State (in-memory, resets on page load)
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
   const _alertState = {
-    lastDailyBriefingDate:  null,   // 'YYYY-MM-DD' â€” morning briefing already done today?
+    lastDailyBriefingDate:  null,   // 'YYYY-MM-DD' Ã¢â‚¬â€ morning briefing already done today?
     lastAlertedGTT:         {},     // { tradeId: { tranche: price, core: price, dynamic: price } }
-    lastAlertedDynamicType: {},     // { tradeId: alertType } â€” last dynamic type sent to Telegram
+    lastAlertedDynamicType: {},     // { tradeId: alertType } Ã¢â‚¬â€ last dynamic type sent to Telegram
     triggeredWatchlist:     new Set() // item IDs already Telegram-alerted today
   };
 
-  // Is today a weekday (Monâ€“Fri)?
+  // Is today a weekday (MonÃ¢â‚¬â€œFri)?
   function _isWeekday() {
     return new Date().getDay() >= 1 && new Date().getDay() <= 5;
   }
@@ -62,7 +62,7 @@ const alertEngine = (() => {
   function _dynamicAlertChanged(tradeId, newType, newGttPrices) {
     const lastType = _alertState.lastAlertedDynamicType[tradeId];
     if (lastType !== newType) return true; // type changed
-    // Same type â€” check if GTT prices shifted >1%
+    // Same type Ã¢â‚¬â€ check if GTT prices shifted >1%
     if (newGttPrices) {
       if (newGttPrices.core   > 0 && _gttChangedSignificantly(tradeId, 'dynamicCore',    newGttPrices.core))   return true;
       if (newGttPrices.tranche > 0 && _gttChangedSignificantly(tradeId, 'dynamicTranche', newGttPrices.tranche)) return true;
@@ -79,11 +79,11 @@ const alertEngine = (() => {
       const gtt = trade.activeGTT;
       const lines = [];
       if (gtt.tranche?.price > 0)
-        lines.push(`â€¢ Tranche GTT: â‚¹${gtt.tranche.price} Ã— ${gtt.tranche.qty} Qty`);
+        lines.push(`Ã¢â‚¬Â¢ Tranche GTT: Ã¢â€šÂ¹${gtt.tranche.price} Ãƒâ€” ${gtt.tranche.qty} Qty`);
       if (gtt.core?.price > 0)
-        lines.push(`â€¢ Core GTT:    â‚¹${gtt.core.price} Ã— ${gtt.core.qty} Qty`);
+        lines.push(`Ã¢â‚¬Â¢ Core GTT:    Ã¢â€šÂ¹${gtt.core.price} Ãƒâ€” ${gtt.core.qty} Qty`);
       if (!lines.length) continue;
-      const msg = `Morning GTT Levels â€” ${todayStr}\n${lines.join('\n')}\nVerify these are set in your broker app.`;
+      const msg = `Morning GTT Levels Ã¢â‚¬â€ ${todayStr}\n${lines.join('\n')}\nVerify these are set in your broker app.`;
       await _sendTelegram(settings, trade.symbol, 'MORNING GTT BRIEFING', msg);
       // Record these as "last alerted" so intraday won't re-fire unless >1% change
       if (gtt.tranche?.price > 0) _recordGTT(trade.id, 'tranche', gtt.tranche.price);
@@ -92,7 +92,7 @@ const alertEngine = (() => {
     _alertState.lastDailyBriefingDate = todayStr;
   }
 
-  // â”€â”€ NSE/BSE Tick Size â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ NSE/BSE Tick Size Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function _getTickSize(price) {
     if (price <= 250)   return 0.05;
     if (price <= 1000)  return 0.10;
@@ -107,7 +107,7 @@ const alertEngine = (() => {
     return (Math.round(price / tick) * tick).toFixed(tick < 1 ? 2 : 0);
   }
 
-  // â”€â”€ Technical Indicator Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Technical Indicator Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function calculateEMA(closes, period) {
     if (!closes || closes.length < period) return null;
     const k = 2 / (period + 1);
@@ -137,7 +137,7 @@ const alertEngine = (() => {
     return atr;
   }
 
-  // â”€â”€ Cumulative Exit % Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Cumulative Exit % Helper Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function _getCumulativeExitData(trade) {
     const PS = [...(trade.entries || []), ...(trade.pyramids || [])]
       .reduce((sum, e) => sum + Number(e.qty || 0), 0);
@@ -151,7 +151,7 @@ const alertEngine = (() => {
     return Math.min(Math.max(0, Math.floor(PS * tierCumPct) - totalExited), openQty);
   }
 
-  // â”€â”€ Main Entry Point â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Main Entry Point Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   async function checkAllAlerts(trades, customSettings = null, customOhlcMap = null, isEndOfDay = false, activeWatchlist = []) {
     const openPaperCount = (window.db && db.getOpenPaperTrades) ? (await db.getOpenPaperTrades()).length : 0;
     if (!trades?.length && !activeWatchlist?.length && openPaperCount === 0) return false;
@@ -248,7 +248,7 @@ const alertEngine = (() => {
               const rawCore = ema20;
               const finalTranche = Math.max(rawTranche, prevHW.tranche || 0);
               const finalCore    = Math.max(rawCore,    prevHW.core    || 0);
-              const trLabel = isStrongDay ? `â‚¹${_roundTick(finalTranche)} (Day Low + Â½ move â€” strong day)` : `â‚¹${_roundTick(finalTranche)} (Prev Day Low)`;
+              const trLabel = isStrongDay ? `Ã¢â€šÂ¹${_roundTick(finalTranche)} (Day Low + Ã‚Â½ move Ã¢â‚¬â€ strong day)` : `Ã¢â€šÂ¹${_roundTick(finalTranche)} (Prev Day Low)`;
               return { trancheQty, coreQty, finalCore, finalTranche, trLabel, gtt: { core: parseFloat(_roundTick(finalCore)), tranche: parseFloat(_roundTick(finalTranche)) } };
             };
 
@@ -266,7 +266,7 @@ const alertEngine = (() => {
                 if (!activeDynamicAlert) {
                   if (currCandle.close >= threshold) {
                     activeDynamicAlert = ALERT_TYPES.SOFT_BREACH_WARN;
-                    dynamicAlertMessage = "EMA20 undercut but close within 2%. Monitoring next day.\nIf gap down below prev close or stays below EMA20 â†’ EXIT.";
+                    dynamicAlertMessage = "EMA20 undercut but close within 2%. Monitoring next day.\nIf gap down below prev close or stays below EMA20 Ã¢â€ â€™ EXIT.";
                     tradeUpdates.softBreachDate = new Date().toISOString().split('T')[0];
                   } else {
                     activeDynamicAlert = ALERT_TYPES.WEAKNESS_EXIT;
@@ -277,14 +277,14 @@ const alertEngine = (() => {
               if (cmp >= ema20 && trade.softBreachDate) tradeUpdates.softBreachDate = null;
             } else if (cmp < ema20 && cmp > entry) {
               activeDynamicAlert = ALERT_TYPES.WEAKNESS_EXIT;
-              dynamicAlertMessage = `Trend Broken â€” EMA20 â‚¹${_roundTick(ema20)} breached.\nExit remaining: Sell all ${openQty} Qty at market.`;
+              dynamicAlertMessage = `Trend Broken Ã¢â‚¬â€ EMA20 Ã¢â€šÂ¹${_roundTick(ema20)} breached.\nExit remaining: Sell all ${openQty} Qty at market.`;
             }
 
             if (!activeDynamicAlert) {
               if (totalExited >= Math.floor(PS * 0.70)) {
                 activeDynamicAlert = ALERT_TYPES.RUNNER_MODE;
                 const runnerCore = Math.max(ema20, prevHW.core || 0);
-                dynamicAlertMessage = `Runner Mode active. All extensions completed.\nRemain: ${openQty} Qty trailing with EMA20.\n\nSet Sell GTT (Core): ${openQty} Qty at â‚¹${_roundTick(runnerCore)} (EMA20)`;
+                dynamicAlertMessage = `Runner Mode active. All extensions completed.\nRemain: ${openQty} Qty trailing with EMA20.\n\nSet Sell GTT (Core): ${openQty} Qty at Ã¢â€šÂ¹${_roundTick(runnerCore)} (EMA20)`;
                 dynamicGttPrices = { core: parseFloat(_roundTick(runnerCore)), tranche: 0 };
                 tradeUpdates.activeGTT = { tranche: { price: 0, qty: 0 }, core: { price: parseFloat(_roundTick(runnerCore)), qty: openQty }, setDate: new Date().toISOString().split('T')[0] };
               } else if (cmp >= target12ATR) {
@@ -292,7 +292,7 @@ const alertEngine = (() => {
                 const exitQty = _calcTierExitQty(PS, totalExited, openQty, 0.70);
                 const remainQty = openQty - exitQty;
                 const t12 = _buildTrailMsg(exitQty, remainQty);
-                dynamicAlertMessage = `Extreme Extension (12Ã—ATR) reached.\nCMP â‚¹${_roundTick(cmp)} â‰¥ 12Ã—ATR = â‚¹${_roundTick(target12ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t12.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at â‚¹${_roundTick(t12.finalCore)} (EMA20)`;
+                dynamicAlertMessage = `Extreme Extension (12Ãƒâ€”ATR) reached.\nCMP Ã¢â€šÂ¹${_roundTick(cmp)} Ã¢â€°Â¥ 12Ãƒâ€”ATR = Ã¢â€šÂ¹${_roundTick(target12ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t12.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at Ã¢â€šÂ¹${_roundTick(t12.finalCore)} (EMA20)`;
                 dynamicGttPrices = { core: t12.gtt.core, tranche: exitQty > 0 ? t12.gtt.tranche : 0 };
                 tradeUpdates.activeGTT = { tranche: { price: exitQty > 0 ? t12.gtt.tranche : 0, qty: exitQty }, core: { price: t12.gtt.core, qty: remainQty }, setDate: new Date().toISOString().split('T')[0] };
               } else if (cmp >= target8ATR) {
@@ -300,7 +300,7 @@ const alertEngine = (() => {
                 const exitQty = _calcTierExitQty(PS, totalExited, openQty, 0.40);
                 const remainQty = openQty - exitQty;
                 const t8 = _buildTrailMsg(exitQty, remainQty);
-                dynamicAlertMessage = `Great Extension (8Ã—ATR) reached.\nCMP â‚¹${_roundTick(cmp)} â‰¥ 8Ã—ATR = â‚¹${_roundTick(target8ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t8.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at â‚¹${_roundTick(t8.finalCore)} (EMA20)`;
+                dynamicAlertMessage = `Great Extension (8Ãƒâ€”ATR) reached.\nCMP Ã¢â€šÂ¹${_roundTick(cmp)} Ã¢â€°Â¥ 8Ãƒâ€”ATR = Ã¢â€šÂ¹${_roundTick(target8ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t8.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at Ã¢â€šÂ¹${_roundTick(t8.finalCore)} (EMA20)`;
                 dynamicGttPrices = { core: t8.gtt.core, tranche: exitQty > 0 ? t8.gtt.tranche : 0 };
                 tradeUpdates.activeGTT = { tranche: { price: exitQty > 0 ? t8.gtt.tranche : 0, qty: exitQty }, core: { price: t8.gtt.core, qty: remainQty }, setDate: new Date().toISOString().split('T')[0] };
               } else if (cmp >= target4ATR) {
@@ -309,12 +309,12 @@ const alertEngine = (() => {
                 const remainQty = openQty - exitQty;
                 const t4 = _buildTrailMsg(exitQty, remainQty);
                 const finalCore4 = Math.max(entry, t4.finalCore);
-                dynamicAlertMessage = `Normal Extension (4Ã—ATR) reached.\nCMP â‚¹${_roundTick(cmp)} â‰¥ 4Ã—ATR = â‚¹${_roundTick(target4ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t4.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at â‚¹${_roundTick(finalCore4)} (BE or EMA20)\n  3. Move Stop Loss to BE â‚¹${_roundTick(entry)}`;
+                dynamicAlertMessage = `Normal Extension (4Ãƒâ€”ATR) reached.\nCMP Ã¢â€šÂ¹${_roundTick(cmp)} Ã¢â€°Â¥ 4Ãƒâ€”ATR = Ã¢â€šÂ¹${_roundTick(target4ATR)}\nAction:\n${exitQty > 0 ? `  1. Set Sell GTT (Tranche): ${exitQty} Qty at ${t4.trLabel}\n` : `  1. Tranche exit fulfilled.\n`}  2. Set Sell GTT (Core): ${remainQty} Qty at Ã¢â€šÂ¹${_roundTick(finalCore4)} (BE or EMA20)\n  3. Move Stop Loss to BE Ã¢â€šÂ¹${_roundTick(entry)}`;
                 dynamicGttPrices = { core: parseFloat(_roundTick(finalCore4)), tranche: exitQty > 0 ? t4.gtt.tranche : 0 };
                 tradeUpdates.activeGTT = { tranche: { price: exitQty > 0 ? t4.gtt.tranche : 0, qty: exitQty }, core: { price: parseFloat(_roundTick(finalCore4)), qty: remainQty }, setDate: new Date().toISOString().split('T')[0] };
               } else if (cmp >= target1R && !(trade.pyramids?.length > 0)) {
                 activeDynamicAlert = ALERT_TYPES.CHECKPOINT_1R;
-                dynamicAlertMessage = `1R Checkpoint reached. Add 50% pos at â‚¹${_roundTick(cmp)}. Tighten stop to â‚¹${_roundTick((entry + (trade.initialStop || 0)) / 2)}.`;
+                dynamicAlertMessage = `1R Checkpoint reached. Add 50% pos at Ã¢â€šÂ¹${_roundTick(cmp)}. Tighten stop to Ã¢â€šÂ¹${_roundTick((entry + (trade.initialStop || 0)) / 2)}.`;
               }
             }
           }
@@ -325,7 +325,7 @@ const alertEngine = (() => {
         const gtt = trade.activeGTT;
         const todayStr = new Date().toISOString().split('T')[0];
         if (gtt.tranche?.price > 0 && gtt.tranche.qty > 0 && trade.cmp <= gtt.tranche.price && gtt.trancheBreachedDate !== todayStr) {
-          const wasNew = _upsertAlert(alerts, ALERT_TYPES.GTT_TRANCHE_HIT, `Tranche GTT Triggered! CMP â‚¹${_roundTick(trade.cmp)} <= â‚¹${_roundTick(gtt.tranche.price)}.`, null, dirty, isEndOfDay);
+          const wasNew = _upsertAlert(alerts, ALERT_TYPES.GTT_TRANCHE_HIT, `Tranche GTT Triggered! CMP Ã¢â€šÂ¹${_roundTick(trade.cmp)} <= Ã¢â€šÂ¹${_roundTick(gtt.tranche.price)}.`, null, dirty, isEndOfDay);
           if (wasNew && _canTelegram && _gttChangedSignificantly(trade.id, 'tranche', gtt.tranche.price)) {
             _sendTelegram(settings, trade.symbol, ALERT_TYPES.GTT_TRANCHE_HIT, `Tranche GTT Hit! Sell ${gtt.tranche.qty} Qty.`);
             _recordGTT(trade.id, 'tranche', gtt.tranche.price);
@@ -333,7 +333,7 @@ const alertEngine = (() => {
           tradeUpdates.activeGTT = { ...(tradeUpdates.activeGTT || trade.activeGTT), trancheBreachedDate: todayStr };
         }
         if (gtt.core?.price > 0 && gtt.core.qty > 0 && trade.cmp <= gtt.core.price && gtt.coreBreachedDate !== todayStr) {
-          const wasNew = _upsertAlert(alerts, ALERT_TYPES.GTT_CORE_HIT, `Core GTT Triggered! CMP â‚¹${_roundTick(trade.cmp)} <= â‚¹${_roundTick(gtt.core.price)}.`, null, dirty, isEndOfDay);
+          const wasNew = _upsertAlert(alerts, ALERT_TYPES.GTT_CORE_HIT, `Core GTT Triggered! CMP Ã¢â€šÂ¹${_roundTick(trade.cmp)} <= Ã¢â€šÂ¹${_roundTick(gtt.core.price)}.`, null, dirty, isEndOfDay);
           if (wasNew && _canTelegram && _gttChangedSignificantly(trade.id, 'core', gtt.core.price)) {
             _sendTelegram(settings, trade.symbol, ALERT_TYPES.GTT_CORE_HIT, `Core GTT Hit! Sell ${gtt.core.qty} Qty.`);
             _recordGTT(trade.id, 'core', gtt.core.price);
@@ -347,8 +347,8 @@ const alertEngine = (() => {
 
       if (isStopBreached) {
         const { openQty } = _getCumulativeExitData(trade);
-        const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of â‚¹${_roundTick(currentStop)}. EXIT all ${openQty} Qty.`, null, dirty, isEndOfDay);
-        if (wasNew && _canTelegram) _sendTelegram(settings, trade.symbol, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss â‚¹${_roundTick(currentStop)}.`);
+        const wasNew = _upsertAlert(alerts, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss of Ã¢â€šÂ¹${_roundTick(currentStop)}. EXIT all ${openQty} Qty.`, null, dirty, isEndOfDay);
+        if (wasNew && _canTelegram) _sendTelegram(settings, trade.symbol, ALERT_TYPES.STOP_BREACH, `CMP breached stop loss Ã¢â€šÂ¹${_roundTick(currentStop)}.`);
         activeDynamicAlert = null;
       } else {
         const stopIdx = alerts.findIndex(a => a.type === ALERT_TYPES.STOP_BREACH);
@@ -382,7 +382,7 @@ const alertEngine = (() => {
     return updated;
   }
 
-  // â”€â”€ CMP Fetch for Paper Trade Simulation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ CMP Fetch for Paper Trade Simulation Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   const _PT_SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
   const _PT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
 
@@ -421,7 +421,7 @@ const alertEngine = (() => {
     } catch { return []; }
   }
 
-  // â”€â”€ Paper Trade Simulation (intraday-aware, mirrors positions engine) â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Paper Trade Simulation (intraday-aware, mirrors positions engine) Ã¢â€â‚¬Ã¢â€â‚¬
   async function _simulatePaperTrades(ohlcMap, settings) {
     if (!window.db || !db.getOpenPaperTrades) return;
     const paperTrades = await db.getOpenPaperTrades();
@@ -448,7 +448,7 @@ const alertEngine = (() => {
     }));
 
     for (const trade of paperTrades) {
-      // â”€â”€ Compute metrics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Ã¢â€â‚¬Ã¢â€â‚¬ Compute metrics Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
       let m;
       if (calc.getTradeMetrics) {
         m = calc.getTradeMetrics(trade);
@@ -468,7 +468,7 @@ const alertEngine = (() => {
       const updated      = { ...trade };
       let   changed      = false;
 
-      // â”€â”€ ATR extension targets (same as real trade engine) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Ã¢â€â‚¬Ã¢â€â‚¬ ATR extension targets (same as real trade engine) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
       const atr      = trade.entryATR || 0;
       const swingLow = trade.swingLow || entryPrice;
       const target4  = isShort ? swingLow - 4  * atr : swingLow + 4  * atr;
@@ -479,7 +479,7 @@ const alertEngine = (() => {
       // Helper: has this exit already been recorded?
       const hasExit = (src) => (updated.partialExits || []).some(e => e.actionSource?.includes(src));
 
-      // â”€â”€ PASS 1: Historical candles â€” fill in any missed past exits â”€â”€â”€â”€â”€
+      // Ã¢â€â‚¬Ã¢â€â‚¬ PASS 1: Historical candles Ã¢â‚¬â€ fill in any missed past exits Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
       // Use the shared ohlcMap (from real trades) first, then fall back to
       // localOhlcMap which was fetched specifically for paper-only symbols.
       const histCandles = ohlcMap[trade.symbol] || ohlcMap[trade.symbol + '.NS']
@@ -512,9 +512,9 @@ const alertEngine = (() => {
         if (atr > 0) {
           const remaining = m.openQty;
           const extChecks = [
-            { target: target4,  src: '4Ã—ATR',  fraction: 0.20, label: '4Ã—ATR Extension Exit (Paper)' },
-            { target: target8,  src: '8Ã—ATR',  fraction: 0.40, label: '8Ã—ATR Extension Exit (Paper)' },
-            { target: target12, src: '12Ã—ATR', fraction: 1.00, label: '12Ã—ATR Extension Exit (Paper)' },
+            { target: target4,  src: '4Ãƒâ€”ATR',  fraction: 0.20, label: '4Ãƒâ€”ATR Extension Exit (Paper)' },
+            { target: target8,  src: '8Ãƒâ€”ATR',  fraction: 0.40, label: '8Ãƒâ€”ATR Extension Exit (Paper)' },
+            { target: target12, src: '12Ãƒâ€”ATR', fraction: 1.00, label: '12Ãƒâ€”ATR Extension Exit (Paper)' },
           ];
           for (const ext of extChecks) {
             if (!hasExit(ext.src) && remaining > 0 && (isShort ? low <= ext.target : high >= ext.target)) {
@@ -529,7 +529,7 @@ const alertEngine = (() => {
         }
       }
 
-      // â”€â”€ PASS 2: Live intraday CMP â€” check TODAY's moves â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Ã¢â€â‚¬Ã¢â€â‚¬ PASS 2: Live intraday CMP Ã¢â‚¬â€ check TODAY's moves Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
       if (!updated.finalExit) {
         const cmp = cmpCache[trade.symbol];
         if (cmp) {
@@ -540,14 +540,14 @@ const alertEngine = (() => {
           }
           // Stop loss hit intraday
           if (isShort ? cmp >= currentStop : cmp <= currentStop) {
-            updated.finalExit = { id: db.generateId('pe'), date: today, price: currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper â€” Intraday)' };
+            updated.finalExit = { id: db.generateId('pe'), date: today, price: currentStop, qty: m.openQty, charges: 0, actionSource: 'Stop Loss Breached (Paper Ã¢â‚¬â€ Intraday)' };
             changed = true;
           }
           // 1R hit intraday
           if (!updated.finalExit && !hasExit('1R') && (isShort ? cmp <= target1R : cmp >= target1R)) {
             const exitQty = Math.floor(m.openQty / 2);
             if (exitQty > 0) {
-              updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: today, price: target1R, qty: exitQty, charges: 0, actionSource: '1R Partial Exit (Paper â€” Intraday)' }];
+              updated.partialExits = [...(updated.partialExits || []), { id: db.generateId('pe'), date: today, price: target1R, qty: exitQty, charges: 0, actionSource: '1R Partial Exit (Paper Ã¢â‚¬â€ Intraday)' }];
               updated.currentStop  = entryPrice;
               m.openQty -= exitQty;
               changed = true;
@@ -556,9 +556,9 @@ const alertEngine = (() => {
           // ATR extension hits intraday
           if (!updated.finalExit && atr > 0) {
             const extChecks = [
-              { target: target4,  src: '4Ã—ATR',  fraction: 0.20, label: '4Ã—ATR Exit (Paper â€” Intraday)' },
-              { target: target8,  src: '8Ã—ATR',  fraction: 0.40, label: '8Ã—ATR Exit (Paper â€” Intraday)' },
-              { target: target12, src: '12Ã—ATR', fraction: 1.00, label: '12Ã—ATR Exit (Paper â€” Intraday)' },
+              { target: target4,  src: '4Ãƒâ€”ATR',  fraction: 0.20, label: '4Ãƒâ€”ATR Exit (Paper Ã¢â‚¬â€ Intraday)' },
+              { target: target8,  src: '8Ãƒâ€”ATR',  fraction: 0.40, label: '8Ãƒâ€”ATR Exit (Paper Ã¢â‚¬â€ Intraday)' },
+              { target: target12, src: '12Ãƒâ€”ATR', fraction: 1.00, label: '12Ãƒâ€”ATR Exit (Paper Ã¢â‚¬â€ Intraday)' },
             ];
             for (const ext of extChecks) {
               if (!hasExit(ext.src) && m.openQty > 0 && (isShort ? cmp <= ext.target : cmp >= ext.target)) {
@@ -574,7 +574,7 @@ const alertEngine = (() => {
         }
       }
 
-      // â”€â”€ Day-6 Time Stop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      // Ã¢â€â‚¬Ã¢â€â‚¬ Day-6 Time Stop Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
       if (!updated.finalExit && m.openQty > 0) {
         const entryDate   = trade.entries?.[0]?.date || today;
         const tradingDays = calc.getTradingDays
@@ -605,7 +605,7 @@ const alertEngine = (() => {
       const trigger = Number(item.trigger_price) || 0;
 
       if (cmp >= trigger) {
-        const message = `WATCHLIST TRIGGERED: ${item.symbol}\nCMP: â‚¹${cmp} >= Trigger: â‚¹${trigger}\nAction: Open App to Execute or Paper Trade`;
+        const message = `WATCHLIST TRIGGERED: ${item.symbol}\nCMP: Ã¢â€šÂ¹${cmp} >= Trigger: Ã¢â€šÂ¹${trigger}\nAction: Open App to Execute or Paper Trade`;
         
         // Update DB
         item.status = 'triggered';
@@ -619,7 +619,7 @@ const alertEngine = (() => {
     }
   }
 
-  // â”€â”€ Upsert Alert (create or update) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Upsert Alert (create or update) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function _upsertAlert(alerts, type, message, gttPrices, dirty, isEndOfDay) {
     const existing = alerts.find(a => a.type === type);
     const today = new Date().toISOString().split('T')[0];
@@ -694,7 +694,7 @@ const alertEngine = (() => {
     return false;
   }
 
-  // â”€â”€ Telegram Notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Telegram Notification Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   async function _sendTelegram(settings, symbol, phase, instruction) {
     if (!settings.telegramBotToken || !settings.telegramChatId) return;
     try {
@@ -702,7 +702,7 @@ const alertEngine = (() => {
 
       // Choose header based on alert type
       const isWatchlist = (phase || '').toUpperCase().includes('WATCHLIST');
-      const emoji  = isWatchlist ? 'ðŸ“‹' : 'ðŸš¨';
+      const emoji  = isWatchlist ? 'Ã°Å¸â€œâ€¹' : 'Ã°Å¸Å¡Â¨';
       const header = isWatchlist ? 'WATCHLIST ALERT' : 'EXIT ALERT';
 
       const text = `${emoji} *${header}* ${emoji}\n\n*Symbol:* ${symbol}\n*Phase:* ${phase}\n\n*Action Required:*\n${instruction}`;
@@ -720,7 +720,7 @@ const alertEngine = (() => {
     }
   }
 
-  // â”€â”€ Query Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Query Helpers Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function getActiveAlerts(trades) {
     const all = [];
     trades.forEach(trade => {
@@ -753,9 +753,19 @@ const alertEngine = (() => {
     await db.saveTrade({ ...trade, alerts });
   }
 
+  // Public wrapper: run paper trade simulation on demand (no market-hours gate).
+  // Called by paper-trades.js every time the page is opened.
+  async function runPaperSimulation() {
+    const settings = await db.getSettings();
+    // Pass empty ohlcMap â€” _simulatePaperTrades will fetch its own OHLC
+    // via localOhlcMap for symbols not covered by real open trades.
+    await _simulatePaperTrades({}, settings);
+  }
+
   return {
     ALERT_TYPES, ALERT_STATUS,
     checkAllAlerts, getActiveAlerts, dismissAlert, completeAlert,
-    calculateATR, calculateEMA
+    calculateATR, calculateEMA,
+    runPaperSimulation
   };
 })();
