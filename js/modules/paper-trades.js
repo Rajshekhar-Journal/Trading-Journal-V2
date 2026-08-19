@@ -1,12 +1,12 @@
 /**
- * paper-trades.js — Paper Trades Module
+ * paper-trades.js â€” Paper Trades Module
  * Shows all simulated paper trades with split-view detail panel.
  * Mirrors positions.js coding style exactly.
  */
 const PaperTradesModule = (() => {
   let _selectedId = null;
 
-  // ── CMP Fetch Helper ─────────────────────────────────────────────────────
+  // â”€â”€ CMP Fetch Helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const _SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
   const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
 
@@ -20,19 +20,26 @@ const PaperTradesModule = (() => {
     } catch { return null; }
   }
 
-  // ── Init ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function init() {
-    await _renderOverviewCards();
-    await _renderTable();
     _selectedId = null;
     // Collapse detail panel on re-init
     const panel = document.getElementById('pt-detail-panel');
     const left  = document.getElementById('pt-table-panel');
     if (panel) panel.classList.add('hidden');
     if (left)  left.classList.remove('panel-open');
+
+    // Run simulation first so any missed historical exits (e.g. stop-loss hit
+    // on a day when the user had no real open trades) are resolved before render.
+    if (window.alertsModule?.runPaperSimulation) {
+      await alertsModule.runPaperSimulation();
+    }
+
+    await _renderOverviewCards();
+    await _renderTable();
   }
 
-  // ── Overview Cards ────────────────────────────────────────────────────────
+  // â”€â”€ Overview Cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function _renderOverviewCards() {
     const container = document.getElementById('pt-overview-cards');
     if (!container) return;
@@ -77,7 +84,7 @@ const PaperTradesModule = (() => {
       </div>`;
   }
 
-  // ── Render Table ──────────────────────────────────────────────────────────
+  // â”€â”€ Render Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function _renderTable() {
     const tbody = document.getElementById('pt-table-body');
     const count = document.getElementById('pt-count');
@@ -109,12 +116,12 @@ const PaperTradesModule = (() => {
 
       return `<tr class="${isSelected ? 'row-selected' : ''}" style="cursor:pointer" onclick="PaperTradesModule._onRowClick('${trade.id}')">
         <td><strong>${trade.symbol}</strong></td>
-        <td><span class="badge badge-muted" style="font-size:10px">${trade.sector || '—'}</span></td>
+        <td><span class="badge badge-muted" style="font-size:10px">${trade.sector || 'â€”'}</span></td>
         <td>${entryDate}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(entryPrice)}</td>
-        <td id="pt-cmp-${trade.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">${isOpen ? '&#8230;' : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td id="pt-cmp-${trade.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">${isOpen ? '&#8230;' : '<span style="color:var(--text-muted)">â€”</span>'}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(stop)}</td>
-        <td class="font-mono">${isOpen ? m.openQty : '<span style="color:var(--text-muted)">—</span>'}</td>
+        <td class="font-mono">${isOpen ? m.openQty : '<span style="color:var(--text-muted)">â€”</span>'}</td>
         <td class="font-mono" style="color:${pnlColor};font-weight:600">
           ${pnl !== 0 ? (pnl > 0 ? '+' : '') + '&#8377;' + calc.formatNumber(Math.abs(pnl)) : '&#8212;'}
           ${r !== 0 ? `<span style="font-size:11px;opacity:0.75">&nbsp;(${r > 0 ? '+' : ''}${r.toFixed(2)}R)</span>` : ''}
@@ -129,7 +136,7 @@ const PaperTradesModule = (() => {
       if (!cell) return;
       const entryPrice = trade.entries?.[0]?.price || 0;
       const cmp = await _fetchCmp(trade.symbol);
-      if (cmp === null) { cell.innerHTML = '<span style="color:var(--text-muted)">—</span>'; return; }
+      if (cmp === null) { cell.innerHTML = '<span style="color:var(--text-muted)">â€”</span>'; return; }
       const isShort = trade.direction === 'Short';
       const profit  = isShort ? cmp < entryPrice : cmp > entryPrice;
       const pctDiff = entryPrice > 0 ? (((cmp - entryPrice) / entryPrice) * 100).toFixed(1) : 0;
@@ -139,14 +146,14 @@ const PaperTradesModule = (() => {
     });
   }
 
-  // ── Row Click → Open Detail Panel ─────────────────────────────────────────
+  // â”€â”€ Row Click â†’ Open Detail Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function _onRowClick(id) {
     _selectedId = id;
     await _renderTable(); // re-render to highlight selected row
     await _renderDetailPanel(id);
   }
 
-  // ── Render Detail Panel ───────────────────────────────────────────────────
+  // â”€â”€ Render Detail Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function _renderDetailPanel(id) {
     const panel  = document.getElementById('pt-detail-panel');
     const left   = document.getElementById('pt-table-panel');
@@ -172,14 +179,14 @@ const PaperTradesModule = (() => {
     // Build lifecycle events
     const events = [];
     (trade.entries || []).forEach(e => events.push({ date: e.date, type: 'Entry', detail: `${e.qty} shares @ &#8377;${calc.formatNumber(e.price)}`, color: '#3b82f6' }));
-    (trade.stopRevisions || []).forEach(s => events.push({ date: s.date, type: 'Stop Trail', detail: `&#8377;${calc.formatNumber(s.oldStop)} → &#8377;${calc.formatNumber(s.newStop)} (${s.actionSource})`, color: '#f59e0b' }));
-    (trade.partialExits || []).forEach(p => events.push({ date: p.date, type: 'Partial Exit', detail: `${p.qty} shares @ &#8377;${calc.formatNumber(p.price)} — <em>${p.actionSource}</em>`, color: '#10b981' }));
-    if (trade.finalExit) events.push({ date: trade.finalExit.date, type: 'Final Exit', detail: `${trade.finalExit.qty} shares @ &#8377;${calc.formatNumber(trade.finalExit.price)} — <em>${trade.finalExit.actionSource}</em>`, color: '#ef4444' });
+    (trade.stopRevisions || []).forEach(s => events.push({ date: s.date, type: 'Stop Trail', detail: `&#8377;${calc.formatNumber(s.oldStop)} â†’ &#8377;${calc.formatNumber(s.newStop)} (${s.actionSource})`, color: '#f59e0b' }));
+    (trade.partialExits || []).forEach(p => events.push({ date: p.date, type: 'Partial Exit', detail: `${p.qty} shares @ &#8377;${calc.formatNumber(p.price)} â€” <em>${p.actionSource}</em>`, color: '#10b981' }));
+    if (trade.finalExit) events.push({ date: trade.finalExit.date, type: 'Final Exit', detail: `${trade.finalExit.qty} shares @ &#8377;${calc.formatNumber(trade.finalExit.price)} â€” <em>${trade.finalExit.actionSource}</em>`, color: '#ef4444' });
     events.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
     const lifecycleRows = events.map(e => `
       <tr>
-        <td style="color:var(--text-muted);font-size:11px">${e.date || '—'}</td>
+        <td style="color:var(--text-muted);font-size:11px">${e.date || 'â€”'}</td>
         <td><span style="color:${e.color};font-weight:600;font-size:12px">${e.type}</span></td>
         <td style="font-size:12px">${e.detail}</td>
       </tr>`).join('');
@@ -195,8 +202,8 @@ const PaperTradesModule = (() => {
             const price = isShort
               ? trade.swingLow - mult * atr
               : trade.swingLow + mult * atr;
-            if (!(trade.partialExits || []).some(p => p.actionSource?.includes(mult + '×'))) {
-              targets.push({ label: `${mult}×ATR Target`, price, color: col });
+            if (!(trade.partialExits || []).some(p => p.actionSource?.includes(mult + 'Ã—'))) {
+              targets.push({ label: `${mult}Ã—ATR Target`, price, color: col });
             }
           });
         }
@@ -206,7 +213,7 @@ const PaperTradesModule = (() => {
     const targetRows = targets.map(t => `
       <tr>
         <td style="color:${t.color};font-weight:600;font-size:12px">${t.label}</td>
-        <td class="font-mono">${t.price ? '&#8377;' + calc.formatNumber(t.price) : '—'}</td>
+        <td class="font-mono">${t.price ? '&#8377;' + calc.formatNumber(t.price) : 'â€”'}</td>
         <td style="font-size:11px;color:var(--text-muted)">${t.note || (t.price ? 'Pending' : '')}</td>
       </tr>`).join('');
 
@@ -222,7 +229,7 @@ const PaperTradesModule = (() => {
             </div>
             <div style="font-size:12px;color:var(--text-muted)">${trade.sector || ''} &bull; ${trade.direction} &bull; Held ${holdDays} day${holdDays !== 1 ? 's' : ''}</div>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="PaperTradesModule._closePanel()">✕ Close</button>
+          <button class="btn btn-secondary btn-sm" onclick="PaperTradesModule._closePanel()">âœ• Close</button>
         </div>
 
         <!-- Key Metrics -->
@@ -245,12 +252,12 @@ const PaperTradesModule = (() => {
           </div>
           <div class="card" style="padding:12px;text-align:center">
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Open Qty</div>
-            <div style="font-weight:700;font-size:15px">${isOpen ? m.openQty : '—'}</div>
+            <div style="font-weight:700;font-size:15px">${isOpen ? m.openQty : 'â€”'}</div>
           </div>
           <div class="card" style="padding:12px;text-align:center">
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Sim. P&L</div>
             <div style="font-weight:700;font-size:15px;color:${pnlColor}">
-              ${pnl !== 0 ? (pnl > 0 ? '+' : '') + '&#8377;' + calc.formatNumber(Math.abs(pnl)) : '—'}
+              ${pnl !== 0 ? (pnl > 0 ? '+' : '') + '&#8377;' + calc.formatNumber(Math.abs(pnl)) : 'â€”'}
               ${r !== 0 ? `<br><span style="font-size:11px">${r > 0 ? '+' : ''}${r.toFixed(2)}R</span>` : ''}
             </div>
           </div>
@@ -274,7 +281,7 @@ const PaperTradesModule = (() => {
           <div class="card" style="padding:0">
             <table class="data-table" style="font-size:12px">
               <thead><tr><th>Date</th><th>Event</th><th>Detail</th></tr></thead>
-              <tbody>${lifecycleRows || '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px">No events yet — simulation in progress</td></tr>'}</tbody>
+              <tbody>${lifecycleRows || '<tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:16px">No events yet â€” simulation in progress</td></tr>'}</tbody>
             </table>
           </div>
         </div>
@@ -289,7 +296,7 @@ const PaperTradesModule = (() => {
       </div>`;
   }
 
-  // ── Close Detail Panel ────────────────────────────────────────────────────
+  // â”€â”€ Close Detail Panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _closePanel() {
     _selectedId = null;
     const panel = document.getElementById('pt-detail-panel');
@@ -299,7 +306,7 @@ const PaperTradesModule = (() => {
     _renderTable();
   }
 
-  // ── Delete Paper Trade ────────────────────────────────────────────────────
+  // â”€â”€ Delete Paper Trade â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   async function _deleteTrade(id) {
     if (!confirm('Delete this paper trade simulation? This cannot be undone.')) return;
     await db.deletePaperTrade(id);
@@ -309,7 +316,7 @@ const PaperTradesModule = (() => {
     await _renderTable();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   function _simPnl(trade) {
     const entryPrice = trade.entries?.[0]?.price || 0;
     const isShort    = trade.direction === 'Short';
@@ -352,7 +359,7 @@ const PaperTradesModule = (() => {
     const isOpen = db.getTradeRemainingQty(trade) > 0;
     if (isOpen) {
       const has1R = (trade.partialExits || []).some(p => p.actionSource?.includes('1R'));
-      if (has1R) return `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">&#9989; 1R Hit — Open</span>`;
+      if (has1R) return `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">&#9989; 1R Hit â€” Open</span>`;
       return `<span class="badge" style="background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600">&#9200; Monitoring</span>`;
     }
     const src = trade.finalExit?.actionSource || '';
