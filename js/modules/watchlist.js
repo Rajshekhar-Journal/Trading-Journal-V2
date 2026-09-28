@@ -109,11 +109,17 @@ const WatchlistModule = (() => {
       <div class="form-group"><label class="form-label">Symbol *</label>
         <input class="form-input" id="wl-symbol" placeholder="E.G. RELIANCE" style="text-transform:uppercase"
           oninput="this.value=this.value.toUpperCase();WatchlistModule._calcQty()"></div>
+      <div class="form-group"><label class="form-label">CMP (&#8377;) <span id="wl-cmp-status" style="color:var(--text-muted);font-weight:400">&#8212; fetched from symbol</span></label>
+        <input class="form-input" id="wl-cmp" disabled placeholder="Auto-fetched" style="opacity:0.7"></div>
       <div class="form-group"><label class="form-label">Sector</label>
         <select class="form-select" id="wl-sector">
           <option>Banking</option><option>IT</option><option>Energy</option><option>Pharma</option>
           <option>FMCG</option><option>Auto</option><option>Telecom</option><option>Chemicals</option>
           <option>NBFC</option><option>Consumer</option><option>Cement</option><option>Other</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Mode</label>
+        <select class="form-select" id="wl-mode">
+          <option value="both" selected>Real + Paper</option><option value="real">Real only</option><option value="paper">Paper only</option>
         </select></div>
       <div class="form-group"><label class="form-label">Trigger Buy Price (&#8377;) *</label>
         <input class="form-input" type="number" id="wl-trigger" step="0.05" placeholder="e.g. 1500"
@@ -125,10 +131,6 @@ const WatchlistModule = (() => {
         <input class="form-input" id="wl-rps" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
       <div class="form-group"><label class="form-label">RPT (&#8377;) <span style="color:var(--text-muted);font-weight:400">default from Settings, editable</span></label>
         <input class="form-input" type="number" id="wl-rpt" step="100" value="${defRPT}" oninput="WatchlistModule._calcQty()"></div>
-      <div class="form-group"><label class="form-label">Mode</label>
-        <select class="form-select" id="wl-mode">
-          <option value="both" selected>Real + Paper</option><option value="real">Real only</option><option value="paper">Paper only</option>
-        </select></div>
       <div class="form-group"><label class="form-label">First entry qty (50%)</label>
         <input class="form-input" id="wl-qty" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
       <div class="form-group form-full"><label class="form-label">Notes (Setup / Thesis)</label>
@@ -155,6 +157,48 @@ const WatchlistModule = (() => {
           await _renderTable();
       }}
     ]);
+    _wireCmpFetch();
+  }
+
+  /** Fetch live CMP 800 ms after the symbol stops changing, and compare it with the trigger. */
+  function _wireCmpFetch() {
+    const symEl = document.getElementById('wl-symbol');
+    if (!symEl) return;
+    let timer, lastSym = '';
+    symEl.addEventListener('input', () => {
+      clearTimeout(timer);
+      const sym = symEl.value.trim().toUpperCase();
+      if (sym.length < 2 || sym === lastSym) return;
+      timer = setTimeout(async () => {
+        lastSym = sym;
+        const cmpEl = document.getElementById('wl-cmp');
+        const status = document.getElementById('wl-cmp-status');
+        if (status) status.textContent = '⏳ fetching…';
+        const price = await _fetchCmp(sym);
+        if (document.getElementById('wl-symbol')?.value.trim().toUpperCase() !== sym) return; // symbol changed meanwhile
+        if (price) {
+          if (cmpEl) cmpEl.value = price.toFixed(2);
+          _showCmpVsTrigger();
+        } else {
+          if (cmpEl) cmpEl.value = '';
+          if (status) status.textContent = '❌ not found — check symbol';
+        }
+      }, 800);
+    });
+    document.getElementById('wl-trigger')?.addEventListener('input', _showCmpVsTrigger);
+  }
+
+  /** Status next to CMP: distance to trigger, and a warning when price is already above it. */
+  function _showCmpVsTrigger() {
+    const cmp = parseFloat(document.getElementById('wl-cmp')?.value);
+    const trigger = parseFloat(document.getElementById('wl-trigger')?.value);
+    const status = document.getElementById('wl-cmp-status');
+    if (!status || !cmp) return;
+    if (!trigger) { status.textContent = '✅ live'; return; }
+    const pct = ((trigger - cmp) / cmp * 100).toFixed(1);
+    status.innerHTML = cmp >= trigger
+      ? '<span style="color:#d97706">⚠ already above trigger — entry fires after a 5-min hold</span>'
+      : `✅ ${pct}% below trigger`;
   }
 
   // ── Execute Real Trade (pre-fills the New Trade modal) ────────────────────
