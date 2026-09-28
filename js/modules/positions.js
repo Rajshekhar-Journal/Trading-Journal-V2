@@ -10,11 +10,10 @@ const positionsModule = (() => {
   let _isFullscreen = false;
   let _cachedSettings = null;
   let _cachedDefRPT = 0;
-  let _cmpRefreshTimer = null;
 
-  // ── Shared CMP fetch helper (uses Supabase Edge Function proxy) ──────────
-  const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
-  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+  // ── CMP / candle fetch helper (Supabase Edge Function proxy) ─────────────
+  const SUPABASE_URL = APP_CONFIG.SUPABASE_URL;
+  const SUPABASE_KEY = APP_CONFIG.SUPABASE_ANON_KEY;
 
   async function _fetchLiveCmp(symbol, includeOHLC = false) {
     try {
@@ -47,88 +46,32 @@ const positionsModule = (() => {
     await _renderOverviewCards();
     await _renderTable();
     _setupNewTradeBtn();
-    _startAutoCmpRefresh();
+    _listenForEngine();
   }
 
-  // ── Auto-refresh CMP for all open positions every 3 minutes ─────────────
-  function _startAutoCmpRefresh() {
-    if (_cmpRefreshTimer) clearInterval(_cmpRefreshTimer);
-    _autoRefreshAllCmps(); // run once immediately
-    _cmpRefreshTimer = setInterval(_autoRefreshAllCmps, 3 * 60 * 1000);
+  // ── Live updates come from the Trade Lifecycle runner (js/engine/runner.js) ──
+  let _engineListener = null;
+  function _listenForEngine() {
+    if (_engineListener) return;
+    _engineListener = async () => {
+      if (!document.getElementById('mod-positions')?.classList.contains('active')) return;
+      await _renderOverviewCards();
+      if (_selectedTradeId) await _renderDetailPanel(_selectedTradeId);
+      else await _renderTable();
+    };
+    window.addEventListener('tlm:cycle', _engineListener);
   }
 
-  async function _autoRefreshAllCmps(isManual = false) {
-    const settings = await db.getSettings();
-    const holidaysStr = settings?.marketHolidays || '';
-    
-    if (!isManual) {
-      // Calculate IST time
-      const now = new Date();
-      const istTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-      const day = istTime.getDay(); // 0 = Sunday, 1 = Monday... 6 = Saturday
-      const isWeekday = day >= 1 && day <= 5;
-      
-      const timeFloat = istTime.getHours() + (istTime.getMinutes() / 60);
-      const isMarketHours = timeFloat >= 8.75 && timeFloat <= 16.05; // 8:45 AM to 4:03 PM
-      
-      const todayStr = String(istTime.getDate()).padStart(2, '0') + '-' + String(istTime.getMonth() + 1).padStart(2, '0') + '-' + istTime.getFullYear();
-      const isHoliday = holidaysStr.includes(todayStr);
+  async function _syncNow() {
+    app.toast('Running rule engine…', 'info', 1500);
+    const ran = await TLMRunner.runCycle({ force: true });
+    if (!ran) app.toast('Nothing to evaluate', 'info');
+  }
 
-      if (!isWeekday || !isMarketHours || isHoliday) {
-         return; // Skip background processing outside market hours or on holidays
-      }
-    }
-    
-    // Determine End Of Day for Telegram Rule B
-    let isEndOfDay = false;
-    if (!isManual) {
-       const istTime = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
-       const timeFloat = istTime.getHours() + (istTime.getMinutes() / 60);
-       if (timeFloat >= 15.95 && timeFloat <= 16.05) isEndOfDay = true;
-    }
-
-    const openTrades = await db.getOpenTrades();
-    const watchlist = (await db.getWatchlist()) || [];
-    const activeWatchlist = watchlist.filter(w => w.status === 'monitoring');
-
-    if (!openTrades.length && !activeWatchlist.length) return;
-    let updated = false;
-    const ohlcMap = {}; // { 'RELIANCE': [{open,high,low,close}, ...] }
-
-    const allSymbols = [...new Set([...openTrades.map(t => t.symbol), ...activeWatchlist.map(w => w.symbol)])];
-
-    // Fetch live price + historical candles for alerts
-    await Promise.all(allSymbols.map(async symbol => {
-      const res = await _fetchLiveCmp(symbol, true); // true = get full OHLC
-      if (!res) return;
-      const { price, candles } = res;
-      ohlcMap[symbol] = candles;
-      
-      const tradesWithSym = openTrades.filter(t => t.symbol === symbol);
-      for (const trade of tradesWithSym) {
-        if (price && Math.abs(price - (trade.cmp || 0)) > 0.01) {
-          await db.saveTrade({ ...trade, cmp: price });
-          updated = true;
-          const cell = document.querySelector(`[data-cmp-cell="${trade.id}"]`);
-          if (cell) cell.textContent = `₹${calc.formatNumber(price)}`;
-        }
-      }
-    }));
-
-    // Re-fetch trades in case cmp was updated, then run advanced alert engine
-    const currentTrades = await db.getOpenTrades();
-    const alertsUpdated = await alertEngine.checkAllAlerts(currentTrades, settings, ohlcMap, isEndOfDay, activeWatchlist);
-    if (alertsUpdated?.length) updated = true;
-
-    // Refresh UI if necessary
-    // If detail panel is open, refresh it to show new CMP
-    if (updated && _selectedTradeId) {
-      await _renderOverviewCards();
-      await _renderDetailPanel(_selectedTradeId);
-    } else if (updated) {
-      await _renderOverviewCards();
-      await _renderTable();
-    }
+  /** Mark / dismiss a lifecycle alert from the detail panel. */
+  async function _alertAct(alertId, status, tradeId) {
+    await db.updateAlert(alertId, status === 'Executed' ? { status, executed_at: new Date().toISOString() } : { status });
+    await _renderDetailPanel(tradeId);
   }
 
   // ── Overview Cards ─────────────────────────────────────────────────────────
@@ -251,11 +194,14 @@ const positionsModule = (() => {
       return _sortState.dir === 'asc' ? cmp_ : -cmp_;
     });
 
+    const pending = {};
+    (await db.getAlerts({ limit: 300 })).filter(a => a.mode === 'real' && a.status === 'New').forEach(a => { pending[a.trade_id] = (pending[a.trade_id] || 0) + 1; });
     tbody.innerHTML = withKeys.map(({ trade, m, cmp, unrealPnl, chgPct,
       exposurePct, riskPct, unrealPct, netPct, netPnl }) => {
       const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
-      const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
-      const alertBadge= alerts.length ? `<span class="badge badge-warning">⚠ ${alerts.length}</span>` : `<span class="badge badge-muted">—</span>`;
+      const stage     = TLMPanel.stateOf(trade);
+      const alertBadge= (stage ? `<span class="tlm-stage">${TLMRules.STAGE_LABELS[stage.stage]}</span> ` : '')
+        + (pending[trade.id] ? `<span class="badge badge-warning">⚠ ${pending[trade.id]}</span>` : '');
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
       const riskRCls  = m.currentRisk >= 0 ? 'text-success'
         : Math.abs(m.currentRisk) > m.trueRPT ? 'text-danger'
@@ -340,45 +286,20 @@ const positionsModule = (() => {
     const _cap    = await db.getCapital();
     const _closed = await db.getClosedTrades();
     const equity  = calc.getCurrentEquity(_cap, calc.getTotalPnl(_closed));
-    const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
-    
-    const phaseColors = {
-      'Stop Loss Breach':                  { icon: '🚨', color: '#f85149', label: 'STOP LOSS BREACH' },
-      'Checkpoint: 1R Confirmation':       { icon: '🟢', color: '#3fb950', label: '1R CHECKPOINT — ADD & TIGHTEN' },
-      'Extension: 4×ATR (20% Exit)':       { icon: '🔵', color: '#58a6ff', label: '4×ATR EXTENSION — EXIT 20%' },
-      'Extension: 8×ATR (40% Exit)':       { icon: '🟠', color: '#ffa657', label: '8×ATR EXTENSION — EXIT 20%' },
-      'Extension: 12×ATR (70% Exit)':      { icon: '🟣', color: '#bf91f3', label: '12×ATR EXTENSION — EXIT 30%' },
-      'Runner Mode (EMA20 Trail)':         { icon: '🏃', color: '#8b949e', label: 'RUNNER MODE — EMA20 TRAIL' },
-      'Warning: EMA20 Soft Breach':        { icon: '🟡', color: '#d29922', label: 'EMA20 SOFT BREACH — MONITORING' },
-      'Weakness: EMA20 Confirmed Exit':    { icon: '📉', color: '#f85149', label: 'EMA20 WEAKNESS — EXIT ALL' },
-      'Time-Based Stop (Day 6)':           { icon: '📅', color: '#8b949e', label: 'DAY-6 TIME EXIT' },
-      'Exit Triggered: Tranche GTT Hit':   { icon: '⬇️', color: '#f0883e', label: 'TRANCHE GTT HIT — EXIT NOW' },
-      'Exit Triggered: Core GTT Hit':      { icon: '⬇️', color: '#f85149', label: 'CORE GTT HIT — EXIT ALL' },
-    };
-
-    // Bulletproof cleanup: strictly render only v2.2 alerts that exist in phaseColors mapping
-    const validUIAlerts = (trade.alerts || []).filter(a => !!phaseColors[a.type]);
-    
-    const alertHtml = validUIAlerts.map(a => {
-      const cfg = phaseColors[a.type] || { icon: '🔔', color: '#8b949e', label: a.type };
-      const triggered = a.triggeredAt ? new Date(a.triggeredAt).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-      return `
-        <div style="border:1px solid ${cfg.color}44;border-left:4px solid ${cfg.color};background:${cfg.color}11;border-radius:10px;padding:14px 16px;margin-bottom:10px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-size:16px">${cfg.icon}</span>
-              <span style="font-weight:700;font-size:13px;color:${cfg.color};letter-spacing:0.3px">${cfg.label}</span>
-            </div>
-            <span style="font-size:11px;color:var(--text-muted)">${triggered}</span>
+    const openAlerts = (await db.getAlerts({ limit: 300 })).filter(a => a.trade_id === tradeId && a.status === 'New');
+    const alertHtml = openAlerts.map(a => `
+        <div class="tlm-alert ${a.rule_id === 'LC-09' ? 'critical' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong>${a.alert_type}</strong>
+            <span style="font-size:11px;color:var(--text-muted)">${new Date(a.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
           </div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text);line-height:1.6;background:rgba(0,0,0,0.2);border-radius:6px;padding:10px 12px;margin-bottom:10px;white-space:pre-wrap;">${a.message || ''}</div>
-          <div style="display:flex;gap:8px;">
-            <button onclick="alertEngine.completeAlert('${tradeId}','${a.type}').then(()=>positionsModule._onRowClick('${tradeId}'))" style="padding:5px 12px;font-size:12px;font-weight:600;background:#238636;color:white;border:none;border-radius:6px;cursor:pointer;">✓ Done (GTT Set)</button>
-            <button onclick="alertEngine.dismissAlert('${tradeId}','${a.type}').then(()=>positionsModule._onRowClick('${tradeId}'))" style="padding:5px 12px;font-size:12px;color:var(--text-muted);background:transparent;border:1px solid var(--border);border-radius:6px;cursor:pointer;">Dismiss</button>
+          <pre>${a.message || ''}</pre>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm btn-primary" onclick="positionsModule._alertAct('${a.id}','Executed','${tradeId}')">✓ Mark executed</button>
+            <button class="btn btn-sm btn-secondary" onclick="positionsModule._alertAct('${a.id}','Dismissed','${tradeId}')">Dismiss</button>
           </div>
-        </div>`;
-    }).join('');
+        </div>`).join('');
     const playbook  = await db.getPlaybookById(trade.playbookId);
 
     panel.innerHTML = `
@@ -434,6 +355,8 @@ const positionsModule = (() => {
           </div>
 
 
+          <div class="card" style="padding:12px;margin:12px 0">${TLMPanel.html(trade)}</div>
+
           <div class="quick-actions">
             <button class="quick-action-btn exit" onclick="positionsModule._showExitModal('${tradeId}', 'partial')">Partial Exit</button>
             <button class="quick-action-btn exit" onclick="positionsModule._showExitModal('${tradeId}', 'final')">Final Exit</button>
@@ -446,7 +369,6 @@ const positionsModule = (() => {
           <div class="detail-tab-bar">
             <button class="detail-tab-btn active" data-dtab="lifecycle">Lifecycle</button>
             <button class="detail-tab-btn" data-dtab="stops">Stop History</button>
-            <button class="detail-tab-btn" data-dtab="targets">Targets</button>
             <button class="detail-tab-btn" data-dtab="notes">Notes</button>
             <button class="detail-tab-btn" data-dtab="chart">Chart</button>
           </div>
@@ -463,11 +385,12 @@ const positionsModule = (() => {
         if (!tc) return;
         if (btn.dataset.dtab === 'lifecycle') tc.innerHTML = _renderLifecycleTab(t);
         else if (btn.dataset.dtab === 'stops')     tc.innerHTML = _renderStopsTab(t);
-        else if (btn.dataset.dtab === 'targets')   tc.innerHTML = _renderTargetsTab(t);
         else if (btn.dataset.dtab === 'notes')     tc.innerHTML = _renderNotesTab(t);
         else if (btn.dataset.dtab === 'chart')     tc.innerHTML = _renderChartTab(t);
       });
     });
+
+    TLMPanel.loadSnapshots(trade);
 
     // Restore fullscreen state if we are currently in fullscreen (panel HTML was just rebuilt)
     if (_isFullscreen) {
@@ -653,8 +576,8 @@ const positionsModule = (() => {
         statusEl.textContent = '⏳ Fetching...';
         try {
           // Use Supabase Edge Function proxy to avoid CORS
-          const SUPABASE_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
-          const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+          const SUPABASE_URL = APP_CONFIG.SUPABASE_URL;
+          const SUPABASE_KEY = APP_CONFIG.SUPABASE_ANON_KEY;
           const ticker = `${encodeURIComponent(trade.symbol)}.NS`;
           const url = `${SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${ticker}&interval=1d&range=1d`;
           const resp = await fetch(url, {
@@ -903,19 +826,14 @@ const positionsModule = (() => {
           lineSeries.setData(targetCandles.map(c => ({ time: c.time, value: price })));
         };
 
-        const swingLow = trade.swingLow || m.avgEntryPrice;
-        const entryATR = trade.entryATR || 0;
-        
+        const tlm = TLMPanel.stateOf(trade);
         _addTargetLine(m.currentStop, '#ef4444', `SL ₹${calc.formatNumber(m.currentStop)}`);
-        
-        if (trade.direction === 'Long') {
-          const riskPerShare = m.avgEntryPrice - trade.initialStop;
-          _addTargetLine(m.avgEntryPrice + riskPerShare, '#eab308', `1R ₹${calc.formatNumber(m.avgEntryPrice + riskPerShare)}`);
-          if (entryATR > 0) {
-            _addTargetLine(swingLow + 4*entryATR, '#3b82f6', `4ATR ₹${calc.formatNumber(swingLow + 4*entryATR)}`);
-            _addTargetLine(swingLow + 8*entryATR, '#f97316', `8ATR ₹${calc.formatNumber(swingLow + 8*entryATR)}`);
-            _addTargetLine(swingLow + 12*entryATR, '#a855f7', `12ATR ₹${calc.formatNumber(swingLow + 12*entryATR)}`);
-          }
+        if (tlm) {
+          if (tlm.hardStop !== m.currentStop) _addTargetLine(tlm.hardStop, '#f97316', `Hard stop ₹${calc.formatNumber(tlm.hardStop)}`);
+          [['T1', '#eab308'], ['T2', '#22c55e'], ['T5', '#3b82f6'], ['T10', '#a855f7']].forEach(([k, col]) =>
+            _addTargetLine(tlm.targets[k], col, `${k.slice(1)}R ₹${calc.formatNumber(tlm.targets[k])}`));
+          const tr = TLMEngine.activeTranche(tlm);
+          if (tr) _addTargetLine(tr.trail, '#f59e0b', `Trail ${tr.id === 'T5' ? '5R' : '10R'} ₹${calc.formatNumber(tr.trail)}`);
         }
 
         // ── Entry & Exit markers on actual candles ────────────────
@@ -1049,7 +967,7 @@ const positionsModule = (() => {
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="exit-charges" value="0" step="0.01"></div>
       <div class="form-group form-full"><label class="form-label">Action Source</label>
         <select class="form-select" id="exit-source">
-          <option>Manual Discretionary</option><option>Day-6 Time Exit</option><option>4×ATR Extension Exit</option><option>8×ATR Extension Exit</option><option>12×ATR Extension Exit</option><option>EMA20 Weakness Exit</option><option>Stop Loss Breached</option><option>1R Pyramid Add</option><option>Full Close</option>
+          <option>LC-07 Trail exit</option><option>LC-09 Hard stop</option><option>Manual Discretionary</option><option>Full Close</option>
         </select>
       </div>
     </div>`;
@@ -1071,18 +989,10 @@ const positionsModule = (() => {
           updated.finalExit = exitRecord;
         }
 
-        // Auto-complete ALL triggered alerts when an exit is recorded.
-        // The action source matches the alert type — mark them as Completed.
-        updated.alerts = (trade.alerts || []).map(a => {
-          if (a.status === 'Triggered') {
-            return { ...a, status: 'Completed', completedAt: new Date().toISOString(), completedBy: source };
-          }
-          return a;
-        });
-
         await db.saveTrade(updated);
         app.closeModal();
-        app.toast(`Exit recorded for ${trade.symbol}. Alerts marked Completed.`, 'success');
+        await TLMAlerts.markExecuted(tradeId, ['SELL', 'EXIT_ALL']);
+        app.toast(`Exit recorded for ${trade.symbol}`, 'success');
         await init();
         const stillOpen = await db.getTradeById(tradeId);
         if (stillOpen) await _renderDetailPanel(tradeId);
@@ -1184,6 +1094,7 @@ const positionsModule = (() => {
 
         await db.saveTrade(updated);
         app.closeModal();
+        await TLMAlerts.markExecuted(tradeId, ['BUY']);
         const stopMsg = newStop !== curStop ? ` | Stop → ₹${calc.formatNumber(newStop)}` : '';
         app.toast(`Pyramid added to ${trade.symbol}${stopMsg}`, 'success');
         await init();
@@ -1215,6 +1126,7 @@ const positionsModule = (() => {
         const updated = { ...trade, currentStop: newStop, stopRevisions: [...(trade.stopRevisions||[]), { id: db.generateId('sr'), date, oldStop, newStop, actionSource: source, notes }] };
         await db.saveTrade(updated);
         app.closeModal();
+        await TLMAlerts.markExecuted(tradeId, ['STOP', 'BRIEF', 'TRAIL']);
         app.toast(`Stop revised for ${trade.symbol}`, 'success');
         await init(); await _renderDetailPanel(tradeId);
       }}
@@ -1312,27 +1224,12 @@ const positionsModule = (() => {
         const exchange   = document.getElementById('nt-exchange')?.value || 'NSE';
         if (!symbol || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
 
-        // Compute frozen entry-day indicators for extension-based exits
-        let entryATR = null, swingLow = null;
-        try {
-          const suffix = exchange === 'BSE' ? '.BO' : '.NS';
-          const ohlcRes = await _fetchLiveCmp(symbol + suffix, true);
-          if (ohlcRes?.candles?.length >= 2) {
-            const period = Math.min(14, ohlcRes.candles.length - 1);
-            entryATR = alertEngine.calculateATR(ohlcRes.candles, period);
-            const last10 = ohlcRes.candles.slice(-10);
-            swingLow = direction === 'Long' 
-              ? Math.min(...last10.map(c => c.low))
-              : Math.max(...last10.map(c => c.high));
-          }
-        } catch (e) { console.warn('Could not compute entryATR/swingLow', e); }
-
         const pb = playbookId ? await db.getPlaybookById(playbookId) : null;
         const trade = {
           id: db.generateId('tr'), symbol, sector, tradeType, direction, exchange,
           playbookId, playbookVersion: playbookId ? pb?.currentVersion || '1.0' : '',
           initialStop: stop, currentStop: stop, rpt,
-          entryATR, swingLow,   // frozen entry-day ATR14 and swing low for exit strategy
+          tlmState: TLMEngine.createState({ entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(await db.getSettings()), now: Date.now() }),
           entries: [{ id: db.generateId('en'), date, price, qty, charges, notes:'' }],
           pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource:'Manual', notes:'Initial stop' }],
           partialExits: [], finalExit: null, notes: [], alerts: [],
@@ -1342,7 +1239,7 @@ const positionsModule = (() => {
         };
         await db.saveTrade(trade);
         app.closeModal();
-        app.toast(`Trade added: ${symbol}${entryATR ? ` | ATR ₹${entryATR.toFixed(2)} | SwingLow ₹${swingLow.toFixed(2)}` : ''}`, 'success');
+        app.toast(`Trade added: ${symbol}`, 'success');
         await init();
       }}
     ]);
@@ -1459,13 +1356,9 @@ const positionsModule = (() => {
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Initial Stop Loss (₹)</label>
         <input class="form-input" type="number" id="edit-initial-stop" step="0.05" value="${trade.initialStop || ''}"></div>
-      <div class="form-group"><label class="form-label">Swing Low (₹)</label>
-        <input class="form-input" type="number" id="edit-swing-low" step="0.05" value="${trade.swingLow || ''}"></div>
-      <div class="form-group"><label class="form-label">Entry ATR (₹)</label>
-        <input class="form-input" type="number" id="edit-entry-atr" step="0.05" value="${trade.entryATR || ''}"></div>
       <div class="form-full">
         <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">
-          Note: Updating these values on legacy trades will allow the Alert Engine to accurately calculate extensions (e.g. 4×ATR).
+          Changing the initial stop recalculates 1R and the 1R / 2R / 5R / 10R targets. The lifecycle stage is kept.
         </p>
       </div>
     </div>`;
@@ -1474,15 +1367,17 @@ const positionsModule = (() => {
       { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
       { id: 'save', label: 'Save Changes', class: 'btn-success', onClick: async () => {
           const initStop = parseFloat(document.getElementById('edit-initial-stop').value);
-          const swingLow = parseFloat(document.getElementById('edit-swing-low').value);
-          const entryATR = parseFloat(document.getElementById('edit-entry-atr').value);
-          
           if (!initStop) { app.toast('Initial stop is required', 'error'); return; }
-          
+
           const updated = { ...trade, initialStop: initStop };
-          if (!isNaN(swingLow)) updated.swingLow = swingLow;
-          if (!isNaN(entryATR)) updated.entryATR = entryATR;
-          
+          const old = trade.tlmState;
+          if (old) {
+            const fresh = TLMEngine.createState({ entryPrice: old.entryPrice, firstQty: old.firstQty, initialStop: initStop });
+            if (!fresh) { app.toast('Initial stop must be below the entry price', 'error'); return; }
+            updated.tlmState = { ...old, initialStop: fresh.initialStop, r: fresh.r, targets: fresh.targets,
+              hardStop: old.stage <= TLMRules.STAGES.ENTERED ? fresh.hardStop : old.hardStop };
+          }
+
           await db.saveTrade(updated);
           app.closeModal();
           app.toast('Trade updated successfully', 'success');
@@ -1493,95 +1388,8 @@ const positionsModule = (() => {
     ]);
   }
 
-  // ── Target Management Tab ────────────────────────────────────────────────
-  function _renderTargetsTab(trade) {
-    const m = calc.getTradeMetrics(trade);
-    const cmp = trade.cmp || m.avgEntryPrice;
-    const swingLow = trade.swingLow || m.avgEntryPrice;
-    const entryATR = trade.entryATR || 0;
-    
-    // 1R = average entry price + risk per share
-    const riskPerShare = m.avgEntryPrice - trade.initialStop;
-    const t1R = m.avgEntryPrice + riskPerShare;
-    
-    const t4 = swingLow + 4 * entryATR;
-    const t8 = swingLow + 8 * entryATR;
-    const t12 = swingLow + 12 * entryATR;
-
-    const _row = (label, formula, price, color, isAtr) => {
-      if (isAtr && (!entryATR || entryATR <= 0)) {
-        return `
-          <tr>
-            <td><strong style="color:${color}">${label}</strong></td>
-            <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">${formula}</td>
-            <td style="color:#f59e0b;font-size:12px;"><span title="Edit trade to set Entry ATR" style="cursor:pointer">⚠️ Missing ATR</span></td>
-            <td>—</td>
-          </tr>`;
-      }
-      if (price <= 0 || isNaN(price)) return '';
-      const ach = cmp >= price;
-      return `
-        <tr>
-          <td><strong style="color:${color}">${label}</strong></td>
-          <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">${formula}</td>
-          <td style="font-weight:600">₹${calc.formatNumber(price)}</td>
-          <td>${ach ? '<span class="badge badge-success">Achieved</span>' : '<span class="badge badge-muted">Pending</span>'}</td>
-        </tr>`;
-    };
-
-    let alertRows = '';
-    const validAlerts = (trade.alerts || []).sort((a,b) => new Date(b.triggeredAt||0) - new Date(a.triggeredAt||0));
-    if (validAlerts.length === 0) {
-      alertRows = `<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No alerts generated yet.</td></tr>`;
-    } else {
-      alertRows = validAlerts.map(a => {
-        const dt = a.triggeredAt ? new Date(a.triggeredAt).toLocaleString('en-IN') : '—';
-        return `
-          <tr>
-            <td style="white-space:nowrap;color:var(--text-muted)">${dt}</td>
-            <td style="font-weight:600">${a.type}</td>
-            <td style="font-family:monospace;font-size:11px;white-space:pre-wrap;">${a.message || '—'}</td>
-            <td><span class="badge ${a.status==='Completed' ? 'badge-success' : 'badge-warning'}">${a.status}</span></td>
-          </tr>`;
-      }).join('');
-    }
-
-    return `
-      <div style="margin-top:16px;">
-        <h4 style="margin:0 0 10px 0;font-size:14px;color:var(--text);">🎯 Target Matrix</h4>
-        <table class="data-table" style="margin-bottom:24px;">
-          <thead>
-            <tr><th>Milestone</th><th>Formula</th><th>Target Price</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong style="color:#ef4444">Current Stop Loss</strong></td>
-              <td style="color:var(--text-muted);font-family:monospace;font-size:11px;">Active Trail</td>
-              <td style="font-weight:600">₹${calc.formatNumber(m.currentStop)}</td>
-              <td>—</td>
-            </tr>
-            ${trade.direction === 'Long' ? _row('1R Checkpoint', 'Avg Entry + 1R', t1R, '#eab308', false) : ''}
-            ${trade.direction === 'Long' ? _row('4×ATR Extension', 'Swing Low + 4×ATR', t4, '#3b82f6', true) : ''}
-            ${trade.direction === 'Long' ? _row('8×ATR Extension', 'Swing Low + 8×ATR', t8, '#f97316', true) : ''}
-            ${trade.direction === 'Long' ? _row('12×ATR Extension', 'Swing Low + 12×ATR', t12, '#a855f7', true) : ''}
-          </tbody>
-        </table>
-
-        <h4 style="margin:0 0 10px 0;font-size:14px;color:var(--text);">🔔 Alert History</h4>
-        <table class="data-table">
-          <thead>
-            <tr><th>Date</th><th>Alert Type</th><th>Message / Instruction</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            ${alertRows}
-          </tbody>
-        </table>
-      </div>
-    `;
-  }
-
   return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal,
     _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _showEditTradeModal, _autoCalcTrade, _autoCalcExitCharges,
     _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _editStopRow, _deleteStopRow,
-    _deleteTrade, _sortTable, forceRefresh: () => _autoRefreshAllCmps(true), _renderTargetsTab };
+    _deleteTrade, _sortTable, _alertAct, forceRefresh: _syncNow };
 })();

@@ -11,7 +11,7 @@ const settingsModule = (() => {
     { id: 'trading', label: '📊 Trading Defaults', icon: '📊' },
     { id: 'risk', label: '🛡 Risk Management', icon: '🛡️' },
     { id: 'charges', label: '💳 Charges & Brokerage', icon: '💳' },
-    { id: 'alerts', label: '🔔 Alerts & Notifications', icon: '🔔' },
+    { id: 'alerts', label: '🔁 Trade Lifecycle & Alerts', icon: '🔁' },
     { id: 'data', label: '🗄 Data Management', icon: '🗄️' },
     { id: 'app', label: '📱 Application', icon: '📱' },
     { id: 'formulas', label: '𝑓 Formula Manager', icon: '🔢' },
@@ -342,151 +342,26 @@ const settingsModule = (() => {
             <h4>&#128274; Privacy Mode</h4>
             <p>Toggle in Settings &rarr; General or press <code>Ctrl+Shift+P</code>. Blurs all &#8377; amounts across the entire app. R-multiples and percentages remain visible. Safe for screen-sharing or screenshots.</p>`)}
 
-          ${S('um8','&#128276;','Alert Engine v2.2 &mdash; Complete Guide',`
-            <p>The alert engine monitors all open trades and generates <strong>GTT (Good Till Triggered) instructions</strong> for your broker. It runs automatically and sends notifications to Telegram.</p>
-
-            <h4>Strategy v2.2 Overview &mdash; Phased Entry + Graduated Exits</h4>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Feature</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Detail</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Entry</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Phased: 50% at entry, +50% at 1R confirmation (via Pyramid).</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">1R Checkpoint</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Alert fires at Entry + 1R. Action: Add remaining 50%, tighten stop to midpoint.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Extension Anchoring</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">All ATR targets from frozen SwingLow (MIN of last 10 candle opens at entry).</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Frozen ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Entry-day ATR14 stored once. Never recalculated during the trade.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:600;">Tranche Trail</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Previous Day Candle Low (with High-Water Mark). Strong day: LOD + &frac12; &times; move.</td></tr>
-              <tr><td style="padding:6px 10px;font-weight:600;">Core Trail</td><td style="padding:6px 10px;">EMA20 with Soft Breach Rule (post-4&times;ATR only).</td></tr>
+          ${S('um8','&#128257;','Trade Lifecycle Rule Engine v3.0 &mdash; Guide',`
+            <p>One rule engine manages every trade, real and paper, from trigger to exit. It runs every minute from 09:00 to 15:30 IST on trading days while the app is open (<strong>&#10227; Sync now</strong> runs it any time). Real trades get an alert; paper trades are executed automatically with virtual money.</p>
+            <h4>Lifecycle</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;text-align:left;">Stage</th><th style="padding:6px 10px;text-align:left;">When</th><th style="padding:6px 10px;text-align:left;">What happens</th></tr></thead><tbody>
+              <tr><td style="padding:6px 10px;">Entry (LC-01)</td><td style="padding:6px 10px;">Price holds 5 min above the watchlist trigger</td><td style="padding:6px 10px;">Buy 50% of full size (RPT &divide; (trigger &minus; stop)); stop = initial stop</td></tr>
+              <tr><td style="padding:6px 10px;">1R (LC-02)</td><td style="padding:6px 10px;">Holds 5 min above entry + 1R</td><td style="padding:6px 10px;">Buy the same qty again; stop raised by 0.5R so total risk = 1 RPT</td></tr>
+              <tr><td style="padding:6px 10px;">2R (LC-03)</td><td style="padding:6px 10px;">Holds 5 min above entry + 2R</td><td style="padding:6px 10px;">Stop = max(avg entry, EMA20 &minus; 2%); from now the hard stop trails EMA20 &minus; 2% daily</td></tr>
+              <tr><td style="padding:6px 10px;">5R (LC-04)</td><td style="padding:6px 10px;">Holds 5 min above entry + 5R</td><td style="padding:6px 10px;">40% of open qty trails max(prev day low, hard stop)</td></tr>
+              <tr><td style="padding:6px 10px;">10R (LC-05)</td><td style="padding:6px 10px;">Holds 5 min above entry + 10R</td><td style="padding:6px 10px;">Unsold 5R trail is dropped; 50% of open qty trails max(prev day low, hard stop)</td></tr>
             </tbody></table>
-
-            <h4>How to Enable Alerts</h4><ol>
-              <li>Go to <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
-              <li>Enter your <strong>Telegram Bot Token</strong> and <strong>Chat ID</strong>.</li>
-              <li>Toggle ON the alert types you want.</li>
-              <li>Click <strong>Save Changes</strong>. Alerts start running on the next 3-minute cycle.</li>
-            </ol>
-
-            <h4>When Does the Engine Run?</h4>
-            <p>Every <strong>3 minutes</strong>, Monday&ndash;Friday, 8:45 AM&ndash;4:03 PM IST, excluding NSE holidays. A special <strong>4:00 PM End-of-Day</strong> fetch runs daily for final Telegram summary. Click <strong>&#128260; Sync Live Data</strong> in Positions to force a manual run anytime.</p>
-
-            <h4>All Alert Types (v2.2)</h4>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Alert</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Trigger</th><th style="padding:6px 10px;border-bottom:1px solid var(--border);text-align:left;">Action</th></tr></thead><tbody>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128680; Stop Loss Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &le; Current Stop (Long)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT entire position immediately.</strong> Overrides all other alerts.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#3fb950;">&#128994; 1R Checkpoint</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; Entry + 1&times;Risk (no pyramid yet)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Add remaining 50% position. Tighten stop to midpoint.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#58a6ff;">&#128309; 4&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 4&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit 20% PS. Set tranche GTT at PrevLow. Core at MAX(BE, EMA20).</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#ffa657;">&#128992; 8&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 8&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit to 40% cumulative. Set tranche GTT at PrevLow. Core at EMA20.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#bf91f3;">&#128995; 12&times;ATR Extension</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &ge; SwingLow + 12&times;ATR</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Exit to 70% cumulative. Remaining 30% enters Runner Mode.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#8b949e;">&#127939; Runner Mode</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">After 12&times;ATR tranche completed</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Trail remaining 30% with EMA20 only (soft breach rule applies).</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#d29922;">&#128993; EMA20 Soft Breach</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">CMP &lt; EMA20, but close within 2% (post-4&times;ATR)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">WARNING only. Monitor next day. If gap-down or stays below &rarr; EXIT.</td></tr>
-              <tr><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);font-weight:700;color:#f85149;">&#128200; EMA20 Weakness Exit</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);">Confirmed EMA20 breach (next-day gap-down or &gt;2% below)</td><td style="padding:6px 10px;border-bottom:1px solid var(--border-light);"><strong>EXIT ALL remaining position at market.</strong></td></tr>
-              <tr><td style="padding:6px 10px;font-weight:700;color:#8b949e;">&#128197; Day-6 Time Exit</td><td style="padding:6px 10px;">Trade held &ge; 6 trading days, no exits yet</td><td style="padding:6px 10px;">Exit 50% of open qty to reduce exposure.</td></tr>
-            </tbody></table>
-
-            <h4>Priority Waterfall</h4>
-            <p>Only <strong>one dynamic alert</strong> is active per trade at a time:</p>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
-              &#128680; Stop Loss Breach (P1 &mdash; overrides everything)<br>
-              &nbsp;&nbsp;&#8595; only if NOT breached<br>
-              &#128200; EMA20 Weakness Exit (P2.0 &mdash; confirmed, post-4&times;ATR)<br>
-              &#128993; EMA20 Soft Breach Warning (P2.0b &mdash; monitoring)<br>
-              &#128995; 12&times;ATR Extension (P2.1 &mdash; cum 70%)<br>
-              &#128992; 8&times;ATR Extension (P2.2 &mdash; cum 40%)<br>
-              &#128309; 4&times;ATR Extension (P2.3 &mdash; cum 20%)<br>
-              &#127939; Runner Mode (after 12&times;ATR done)<br>
-              &#128994; 1R Checkpoint (P3 &mdash; advisory)<br>
-              <br>
-              &#128197; Day-6 Time Exit (independent &mdash; runs alongside any alert)
-            </p>
-
-            <h4>EMA20 Soft Breach Rule (Post-4&times;ATR Only)</h4>
-            <p>After the 4&times;ATR exit is completed, EMA20 breaches get a <strong>2% tolerance buffer</strong> to avoid false shakeouts:</p>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
-              CMP dips below EMA20<br>
-              &nbsp;&nbsp;&#9500; Close &ge; EMA20 &times; 0.98? (within 2%)<br>
-              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;YES &rarr; &#128993; WARNING only. Monitor next day.<br>
-              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9500; Next day gap down below prev close? &rarr; &#128308; EXIT<br>
-              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9500; Next day stays below EMA20? &rarr; &#128308; EXIT<br>
-              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&#9492; Next day recovers above EMA20? &rarr; &#128994; Cancel warning<br>
-              &nbsp;&nbsp;&#9474;&nbsp;&nbsp;NO (close &gt;2% below) &rarr; &#128308; EXIT immediately<br>
-              &nbsp;&nbsp;&#9492; Before 4&times;ATR? &rarr; &#128308; EXIT immediately (no tolerance)
-            </p>
-
-            <h4>&#128200; Strong Day Adjustment (2.5&times;ATR Move)</h4>
-            <p>On days when the stock&rsquo;s close-to-close move exceeds <strong>2.5&times; ATR14</strong>, the tranche trailing stop uses:</p>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;">
-              <strong>Normal day:</strong> Tranche GTT = Prev Day Low (with HWM)<br>
-              <strong>Strong day (&gt;2.5&times;ATR):</strong> Tranche GTT = Day Low + &frac12; &times; move
-            </p>
-
-            <h4>Qty Exit per Extension Tier</h4>
-            <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tier</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Exit %</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Cumul %</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Tranche Stop</th><th style="padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;">Core Stop</th></tr></thead><tbody>
-              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">4&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">MAX(Breakeven, EMA20)</td></tr>
-              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">8&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">20%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">40%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA20</td></tr>
-              <tr><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">12&times;ATR</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">30%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">70%</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">Prev Day Low</td><td style="padding:5px 8px;border-bottom:1px solid var(--border-light);">EMA20</td></tr>
-              <tr><td style="padding:5px 8px;">Runner</td><td style="padding:5px 8px;">30%</td><td style="padding:5px 8px;">100%</td><td style="padding:5px 8px;">&mdash;</td><td style="padding:5px 8px;">EMA20 (with soft breach)</td></tr>
-            </tbody></table>
-            <p><em>Exit qty formula: exitQty = MIN(MAX(0, floor(PS &times; tierCumPct) &minus; totalExited), openQty). PS = total bought qty (entries + pyramids). Handles pyramids and discretionary exits automatically.</em></p>
-
-            <h4>&#128274; GTT High-Water Mark (Prices Never Drop)</h4>
-            <p>Once the engine calculates a GTT price, it stores a <strong>high-water mark</strong> per alert. GTT prices can only go <strong>up</strong>, never down. Phase carry-over applies across tier transitions.</p>
-
-            <h4>Alert Lifecycle &mdash; Full Flow (v2.2)</h4>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.9;">
-              1. Entry (50%) &rarr; Set initial GTT at [Stop] for [50% Qty]<br>
-              2. CMP &ge; Entry + 1R &rarr; &#128994; 1R CHECKPOINT &rarr; Add 50%, tighten stop<br>
-              3. CMP &ge; SwingLow + 4&times;ATR &rarr; &#128309; 4&times;ATR &rarr; exit 20%, stop to BE<br>
-              4. CMP &ge; SwingLow + 8&times;ATR &rarr; &#128992; 8&times;ATR &rarr; exit to 40% cumulative<br>
-              &nbsp;&nbsp;&nbsp;(strong day &gt;2.5&times;ATR? tranche = Day Low + &frac12; move)<br>
-              5. CMP &ge; SwingLow + 12&times;ATR &rarr; &#128995; 12&times;ATR &rarr; exit to 70% cumulative<br>
-              6. Remaining 30% &rarr; &#127939; RUNNER MODE &rarr; EMA20 trail with soft breach<br>
-              7. EMA20 breached (confirmed) &rarr; &#128200; WEAKNESS EXIT &rarr; exit all
-            </p>
-
-            <h4>Exit Reason Tracking</h4>
-            <p>When recording an exit (Partial or Final), select the exact reason from the dropdown:</p>
-            <ul style="font-size:12px;">
-              <li><strong>Manual Discretionary</strong> &mdash; Trader&rsquo;s own judgment</li>
-              <li><strong>Day-6 Time Exit</strong> &mdash; Time-based stop after 6 trading days</li>
-              <li><strong>4&times;ATR / 8&times;ATR / 12&times;ATR Extension Exit</strong> &mdash; Extension tier reached</li>
-              <li><strong>EMA20 Weakness Exit</strong> &mdash; Confirmed EMA20 breach</li>
-              <li><strong>Stop Loss Breached</strong> &mdash; Stop loss hit</li>
-              <li><strong>1R Pyramid Add</strong> &mdash; Related to 1R confirmation entry</li>
-              <li><strong>Full Close</strong> &mdash; Complete position closure</li>
-            </ul>
-            <p>Recording an exit automatically marks all triggered alerts as Completed.</p>
-
-            <h4>NSE Tick Size Rounding</h4>
-            <p>All GTT prices are rounded to broker-compatible NSE tick sizes: &le;&#8377;250 &rarr; 0.05 | &le;&#8377;1k &rarr; 0.10 | &le;&#8377;5k &rarr; 0.50 | &le;&#8377;18k &rarr; 1.00 | above &rarr; 5.00</p>
-
-            <h4>Alert Cards in UI</h4>
-            <p>Active alerts appear at the top of the detail panel when you click a position. Each card shows: phase icon, label, triggered timestamp, exact GTT instruction. Buttons: <strong>&checkmark; Done (GTT Set)</strong> marks alert as completed. <strong>Dismiss</strong> silences it without action.</p>
+            <h4>Exits</h4><ul>
+              <li><strong>Trail exit (LC-07):</strong> 15 minutes below the trail, or 2% below it at once &rarr; sell that tranche.</li>
+              <li><strong>Hard stop (LC-09):</strong> price crosses below &rarr; sell everything immediately, at any stage.</li></ul>
+            <h4>Alerts</h4><ul>
+              <li>Three lines: Alert type, CMP, Suggestion (with calculated qty and &#8377; prices).</li>
+              <li>Same alert at most once a day; re-sent only if the suggested value moves 1% or more. Executed alerts never repeat.</li>
+              <li>Stop-loss breach on a real trade repeats every 15 minutes until you record the exit.</li>
+              <li>09:00 IST: a &ldquo;Set stop loss&rdquo; alert for every open position with recalculated levels.</li>
+              <li>Real alerts go to Telegram and the Alert Dashboard; paper alerts only to the Alert Dashboard.</li></ul>
           `)}
-
-          ${S('um9','&#128276;','Telegram Notification Rules (v2.2)',`
-            <h4>Rule A &mdash; New Alert</h4>
-            <p>Instant Telegram alert when a trade crosses a <strong>new tier</strong> for the first time (1R checkpoint, 4&times;ATR, 8&times;ATR, 12&times;ATR, Runner Mode, EMA20 Breach).</p>
-
-            <h4>Rule B &mdash; End-of-Day Summary</h4>
-            <p>At <strong>4:00 PM IST</strong>, if any alert&rsquo;s message has changed since the last EOD notification, a final daily Telegram message is sent with the latest GTT levels.</p>
-
-            <h4>Rule C &mdash; 1% Upward Move</h4>
-            <p>If any GTT price in the alert message increases by <strong>&ge;1%</strong> from the last notified value during intraday trading, a re-notification is sent. Only fires on <em>upward</em> moves.</p>
-
-            <h4>Telegram Message Format</h4>
-            <p style="font-family:monospace;font-size:11px;background:var(--bg);padding:10px 14px;border-radius:6px;line-height:1.8;">
-              &#128680; <strong>EXIT ALERT</strong> &#128680;<br><br>
-              <strong>Symbol:</strong> RELIANCE<br>
-              <strong>Phase:</strong> &#128309; 4&times;ATR Extension<br><br>
-              <strong>Action Required:</strong><br>
-              1. Set Tranche GTT: 200 Qty at &pound;562 (Prev Day Low)<br>
-              2. Set Core GTT: 800 Qty at &pound;555 (EMA20)<br><br>
-              Next target: 8&times;ATR at &pound;670
-            </p>
-
-            <h4>Telegram Setup</h4><ol>
-              <li>Search <strong>@BotFather</strong> on Telegram, send <code>/newbot</code>, follow steps to get your <strong>Bot Token</strong>.</li>
-              <li>Search <strong>@userinfobot</strong> on Telegram, send <code>/start</code> to get your <strong>Chat ID</strong>.</li>
-              <li>Paste both in <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
-              <li>Click <strong>Save</strong>. Send a test by clicking <strong>&#128260; Sync Live Data</strong> in Positions.</li>
-            </ol>
-          `)}
-
           ${S('um10','&#128172;','Telegram Bot Setup',`
             <h4>Step 1 &mdash; Create Your Bot</h4><ol>
               <li>Open Telegram &rarr; search <strong>@BotFather</strong> (blue tick) &rarr; send <code>/newbot</code>.</li>
@@ -875,48 +750,60 @@ const settingsModule = (() => {
     app.toast('Brokerage settings saved', 'success');
   }
 
-  // ── PAGE: Alerts ───────────────────────────────────────────────────────────
+  // ── PAGE: Trade Lifecycle & Alerts (rule engine v3.0) ──────────────────────
+  const TLM_PARAM_FIELDS = [
+    { key: 'entryHoldMin',       label: 'Entry hold above trigger',        unit: 'min' },
+    { key: 'targetHoldMin',      label: 'Target hold (1R / 2R / 5R / 10R)', unit: 'min' },
+    { key: 'trailHoldMin',       label: 'Trail exit — time below trail',    unit: 'min' },
+    { key: 'trailDeepBreakPct',  label: 'Trail exit at once — % below',     unit: '%' },
+    { key: 'firstEntryPct',      label: 'First entry — % of full size',     unit: '%' },
+    { key: 'stopRaiseAt1R',      label: 'Stop raise at 1R',                 unit: 'R' },
+    { key: 'emaBufferPct',       label: 'Hard stop — % below EMA20',        unit: '%' },
+    { key: 'tranche5Pct',        label: '5R trail — % of open qty',         unit: '%' },
+    { key: 'tranche10Pct',       label: '10R trail — % of open qty',        unit: '%' },
+    { key: 'largeCandleAtrMult', label: 'Large candle = move above',        unit: '× ATR14' },
+    { key: 'alertResendPct',     label: 'Re-send same alert if value moves', unit: '%' },
+    { key: 'breachRepeatMin',    label: 'Repeat stop-breach alert every',   unit: 'min' },
+  ];
+
+  const TLM_RULE_ROWS = [
+    ['LC-01', 'Entry', 'Price holds above trigger', 'Buy 50% of RPT size; stop = initial stop'],
+    ['LC-02', '1R', 'Holds above entry + 1R', 'Buy same qty; stop + 0.5R (risk = 1 RPT)'],
+    ['LC-03', '2R', 'Holds above entry + 2R', 'Stop = max(avg entry, EMA20 − 2%)'],
+    ['LC-04', '5R', 'Holds above entry + 5R', 'Trail 40% of open qty on max(prev day low, hard stop)'],
+    ['LC-05', '10R', 'Holds above entry + 10R', 'Drop unsold 5R trail; trail 50% of open qty'],
+    ['LC-06', 'Trail update', 'Every day start', 'Trail = max(trail, prev day low*, hard stop)'],
+    ['LC-07', 'Trail exit', '15 min below trail, or 2% below', 'Sell the tranche at market'],
+    ['LC-08', 'Hard-stop trail', 'Every day start, from 2R', 'Hard stop = max(stop, EMA20 − 2%)'],
+    ['LC-09', 'Hard stop', 'Price below hard stop', 'Sell all open qty at once'],
+    ['LC-10', 'Day start', '09:00 IST', 'Set-stop-loss alert for each open position'],
+  ];
+
   async function _pageAlerts() {
     const settings = await db.getSettings();
-    const s = settings?.alerts || {};
-    const ALERT_TYPES = [
-      { id: 'portfolioHeat', name: 'Portfolio Heat', desc: 'Triggers when heat approaches or exceeds max' },
-      { id: 'positionRisk', name: 'Position Risk', desc: 'Individual position risk exceeds threshold' },
-      { id: 'stopBreach', name: 'Stop Loss Breach', desc: 'Price has breached the stop loss level' },
-      { id: 'day5Exit', name: 'Day-5 Exit', desc: 'Trade has been open for 5+ days without movement' },
-      { id: 'ruleBroken', name: 'Rule Break', desc: 'Trade executed without following playbook rules' },
-      { id: 'revengeTrade', name: 'Revenge Trading', desc: 'Increased position after consecutive losses' },
-      { id: 'ema20Exit', name: 'EMA20 Exit Signal', desc: 'Price breaks below 20-day EMA' },
-      { id: 'atrExtension', name: 'ATR Extension', desc: 'Price extends beyond 2x ATR from moving average' },
-    ];
+    const p = TLMRunner.paramsFrom(settings);
     return `<div class="settings-page">
-      <div class="settings-section-header">Alerts &amp; Notifications</div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Disabling an alert never disables the underlying business rule. Alerts only control how you are notified.</div>
-      <table class="alerts-config-table">
-        <thead><tr><th>Alert</th><th>Enabled</th><th>Severity</th><th>Dashboard</th><th>Popup</th></tr></thead>
-        <tbody>${ALERT_TYPES.map(a => {
-          const cfg = s[a.id] || { enabled: true, severity: 'Warning', dashboard: true, popup: true };
-          return `<tr>
-            <td><div style="font-weight:500">${a.name}</div><div style="font-size:11px;color:var(--text-muted)">${a.desc}</div></td>
-            <td><label class="toggle-switch"><input type="checkbox" id="al-${a.id}-on" ${cfg.enabled ? 'checked' : ''}><span class="toggle-slider"></span></label></td>
-            <td><select class="form-select" id="al-${a.id}-sev" style="width:100px">
-              <option ${cfg.severity==='Info'?'selected':''}>Info</option>
-              <option ${cfg.severity==='Warning'?'selected':''}>Warning</option>
-              <option ${cfg.severity==='Critical'?'selected':''}>Critical</option>
-            </select></td>
-            <td style="text-align:center"><input type="checkbox" id="al-${a.id}-dash" ${cfg.dashboard ? 'checked' : ''}></td>
-            <td style="text-align:center"><input type="checkbox" id="al-${a.id}-pop" ${cfg.popup ? 'checked' : ''}></td>
-          </tr>`;
-        }).join('')}</tbody>
+      <div class="settings-section-header">Trade Lifecycle rules (v${p.rulesVersion})</div>
+      <div class="alert-banner info" style="margin-bottom:14px">ℹ Real and paper trades follow the same pre-defined rules. Real trades get an alert (Telegram + Alert Dashboard); paper trades are executed automatically.</div>
+      <table class="data-table" style="font-size:12px;margin-bottom:6px">
+        <thead><tr><th>Rule</th><th>Stage</th><th>Trigger</th><th>Action</th></tr></thead>
+        <tbody>${TLM_RULE_ROWS.map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody>
       </table>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">* On a large-candle day (close-to-close move above ${p.largeCandleAtrMult} × ATR14) the base is day low + ½ the move. Stages only move forward; stops and trails never move down.</div>
+
+      <div class="settings-section-header">Rule parameters</div>
+      <div class="settings-grid">
+        ${TLM_PARAM_FIELDS.map(f => `<div class="form-group"><label class="form-label">${f.label} (${f.unit})</label>
+          <input class="form-input" type="number" step="any" id="tlm-${f.key}" value="${p[f.key]}"></div>`).join('')}
+      </div>
 
       <div class="settings-section-header" style="margin-top:24px">Market Holidays</div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Enter comma-separated dates (DD-MM-YYYY) for holidays. These are skipped when calculating trading days (e.g. for Day-5 exit).</div>
+      <div class="alert-banner info" style="margin-bottom:14px">ℹ Comma-separated dates (DD-MM-YYYY). The engine does not run on these days.</div>
       <div class="form-group">
         <input class="form-input" type="text" id="al-holidays" value="${settings.marketHolidays || ''}" placeholder="e.g. 26-01-2026, 15-08-2026, 02-10-2026">
       </div>
-      
-      <div class="settings-section-header" style="margin-top:24px;">Telegram Integration (Dynamic Exits)</div>
+
+      <div class="settings-section-header" style="margin-top:24px;">Telegram (real-trade alerts only)</div>
       <div class="settings-grid">
         <div class="form-group">
           <label class="form-label">Telegram Bot Token</label>
@@ -936,18 +823,20 @@ const settingsModule = (() => {
 
   async function _saveAlerts() {
     const settings = await db.getSettings();
-    const ALERT_IDS = ['portfolioHeat','positionRisk','stopBreach','day5Exit','ruleBroken','revengeTrade','ema20Exit','atrExtension'];
-    settings.alerts = {};
-    ALERT_IDS.forEach(id => {
-      settings.alerts[id] = { enabled: document.getElementById(`al-${id}-on`)?.checked ?? true, severity: document.getElementById(`al-${id}-sev`)?.value || 'Warning', dashboard: document.getElementById(`al-${id}-dash`)?.checked ?? true, popup: document.getElementById(`al-${id}-pop`)?.checked ?? true };
-    });
+    const overrides = {};
+    for (const f of TLM_PARAM_FIELDS) {
+      const v = parseFloat(document.getElementById(`tlm-${f.key}`)?.value);
+      if (!(v >= 0)) { app.toast(`${f.label}: enter a number`, 'error'); return; }
+      if (v !== TLMRules.DEFAULT_PARAMS[f.key]) overrides[f.key] = v;
+    }
+    settings.tlmParams = overrides;
+    delete settings.alerts;   // v2 alert toggles are replaced by the rule set
     settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
     settings.telegramBotToken = document.getElementById('al-telegram-token')?.value || '';
     settings.telegramChatId = document.getElementById('al-telegram-chat')?.value || '';
-    
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Alert settings & Telegram config saved', 'success');
+    app.toast('Trade lifecycle settings saved', 'success');
   }
 
   // ── PAGE: Data Management ──────────────────────────────────────────────────

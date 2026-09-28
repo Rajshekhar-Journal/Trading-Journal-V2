@@ -45,3 +45,26 @@ This project is configured for automated deployment via Vercel.
 ## Documentation
 
 For instructions on how to use the application, please refer to the [User Guide](USER_GUIDE.md).
+
+## Trade Lifecycle rule engine v3.0 (2026-09-28)
+
+Real and paper trades follow one pre-defined rule set (spec: *Trade Lifecycle Rule Engine — Spec v3.0*).
+
+| File | Role |
+| --- | --- |
+| `js/config.js` | Supabase URL / anon key — single source |
+| `js/engine/indicators.js` | EMA (SMA-seeded), ATR, tick rounding, 5-min / 15-min hold checks, IST time helpers |
+| `js/engine/tlm-rules.js` | Rule IDs LC-01…LC-10, stages, alert types, default parameters |
+| `js/engine/tlm-engine.js` | Pure engine: `planPosition`, `createState`, `evaluateWatch`, `dayStart`, `evaluate` |
+| `js/engine/market-data.js` | 1-min + daily candles via the `yahoo-finance` Edge Function |
+| `js/engine/alert-service.js` | 3-line alerts, once-a-day / 1% / 15-min rules, Telegram (real only), `alert_log` |
+| `js/engine/executors.js` | Paper auto-execution (pyramids, stops, exits, charges) |
+| `js/engine/runner.js` | Runs every minute 09:00–15:31 IST while the app is open; `Sync now` forces a run |
+| `js/modules/alert-dashboard.js` | Dashboard card + full-screen alert log |
+| `js/modules/tlm-panel.js` | Lifecycle panel (stage, targets, hard stop, trails, entry-day charts) |
+
+Database: run `supabase/migrations/004_paper_trades_watchlist.sql` and `005_tlm_engine.sql` in the Supabase SQL Editor.
+
+Tests: `npm test` (pure engine, worked example and scenarios).
+
+Retired code is in `_archive/`; the pre-v3.0 code is backed up in `_backup_pre_tlm_v3/`.

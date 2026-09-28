@@ -2,7 +2,7 @@
  * sw.js — TradeJournal Service Worker (minimal, bulletproof)
  * Only caches the app shell. Network-first for everything else.
  */
-const CACHE = 'tj-shell-v2';
+const CACHE = 'tj-shell-v3';
 
 self.addEventListener('install', event => {
   event.waitUntil(

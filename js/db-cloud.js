@@ -16,6 +16,13 @@ const db = (() => {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   }
 
+  /** Surface a save error to the user and stop the caller (no silent fallbacks). */
+  function _fail(what, error) {
+    console.error(what + ':', error);
+    if (window.app?.toast) app.toast(`${what}: ${error.message}`, 'error', 6000);
+    throw new Error(error.message);
+  }
+
   // ── Change notification system (compatibility with Phase 1) ───────────────
   const _listeners = {};
   function _notifyChange(type) {
@@ -57,21 +64,9 @@ const db = (() => {
   }
 
   async function saveTrade(trade) {
-    const uid = _uid();
-    const row = _tradeToRow(trade, uid);
-
-    // Extended fields (require migration 002)
-    const extendedFields = ['sector','exchange','current_stop','rpt','chart_link','playbook_version','closed_at','swing_low','entry_atr'];
-
-    // Try full row first (works after migration 002)
-    let { error } = await _sb().from('trades').upsert(row, { onConflict: 'id' });
-    if (error) {
-      // Fall back to core columns only (original 001 schema)
-      console.warn('saveTrade extended failed, using core payload:', error.message);
-      const coreRow = Object.fromEntries(Object.entries(row).filter(([k]) => !extendedFields.includes(k)));
-      const res = await _sb().from('trades').upsert(coreRow, { onConflict: 'id' });
-      if (res.error) { console.error('saveTrade core also failed:', res.error); return; }
-    }
+    const row = _tradeToRow(trade, _uid());
+    const { error } = await _sb().from('trades').upsert(row, { onConflict: 'id' });
+    if (error) _fail('Trade save failed', error);
     _notifyChange('trades');
   }
 
@@ -99,6 +94,8 @@ const db = (() => {
       chartLink:       row.chart_link      || null,
       swingLow:        row.swing_low       || 0,
       entryATR:        row.entry_atr       || 0,
+      tlmState:        row.tlm_state       || null,
+      positionSizeMax: row.position_size_max || null,
       entries:         row.entries         || [],
       pyramids:        row.pyramids        || [],
       partialExits:    row.partial_exits   || [],
@@ -135,6 +132,8 @@ const db = (() => {
       chart_link:      trade.chartLink  || trade.chart_link  || null,
       swing_low:       trade.swingLow   || trade.swing_low   || 0,
       entry_atr:       trade.entryATR   || trade.entry_atr   || 0,
+      tlm_state:       trade.tlmState   || trade.tlm_state   || null,
+      position_size_max: trade.positionSizeMax || null,
       entries:         trade.entries         || [],
       pyramids:        trade.pyramids        || [],
       partial_exits:   trade.partialExits    || trade.partial_exits  || [],
@@ -441,16 +440,7 @@ const db = (() => {
         intraday: { brokerage: 20, brokeragePercent: 0.0003, stt: 0.00025, exchangeCharge: 0.0000335, sebiCharge: 0.000001, gst: 0.18, stampDuty: 0.00003 },
         futures: { brokerage: 20, brokeragePercent: 0.0003, stt: 0.0002, exchangeCharge: 0.00002, sebiCharge: 0.000001, gst: 0.18, stampDuty: 0.00002 }
       },
-      alerts: {
-        portfolioHeat:  { enabled: true,  severity: 'Warning',  dashboard: true,  popup: true  },
-        positionRisk:   { enabled: true,  severity: 'Warning',  dashboard: true,  popup: false },
-        stopLossBreach: { enabled: true,  severity: 'Critical', dashboard: true,  popup: true  },
-        day5Exit:       { enabled: true,  severity: 'Info',     dashboard: true,  popup: false },
-        ruleBreak:      { enabled: true,  severity: 'Warning',  dashboard: true,  popup: false },
-        revengeTrade:   { enabled: true,  severity: 'Warning',  dashboard: true,  popup: false },
-        ema20Exit:      { enabled: true,  severity: 'Warning',  dashboard: true,  popup: false },
-        atrExtension:   { enabled: true,  severity: 'Warning',  dashboard: true,  popup: false }
-      },
+      tlmParams: {},   // overrides for TLMRules.DEFAULT_PARAMS (Settings → Trade Lifecycle)
       marketHealth: {
         trend: 'Uptrend', breadthValue: 0, breadthClassification: 'Neutral',
         guidance: 'Observe', lastUpdated: new Date().toISOString().split('T')[0]
@@ -483,6 +473,9 @@ const db = (() => {
       stop_loss:     item.stop_loss,
       notes:         item.notes         || null,
       status:        item.status        || 'monitoring',
+      mode:          item.mode          || 'both',
+      rpt:           item.rpt           || null,
+      triggered_at:  item.triggered_at  || null,
       created_at:    item.created_at    || new Date().toISOString()
     };
     const { error } = await _sb().from('watchlist').upsert(payload, { onConflict: 'id' });
@@ -530,17 +523,64 @@ const db = (() => {
   async function savePaperTrade(trade) {
     const uid = _uid();
     if (!uid) throw new Error('Not authenticated');
-    const row = _tradeToRow(trade); // reuse same serialiser as real trades
-    row.user_id = uid;
-    const { error } = await _sb().from('paper_trades').upsert(row);
-    if (error) { console.error('savePaperTrade:', error); throw new Error(error.message); }
+    const row = _tradeToRow(trade, uid); // same serialiser as real trades
+    const { error } = await _sb().from('paper_trades').upsert(row, { onConflict: 'id' });
+    if (error) _fail('Paper trade save failed', error);
     _notifyChange('paper_trades_updated');
   }
 
   async function deletePaperTrade(id) {
-    const { error } = await _sb().from('paper_trades').delete().eq('id', id);
+    const { error } = await _sb().from('paper_trades').delete().eq('id', id).eq('user_id', _uid());
     if (error) { console.error('deletePaperTrade:', error); throw new Error(error.message); }
     _notifyChange('paper_trades_updated');
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ALERT LOG  (Trade Lifecycle alerts — real and paper)
+  // ════════════════════════════════════════════════════════════════════════
+
+  /** Alerts newest first. opts: { since (ISO), until (ISO), limit } */
+  async function getAlerts(opts = {}) {
+    const uid = _uid();
+    if (!uid) return [];
+    let q = _sb().from('alert_log').select('*').eq('user_id', uid).order('created_at', { ascending: false });
+    if (opts.since) q = q.gte('created_at', opts.since);
+    if (opts.until) q = q.lte('created_at', opts.until);
+    q = q.limit(opts.limit || 1000);
+    const { data, error } = await q;
+    if (error) { console.error('getAlerts:', error); return []; }
+    return data || [];
+  }
+
+  async function insertAlert(row) {
+    const record = { id: row.id || _generateId('al'), user_id: _uid(), created_at: new Date().toISOString(), ...row };
+    const { error } = await _sb().from('alert_log').insert(record);
+    if (error) _fail('Alert log save failed', error);
+    _notifyChange('alerts');
+    return record;
+  }
+
+  async function updateAlert(id, patch) {
+    const { error } = await _sb().from('alert_log').update(patch).eq('id', id).eq('user_id', _uid());
+    if (error) _fail('Alert update failed', error);
+    _notifyChange('alerts');
+  }
+
+  // ════════════════════════════════════════════════════════════════════════
+  // TRADE SNAPSHOTS  (entry-day chart data)
+  // ════════════════════════════════════════════════════════════════════════
+
+  async function saveSnapshot(snap) {
+    const record = { id: snap.id || _generateId('sn'), user_id: _uid(), ...snap };
+    const { error } = await _sb().from('trade_snapshots').insert(record);
+    if (error) _fail('Chart snapshot save failed', error);
+    return record;
+  }
+
+  async function getSnapshots(tradeId) {
+    const { data, error } = await _sb().from('trade_snapshots').select('*').eq('user_id', _uid()).eq('trade_id', tradeId).order('taken_at');
+    if (error) { console.error('getSnapshots:', error); return []; }
+    return data || [];
   }
 
   // ── Utility ───────────────────────────────────────────────────────────────
@@ -561,6 +601,8 @@ const db = (() => {
     getEquitySnapshots, saveEquitySnapshot,
     // Watchlist
     getWatchlist, saveWatchlistItem, deleteWatchlistItem,
+    // Alert log + snapshots
+    getAlerts, insertAlert, updateAlert, saveSnapshot, getSnapshots,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility

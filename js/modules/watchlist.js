@@ -18,8 +18,8 @@ const WatchlistModule = (() => {
   }
 
   // ── CMP Fetch Helper (Supabase Edge Function proxy) ─────────────────────
-  const _SB_URL = 'https://zopskuwqlbteyiypwnid.supabase.co';
-  const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpvcHNrdXdxbGJ0ZXlpeXB3bmlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxMTI3NTksImV4cCI6MjA5OTY4ODc1OX0.gG0TU9Uf3ODJOqUu4SqZs-Uk1CKlUb47DrfULVg6vHY';
+  const _SB_URL = APP_CONFIG.SUPABASE_URL;
+  const _SB_KEY = APP_CONFIG.SUPABASE_ANON_KEY;
 
   async function _fetchCmp(symbol) {
     try {
@@ -37,17 +37,10 @@ const WatchlistModule = (() => {
     if (!tbody) return;
 
     const watchlist    = await db.getWatchlist();
-    const settings     = await db.getSettings();
-    const riskPct      = settings?.riskPerTrade || 1.0;
-    const capList      = await db.getCapital();
-    const closedTrades = await db.getClosedTrades();
-    const realPnl      = calc.getTotalPnl(closedTrades);
-    const totalCap     = capList.reduce((s, c) => s + (c.amount || 0), 0) || 100000;
-    const equity       = calc.getCurrentEquity(capList, realPnl) || totalCap;
-    const rpt          = equity * (riskPct / 100);
+    const rpt          = await TLMRunner.defaultRpt();
 
     if (!watchlist || !watchlist.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px 0;color:var(--text-muted)">
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px 0;color:var(--text-muted)">
         <div style="font-size:32px;margin-bottom:8px">&#128065;</div>
         <div style="font-weight:600;margin-bottom:4px">No stocks in Watchlist</div>
         <div style="font-size:12px">Click <strong>+ Add to Watchlist</strong> to track your next setup.</div>
@@ -60,8 +53,10 @@ const WatchlistModule = (() => {
       const trigger      = Number(item.trigger_price) || 0;
       const sl           = Number(item.stop_loss)     || 0;
       const riskPerShare = Math.abs(trigger - sl);
-      const totalQty     = riskPerShare > 0 ? Math.floor(rpt / riskPerShare) : 0;
-      const initialQty   = Math.floor(totalQty / 2);
+      const plan         = TLMEngine.planPosition({ trigger, stop: sl, rpt: Number(item.rpt) || rpt });
+      const totalQty     = plan?.fullQty || 0;
+      const initialQty   = plan?.firstQty || 0;
+      const mode         = item.mode || 'both';
 
       let statusCell, actionsCell;
 
@@ -72,7 +67,6 @@ const WatchlistModule = (() => {
         statusCell  = `<span class="badge" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#9889; Triggered</span>`;
         actionsCell = `
           <button class="btn btn-primary btn-sm" onclick="WatchlistModule._showExecuteModal('${item.id}')" title="Execute as real trade" style="margin-right:4px">&#9654; Execute</button>
-          <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._createPaperTrade('${item.id}')" title="Simulate as paper trade" style="margin-right:4px">&#128196; Paper</button>
           <button class="btn btn-secondary btn-sm" onclick="WatchlistModule._deleteItem('${item.id}')" title="Remove">&#128465;</button>`;
       } else {
         statusCell  = `<span class="badge" style="background:rgba(16,185,129,0.15);color:#34d399;border:1px solid rgba(16,185,129,0.35);padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600">&#128065; Monitoring</span>`;
@@ -86,6 +80,7 @@ const WatchlistModule = (() => {
         <td class="font-mono">&#8377;${calc.formatNumber(sl)}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(riskPerShare)}</td>
         <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(50% of ${totalQty})</span></td>
+        <td><span class="badge badge-muted">${mode === 'both' ? 'Real + Paper' : mode === 'paper' ? 'Paper' : 'Real'}</span></td>
         <td>${statusCell}</td>
         <td style="text-align:right;white-space:nowrap">${actionsCell}</td>
       </tr>`;
@@ -109,15 +104,7 @@ const WatchlistModule = (() => {
 
   // ── Add to Watchlist Modal ────────────────────────────────────────────────
   async function _showAddModal() {
-    const settings     = await db.getSettings();
-    const capList      = await db.getCapital();
-    const closedTrades = await db.getClosedTrades();
-    const realPnl      = calc.getTotalPnl(closedTrades);
-    const totalCap     = capList.reduce((s, c) => s + (c.amount || 0), 0) || 100000;
-    const equity       = calc.getCurrentEquity(capList, realPnl) || totalCap;
-    const riskPct      = settings?.riskPerTrade || 1.0;
-    const defRPT       = (equity * riskPct / 100).toFixed(0);
-
+    const defRPT = Math.round(await TLMRunner.defaultRpt());
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Symbol *</label>
         <input class="form-input" id="wl-symbol" placeholder="E.G. RELIANCE" style="text-transform:uppercase"
@@ -136,7 +123,13 @@ const WatchlistModule = (() => {
           oninput="WatchlistModule._calcQty()"></div>
       <div class="form-group"><label class="form-label">Risk/Share <span id="wl-rps-lbl" style="color:var(--text-muted);font-weight:400">&#8212; auto</span></label>
         <input class="form-input" id="wl-rps" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
-      <div class="form-group"><label class="form-label">Initial Qty (50%) <span style="color:var(--text-muted);font-weight:400">RPT = &#8377;${Number(defRPT).toLocaleString('en-IN')}</span></label>
+      <div class="form-group"><label class="form-label">RPT (&#8377;) <span style="color:var(--text-muted);font-weight:400">default from Settings, editable</span></label>
+        <input class="form-input" type="number" id="wl-rpt" step="100" value="${defRPT}" oninput="WatchlistModule._calcQty()"></div>
+      <div class="form-group"><label class="form-label">Mode</label>
+        <select class="form-select" id="wl-mode">
+          <option value="both" selected>Real + Paper</option><option value="real">Real only</option><option value="paper">Paper only</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">First entry qty (50%)</label>
         <input class="form-input" id="wl-qty" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
       <div class="form-group form-full"><label class="form-label">Notes (Setup / Thesis)</label>
         <input class="form-input" id="wl-notes" placeholder="Pattern, catalyst, confluence..."></div>
@@ -150,11 +143,13 @@ const WatchlistModule = (() => {
           const stop    = parseFloat(document.getElementById('wl-stop')?.value);
           const sector  = document.getElementById('wl-sector')?.value;
           const notes   = document.getElementById('wl-notes')?.value;
+          const rpt     = parseFloat(document.getElementById('wl-rpt')?.value) || null;
+          const mode    = document.getElementById('wl-mode')?.value || 'both';
           if (!symbol)                  { app.toast('Symbol is required', 'error'); return; }
           if (!trigger || trigger <= 0) { app.toast('Trigger Buy Price is required', 'error'); return; }
           if (!stop    || stop    <= 0) { app.toast('Stop Loss is required', 'error'); return; }
           if (stop >= trigger)          { app.toast('Stop Loss must be below Trigger price', 'error'); return; }
-          await db.saveWatchlistItem({ symbol, sector, trigger_price: trigger, stop_loss: stop, notes, status: 'monitoring' });
+          await db.saveWatchlistItem({ symbol, sector, trigger_price: trigger, stop_loss: stop, notes, rpt, mode, status: 'monitoring' });
           app.closeModal();
           app.toast(`${symbol} added to Watchlist`, 'success');
           await _renderTable();
@@ -252,7 +247,7 @@ const WatchlistModule = (() => {
             id: db.generateId('tr'), symbol: sym, sector, tradeType: ttType, direction: dir, exchange: exch,
             playbookId: pbId, playbookVersion: pbId ? pb?.currentVersion || '1.0' : '',
             initialStop: stop, currentStop: stop, rpt,
-            entryATR: null, swingLow: null,
+            tlmState: TLMEngine.createState({ entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(settings), now: Date.now() }),
             entries:      [{ id: db.generateId('en'), date, price, qty, charges, notes: `From Watchlist: ${item.symbol}` }],
             pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource: 'Manual', notes: 'Initial stop from Watchlist trigger' }],
             partialExits: [], finalExit: null, notes: [], alerts: [],
@@ -270,65 +265,17 @@ const WatchlistModule = (() => {
     ]);
   }
 
-  // ── Create Paper Trade (no modal — instant simulation record) ────────────
-  async function _createPaperTrade(itemId) {
-    const watchlist = await db.getWatchlist();
-    const item = watchlist.find(w => w.id === itemId);
-    if (!item) return;
-
-    const settings     = await db.getSettings();
-    const capList      = await db.getCapital();
-    const closedT      = await db.getClosedTrades();
-    const realPnl      = calc.getTotalPnl(closedT);
-    const equity       = calc.getCurrentEquity(capList, realPnl);
-    const defRPT       = calc.getCurrentR(equity, settings);
-    const trigger      = Number(item.trigger_price) || 0;
-    const sl           = Number(item.stop_loss)     || 0;
-    const riskPerShare = Math.abs(trigger - sl);
-    const totalQty     = riskPerShare > 0 ? Math.floor(defRPT / riskPerShare) : 0;
-    const initialQty   = Math.floor(totalQty / 2);
-    const today        = new Date().toISOString().split('T')[0];
-
-    if (initialQty <= 0) { app.toast('Cannot compute position size — check RPT and price levels', 'error'); return; }
-
-    const paperTrade = {
-      id: db.generateId('pt'), symbol: item.symbol, sector: item.sector || 'Other',
-      tradeType: 'Equity', direction: 'Long', exchange: 'NSE',
-      playbookId: '', playbookVersion: '',
-      initialStop: sl, currentStop: sl, rpt: defRPT,
-      entryATR: null, swingLow: null,
-      entries:      [{ id: db.generateId('en'), date: today, price: trigger, qty: initialQty, charges: 0, notes: `Paper trade from Watchlist: ${item.symbol}` }],
-      pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date: today, oldStop: 0, newStop: sl, actionSource: 'Auto', notes: 'Auto-created from Watchlist trigger' }],
-      partialExits: [], finalExit: null, notes: [], alerts: [],
-      ruleFollowed: true, reviewStatus: 'Paper', rating: 0,
-      chartLink: `https://www.tradingview.com/chart/?symbol=NSE:${item.symbol}`, tags: [item.sector || 'Other'],
-      cmp: trigger, createdAt: today, closedAt: null
-    };
-
-    await db.savePaperTrade(paperTrade);
-    // Mark watchlist item as executed
-    await db.saveWatchlistItem({ ...item, status: 'executed' });
-    app.toast(`&#128196; Paper trade created for ${item.symbol} — simulation running`, 'success');
-    await _renderTable();
-  }
-
   // ── Live Qty Calculator ───────────────────────────────────────────────────
   async function _calcQty() {
     const trigger = parseFloat(document.getElementById('wl-trigger')?.value) || 0;
     const stop    = parseFloat(document.getElementById('wl-stop')?.value)    || 0;
     if (!trigger || !stop || stop >= trigger) return;
 
-    const rps          = trigger - stop;
-    const settings     = await db.getSettings();
-    const capList      = await db.getCapital();
-    const closedTrades = await db.getClosedTrades();
-    const realPnl      = calc.getTotalPnl(closedTrades);
-    const totalCap     = capList.reduce((s, c) => s + (c.amount || 0), 0) || 100000;
-    const equity       = calc.getCurrentEquity(capList, realPnl) || totalCap;
-    const riskPct      = settings?.riskPerTrade || 1.0;
-    const rpt          = equity * riskPct / 100;
-    const totalQty     = Math.floor(rpt / rps);
-    const initQty      = Math.floor(totalQty / 2);
+    const rps      = trigger - stop;
+    const rpt      = parseFloat(document.getElementById('wl-rpt')?.value) || await TLMRunner.defaultRpt();
+    const plan     = TLMEngine.planPosition({ trigger, stop, rpt });
+    const totalQty = plan?.fullQty || 0;
+    const initQty  = plan?.firstQty || 0;
 
     const rpsEl = document.getElementById('wl-rps');
     const qtyEl = document.getElementById('wl-qty');
@@ -346,7 +293,7 @@ const WatchlistModule = (() => {
     await _renderTable();
   }
 
-  return { init, _renderTable, _showAddModal, _showExecuteModal, _createPaperTrade, _calcQty, _deleteItem };
+  return { init, _renderTable, _showAddModal, _showExecuteModal, _calcQty, _deleteItem };
 })();
 
 window.WatchlistModule = WatchlistModule;

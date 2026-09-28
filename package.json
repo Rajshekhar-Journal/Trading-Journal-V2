@@ -1,8 +1,12 @@
 {
   "dependencies": {
-    "md-to-pdf": "^5.2.5"
+    "md-to-pdf": "^5.2.5",
+    "puppeteer": "^25.3.0"
   },
   "devDependencies": {
     "supabase": "^2.109.1"
+  },
+  "scripts": {
+    "test": "node --test tests/tlm-engine.test.js"
   }
 }

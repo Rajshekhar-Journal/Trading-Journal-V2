@@ -11,9 +11,6 @@ const dashboardModule = (() => {
 
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
-    // Auto-run alert engine on every dashboard load
-    try { alertEngine.checkAllAlerts(await db.getOpenTrades()); } catch(e) {}
-
     const settings = await db.getSettings();
     _selectedRange = settings?.general?.defaultDateRange || 'YTD';
 
@@ -67,7 +64,7 @@ const dashboardModule = (() => {
     _renderDailyChart(filteredClosed, equity);
     _renderBubbleChart(filteredClosed, equity);
     _renderPositionSnapshot(openTrades, currentR, settings, equity);
-    _renderAlertCentre(openTrades);
+    AlertDashboard.render();
   }
 
   // ── Section A: Current State ──────────────────────────────────────────────
@@ -307,7 +304,7 @@ const dashboardModule = (() => {
     }
 
     if (openTrades.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" class="no-data" style="padding:24px;">No open positions</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="no-data" style="padding:24px;">No open positions</td></tr>`;
       return;
     }
 
@@ -320,8 +317,7 @@ const dashboardModule = (() => {
         : Math.abs(m.currentRisk) > m.trueRPT ? 'text-danger'
         : 'text-warning';
       const dayBadge   = m.holdingDays >= 5 ? 'badge-warning' : 'badge-info';
-      const activeAlerts = alertEngine.getActiveAlerts([trade]);
-      const alertIcon  = activeAlerts.length > 0 ? ' ⚠' : '';
+      const stage      = trade.tlmState ? TLMRules.STAGE_LABELS[trade.tlmState.stage] : '—';
 
       const expPct  = equity > 0 ? (m.exposure    / equity * 100) : 0;
       const riskPct = equity > 0 ? (m.currentRisk / equity * 100) : 0;
@@ -333,7 +329,6 @@ const dashboardModule = (() => {
             <div style="display:flex;align-items:center;gap:6px;">
               ${dirBadge}
               <strong style="color:#1a1f36;">${trade.symbol}</strong>
-              ${alertIcon ? `<span style="color:#f59e0b;font-size:13px;">${alertIcon}</span>` : ''}
             </div>
             <div style="font-size:11px;color:#94a3b8;">${trade.tradeType || 'Equity'} · ${trade.sector || ''}</div>
           </td>
@@ -345,6 +340,7 @@ const dashboardModule = (() => {
             <span class="prv-amt">${calc.formatCurrency(m.currentRisk)}</span>
             <span class="prv-pct">${_s(riskPct)}${Math.abs(riskPct).toFixed(1)}% AV</span>
           </td>
+          <td><span class="tlm-stage">${stage}</span></td>
           <td class="text-right"><span class="badge ${dayBadge}">${m.holdingDays}d (T: ${m.tradingDays})</span></td>
         </tr>
       `;
@@ -352,77 +348,6 @@ const dashboardModule = (() => {
 
     tbody.querySelectorAll('.clickable-row').forEach(row => {
       row.addEventListener('click', () => app.navigate('positions'));
-    });
-  }
-
-  // ── Action Centre ─────────────────────────────────────────────────────────
-  function _renderAlertCentre(openTrades) {
-    const tbody   = document.getElementById('dash-alert-body');
-    const counter = document.getElementById('dash-alert-count');
-    if (!tbody) return;
-
-    const alerts = alertEngine.getActiveAlerts(openTrades);
-    if (counter) {
-      counter.textContent = alerts.length;
-      counter.className   = 'badge ' + (alerts.length > 0 ? 'badge-danger' : 'badge-muted');
-    }
-
-    if (alerts.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="3" class="no-data" style="padding:24px;">✅ All clear — no active alerts</td></tr>`;
-      return;
-    }
-
-    function _severity(type) {
-      if (type.includes('Stop') || type.includes('Breach')) return 'badge-danger';
-      if (type.includes('Day-5') || type.includes('ATR'))   return 'badge-warning';
-      return 'badge-info';
-    }
-
-    const phaseColors = {
-      'Stop Loss Breach':               { icon: '🚨', color: '#f85149', label: 'STOP BREACH' },
-      'Dynamic Exit: Trend Broken':     { icon: '⚠️', color: '#ff9500', label: 'TREND BROKEN' },
-      'Dynamic Exit: Phase 3 (5 ATR)':  { icon: '🟣', color: '#bf91f3', label: 'PHASE 3 (5×ATR)' },
-      'Dynamic Exit: Phase 2 (3 ATR)':  { icon: '🟠', color: '#ffa657', label: 'PHASE 2 (3×ATR)' },
-      'Dynamic Exit: Phase 1 (2R)':     { icon: '🟢', color: '#3fb950', label: 'PHASE 1 (2R)' },
-      'Day-5 Exit Due':                 { icon: '📅', color: '#8b949e', label: 'DAY-5 EXIT' },
-    };
-
-    tbody.innerHTML = alerts.map((alert, idx) => {
-      const cfg = phaseColors[alert.type] || { icon: '🔔', color: '#8b949e', label: alert.type };
-      const msgPreview = (alert.message || '').slice(0, 120) + ((alert.message || '').length > 120 ? '...' : '');
-      return `
-      <tr>
-        <td style="padding:10px 8px;">
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:14px">${cfg.icon}</span>
-            <strong style="color:var(--text);">${alert.symbol}</strong>
-            <span style="font-size:11px;font-weight:600;color:${cfg.color};padding:2px 7px;border-radius:10px;background:${cfg.color}22;">${cfg.label}</span>
-          </div>
-        </td>
-        <td style="padding:10px 8px;font-size:11px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;max-width:320px;">${msgPreview}</td>
-        <td style="padding:10px 8px;white-space:nowrap;">
-          <button data-alert-idx="${idx}" data-action="done" style="padding:4px 10px;font-size:11px;font-weight:600;background:#238636;color:white;border:none;border-radius:5px;cursor:pointer;margin-right:4px;">✓ Done</button>
-          <button data-alert-idx="${idx}" data-action="dismiss" style="padding:4px 10px;font-size:11px;color:var(--text-muted);background:transparent;border:1px solid var(--border);border-radius:5px;cursor:pointer;">Dismiss</button>
-        </td>
-      </tr>`;
-    }).join('');
-
-    // Attach handlers
-    tbody.querySelectorAll('[data-alert-idx]').forEach(btn => {
-      const idx   = parseInt(btn.dataset.alertIdx, 10);
-      const alert = alerts[idx];
-      const action = btn.dataset.action;
-      if (!alert) return;
-      btn.addEventListener('click', async () => {
-        if (action === 'done') {
-          await alertEngine.completeAlert(alert.tradeId, alert.type);
-          app.toast(`✓ Alert marked done for ${alert.symbol}`, 'success');
-        } else {
-          await alertEngine.dismissAlert(alert.tradeId, alert.type);
-          app.toast(`Alert dismissed for ${alert.symbol}`, 'info');
-        }
-        dashboardModule.init();
-      });
     });
   }
 
