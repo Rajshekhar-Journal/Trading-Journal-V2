@@ -974,7 +974,7 @@ const settingsModule = (() => {
     const content = `
       <div>
         <div class="alert-banner" style="background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;margin-bottom:14px;">
-          ⚠️ This will permanently delete ALL your trades, positions, capital entries, and playbooks.
+          ⚠️ This will permanently delete ALL your trades, positions, paper trades, watchlist, alert log, entry charts, capital entries and playbooks.
           Your settings and risk configuration will also be reset.
         </div>
         <div class="form-group">
@@ -995,7 +995,7 @@ const settingsModule = (() => {
         if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
 
         try {
-          // Delete all Supabase data for this user (trades, capital, playbooks, settings, snapshots)
+          // Delete all Supabase data for this user (every table — see db.resetAllData)
           const failedTables = await db.resetAllData();
           if (failedTables.length > 0) {
             app.toast(`Reset partially failed for: ${failedTables.join(', ')}. Please try again.`, 'error');

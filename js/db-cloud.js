@@ -402,7 +402,8 @@ const db = (() => {
     const uid = _uid();
     if (!uid) throw new Error('Not authenticated');
     const sb = _sb();
-    const tables = ['trades', 'capital', 'playbooks', 'settings', 'equity_snapshots'];
+    const tables = ['trades', 'paper_trades', 'watchlist', 'alert_log', 'trade_snapshots',
+                    'capital', 'playbooks', 'settings', 'equity_snapshots'];
     const errors = [];
     for (const table of tables) {
       const { error } = await sb.from(table).delete().eq('user_id', uid);
