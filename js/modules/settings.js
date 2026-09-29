@@ -7,6 +7,7 @@ const settingsModule = (() => {
   let _hasUnsaved = false;
 
   const PAGES = [
+    { id: 'start', label: '🚀 Getting Started', icon: '🚀' },
     { id: 'general', label: '⚙ General', icon: '⚙️' },
     { id: 'trading', label: '📊 Trading Defaults', icon: '📊' },
     { id: 'risk', label: '🛡 Risk Management', icon: '🛡️' },
@@ -52,7 +53,7 @@ const settingsModule = (() => {
   async function _showPage(id) {
     const el = document.getElementById('settings-content');
     if (!el) return;
-    const asyncPages = { general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
+    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
     if (asyncPages[id]) {
       el.innerHTML = await asyncPages[id]();
     } else {
@@ -750,6 +751,73 @@ const settingsModule = (() => {
     app.toast('Brokerage settings saved', 'success');
   }
 
+  // ── PAGE: Getting Started (new-user setup guide) ─────────────────────────────
+  function _pageStart() {
+    const go = (id, label) => `<a href="#" onclick="settingsModule._goPage('${id}');return false;">${label}</a>`;
+    const nav = (mod, label) => `<a href="#" onclick="app.navigate('${mod}');return false;">${label}</a>`;
+    const step = (n, title, body) => `
+      <div class="gs-step">
+        <div class="gs-num">${n}</div>
+        <div class="gs-body"><div class="gs-title">${title}</div>${body}</div>
+      </div>`;
+    const part = (title, sub) => `<div class="settings-section-header" style="margin-top:26px">${title}</div>${sub ? `<p class="gs-sub">${sub}</p>` : ''}`;
+    return `<div class="settings-page gs">
+      <div class="settings-section-header">🚀 Getting Started — account setup guide</div>
+      <div class="alert-banner info" style="margin-bottom:6px">ℹ Follow parts A → C once, in order (about 20 minutes). Part D is the daily routine; Part E the weekly one. Every number in the journal — equity, RPT, position size, heat — flows from the capital and risk settings in Part B, so do those first.</div>
+
+      ${part('A · Get access', 'Accounts are created by the administrator; there is no self sign-up page in this version.')}
+      ${step(1, 'Create the account (administrator)', `<p>Supabase dashboard → <strong>Authentication → Users → Add user</strong>. Enter the trader's email and a temporary password and tick <em>Auto Confirm User</em>. Send the site link and the password to the trader.</p>`)}
+      ${step(2, 'First login', `<p>Open the journal link and sign in with that email and password. You land on the Dashboard. Forgotten passwords are reset by the administrator in the same Supabase screen.</p>`)}
+      ${step(3, 'Install it (optional, recommended)', `<p>Phone: browser menu → <strong>Add to Home screen</strong> — the journal opens full-screen with a Positions / Watchlist / Paper / Dashboard tab bar. Computer: Chrome or Edge → <strong>Install app</strong> icon in the address bar.</p>`)}
+
+      ${part('B · Money and risk (do this before any trade)')}
+      ${step(4, 'Your profile', `<p>${go('general', 'Settings → General')}: set <strong>Trader name</strong>, date format, financial-year start and the module to open at startup. Save.</p>`)}
+      ${step(5, 'Opening capital', `<p>${nav('capital', 'Capital')} → <strong>+ Add Transaction</strong> → type <em>Deposit</em>, the date you start and your trading capital. Add later deposits and withdrawals here too — equity and RPT update from this ledger.</p>`)}
+      ${step(6, 'Risk per trade (RPT) and portfolio heat', `<p>${go('risk', 'Settings → Risk Management')}:</p>
+        <ul><li><strong>Risk mode</strong> — <em>Dynamic</em> (e.g. 1% of equity, grows and shrinks with the account) or <em>Fixed</em> (a set ₹ amount).</li>
+        <li><strong>Max portfolio heat</strong> (e.g. 4%) and <strong>warning heat</strong> (e.g. 3.5%) — the total open risk you allow across all positions.</li>
+        <li>Check <strong>Current Computed RPT</strong>. This is the default RPT the Watchlist uses to size every trade: full size = RPT ÷ (trigger − stop); first entry = half.</li></ul>`)}
+      ${step(7, 'Trading defaults', `<p>${go('trading', 'Settings → Trading Defaults')}: default trade type (Equity), direction (Long), max open positions.</p>`)}
+      ${step(8, 'Charges', `<p>${go('charges', 'Settings → Charges & Brokerage')}: pick your broker and enter its brokerage. Government charges (STT, exchange, SEBI, GST, stamp duty) are pre-filled. Charges are deducted from every P&amp;L, paper trades included.</p>`)}
+
+      ${part('C · Rules, alerts and research tools')}
+      ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Lifecycle & Alerts')}: read the rule table (entry → 1R add → 2R lock → 5R / 10R trails → hard stop). Keep the default parameters unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
+      ${step(10, 'Telegram alerts', `<p>On the same page, open <strong>📖 Account setup — step-by-step guide</strong> under Telegram, create your bot, paste the token and chat ID, click <strong>📨 Send test message</strong>, then <strong>Save Changes</strong>. Real-trade alerts then reach your phone; paper alerts stay on the Alert Dashboard.</p>`)}
+      ${step(11, 'Playbooks', `<p>${nav('playbook', 'Playbook')} → <strong>+ New Playbook</strong> for each setup you trade (e.g. VCP breakout): entry rules, exit rules, checklist. Keep one <em>Active</em> version per setup and tag each trade with it — Analytics then shows which setups make money.</p>`)}
+      ${step(12, 'Market Health', `<p>Click <strong>🌡 Market Health</strong> (top bar) → run <strong>Auto Fetch</strong> once. After that it refreshes automatically at 08:45 IST on trading days. Use trend and breadth to decide how aggressive to be.</p>`)}
+
+      ${part('D · Daily routine (market days)')}
+      ${step(13, 'Before 09:00 — open the journal and keep it open', `<p>The rule engine runs every minute from 09:00 to 15:30 IST <strong>only while the journal is open in a browser</strong> — keep a tab (or the installed app) open on a computer all session. At 09:00 each open position gets a <em>Set stop loss</em> alert with the day's recalculated stop; place or update those stops with your broker.</p>`)}
+      ${step(14, 'Add setups to the Watchlist', `<p>${nav('watchlist', 'Watchlist')} → <strong>+ Add to Watchlist</strong>: symbol (CMP fills in), trigger price, stop loss, RPT (pre-filled, editable) and mode. Leave mode on <strong>Real + Paper</strong> so every setup is also tested by the paper engine.</p>`)}
+      ${step(15, 'Entry triggered → record the real trade', `<p>When price holds 5 minutes above the trigger you get an <em>Entry triggered</em> alert (Telegram + Alert Dashboard) with the quantity and stop. Buy with your broker, then Watchlist → <strong>▶ Execute</strong> and enter your <strong>actual</strong> fill price and quantity. The paper twin is created automatically.</p>`)}
+      ${step(16, 'Act on each alert, then record it', `<table class="data-table" style="font-size:12px;margin:6px 0">
+          <thead><tr><th>Alert</th><th>Do at broker</th><th>Record in Positions</th></tr></thead>
+          <tbody>
+            <tr><td>Target reached — 1R</td><td>Buy the same qty again; move stop</td><td><strong>Pyramid</strong> (enter the new stop)</td></tr>
+            <tr><td>Target reached — 2R / Set stop loss</td><td>Move the stop to the value shown</td><td><strong>Revise Stop</strong></td></tr>
+            <tr><td>Target reached — 5R / 10R</td><td>Set a sell stop for the tranche qty at the trail shown</td><td>Nothing until it fills</td></tr>
+            <tr><td>Partial exit</td><td>Sell the tranche qty</td><td><strong>Partial Exit</strong> (source LC-07)</td></tr>
+            <tr><td>Stop loss breached</td><td>Sell everything</td><td><strong>Final Exit</strong> (source LC-09)</td></tr>
+          </tbody></table>
+        <p>Recording the transaction marks the alert <em>Executed</em>, so it will not repeat. If you acted without recording, use <strong>Mark executed</strong> on the Dashboard's Alert Dashboard. A stop-breach alert repeats every 15 minutes until the exit is recorded.</p>`)}
+      ${step(17, 'Keep an eye on the Dashboard', `<p>${nav('dashboard', 'Dashboard')}: the Alert Dashboard card lists today's alerts (⛶ <strong>Full log</strong> for history, filters and CSV); below it, account value, portfolio heat and remaining risk capacity.</p>`)}
+
+      ${part('E · Weekly and monthly')}
+      ${step(18, 'Review closed trades', `<p>${nav('trades', 'Trades')}: open each closed trade, add notes, rating and <em>rule followed</em>, and set review status to <em>Reviewed</em>.</p>`)}
+      ${step(19, 'Compare real with paper', `<p>${nav('paper', 'Paper Trades')} shows what the rules alone would have done. In ${nav('analytics', 'Analytics')} switch between <strong>Real</strong> and <strong>Paper</strong>: if paper consistently beats real, the gap is execution or discipline; if real beats paper, your discretion adds value.</p>`)}
+      ${step(20, 'Capital and backup', `<p>Record deposits and withdrawals in Capital as they happen. Once a month: ${go('data', 'Settings → Data Management')} → <strong>Export</strong> a backup file.</p>`)}
+
+      ${part('Tips for getting the most out of the journal')}
+      <ul class="gs-tips">
+        <li>Always record <strong>actual</strong> fill prices, quantities and charges — every metric and R-multiple is computed from them.</li>
+        <li>Put every setup on the Watchlist, even ones you skip: the paper engine still trades them, which tells you what skipping cost.</li>
+        <li>Don't edit an open trade's initial stop unless it was entered wrong — it defines 1R and all targets.</li>
+        <li>Screen-sharing? <strong>Ctrl+Shift+P</strong> blurs all ₹ amounts (R and % stay visible).</li>
+        <li>Starting over? ${go('data', 'Data Management')} → <strong>Reset All Data</strong> wipes trades, paper trades, watchlist, alerts, capital and settings.</li>
+      </ul>
+    </div>`;
+  }
+
   // ── PAGE: Trade Lifecycle & Alerts (rule engine v3.0) ──────────────────────
   const TLM_PARAM_FIELDS = [
     { key: 'entryHoldMin',       label: 'Entry hold above trigger',        unit: 'min' },
@@ -804,6 +872,24 @@ const settingsModule = (() => {
       </div>
 
       <div class="settings-section-header" style="margin-top:24px;">Telegram (real-trade alerts only)</div>
+      <details class="tg-guide" style="margin:0 0 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:10px 14px;font-size:12.5px;line-height:1.6">
+        <summary style="cursor:pointer;font-weight:600;color:var(--primary)">📖 Account setup — step-by-step guide (about 3 minutes)</summary>
+        <ol style="margin:10px 0 4px 18px;padding:0">
+          <li><strong>Install Telegram</strong> on your phone (or open web.telegram.org) and sign in.</li>
+          <li><strong>Create your bot:</strong> search for <strong>@BotFather</strong> (blue tick), open it and send <code>/newbot</code>.</li>
+          <li>Send a <strong>display name</strong> (e.g. <em>My Trade Alerts</em>), then a <strong>username</strong> ending in <code>bot</code> (e.g. <em>rajsekhar_trade_alerts_bot</em>).</li>
+          <li>BotFather replies with a <strong>token</strong> like <code>123456789:AAH…</code>. Copy it and paste it into <strong>Telegram Bot Token</strong> below. Keep it private — anyone with it can send messages as your bot.</li>
+          <li><strong>Start the bot:</strong> tap the link BotFather gives (t.me/&lt;your_bot&gt;) and press <strong>Start</strong>. Telegram will not deliver alerts until you do this.</li>
+          <li><strong>Get your Chat ID:</strong> search for <strong>@userinfobot</strong>, press Start, and copy the number it shows as <em>Id</em>. Paste it into <strong>Telegram Chat ID</strong> below.</li>
+          <li>Click <strong>📨 Send test message</strong>. You should receive “Telegram alerts are working” within a few seconds.</li>
+          <li>Click <strong>Save Changes</strong>. From now on, real-trade alerts (entries, targets, partial exits, stop-loss breaches and the 09:00 stop-loss brief) arrive on Telegram. Paper-trade alerts stay on the Alert Dashboard only.</li>
+        </ol>
+        <div style="margin-top:8px;color:var(--text-muted)">
+          <strong>Troubleshooting:</strong> “Unauthorized” = wrong or revoked token (create a new one with <code>/token</code> in BotFather) ·
+          “chat not found” = you have not pressed Start in the bot chat, or the Chat ID is wrong ·
+          alerts only go out while the app is open in a browser during market hours (09:00–15:30 IST).
+        </div>
+      </details>
       <div class="settings-grid">
         <div class="form-group">
           <label class="form-label">Telegram Bot Token</label>
