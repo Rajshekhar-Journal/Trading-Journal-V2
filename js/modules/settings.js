@@ -816,6 +816,10 @@ const settingsModule = (() => {
           <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Get this from @userinfobot or similar.</div>
         </div>
       </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
+        <button class="btn btn-secondary btn-sm" id="al-telegram-test" onclick="settingsModule._testTelegram()">📨 Send test message</button>
+        <span id="al-telegram-result" style="font-size:12px;color:var(--text-muted)">Uses the token and chat ID above (no need to save first).</span>
+      </div>
 
       ${_saveBtn('saveAlerts')}
     </div>`;
@@ -837,6 +841,33 @@ const settingsModule = (() => {
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Trade lifecycle settings saved', 'success');
+  }
+
+  /** Send a sample alert to Telegram with the token / chat ID currently typed in. */
+  async function _testTelegram() {
+    const token  = document.getElementById('al-telegram-token')?.value.trim();
+    const chatId = document.getElementById('al-telegram-chat')?.value.trim();
+    const out    = document.getElementById('al-telegram-result');
+    const btn    = document.getElementById('al-telegram-test');
+    const show = (msg, ok) => { if (out) { out.textContent = msg; out.style.color = ok ? '#059669' : '#dc2626'; } };
+    if (!token || !chatId) { show('Enter both the bot token and the chat ID first.', false); return; }
+    const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const text = `Alert type : Test message · TradeJournal\nCMP        : —\nSuggestion : Telegram alerts are working (${time} IST)`;
+    if (btn) btn.disabled = true;
+    show('Sending…', true);
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) show('✅ Sent — check Telegram. Remember to Save Changes.', true);
+      else show(`❌ Telegram said: ${data.description || r.status}. Check the token, and that you have pressed Start in a chat with the bot.`, false);
+    } catch (e) {
+      show('❌ Could not reach Telegram: ' + e.message, false);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
   }
 
   // ── PAGE: Data Management ──────────────────────────────────────────────────
@@ -1045,5 +1076,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();
