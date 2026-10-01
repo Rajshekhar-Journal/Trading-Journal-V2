@@ -449,8 +449,8 @@ const MobileModule = (() => {
         <div class="sheet-section-title">Trade lifecycle — ${TLMRules.stageLabel(tlm)}</div>
         <div class="sheet-grid">
           <div class="sheet-field"><div class="sheet-field-label">Hard stop</div><div class="sheet-field-value" style="color:#ef4444">₹${_fmt(tlm.hardStop)}</div></div>
-          <div class="sheet-field"><div class="sheet-field-label">${(tlm.plan || TLMRules.targetPlan()).T1.r}R / ${(tlm.plan || TLMRules.targetPlan()).T2.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T1)} / ₹${_fmt(tlm.targets.T2)}</div></div>
-          <div class="sheet-field"><div class="sheet-field-label">${(tlm.plan || TLMRules.targetPlan()).T5.r}R / ${(tlm.plan || TLMRules.targetPlan()).T10.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T5)} / ₹${_fmt(tlm.targets.T10)}</div></div>
+          <div class="sheet-field"><div class="sheet-field-label">${TLMRules.planOf(tlm).T1.r}R / ${TLMRules.planOf(tlm).T2.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T1)} / ₹${_fmt(tlm.targets.T2)}</div></div>
+          <div class="sheet-field"><div class="sheet-field-label">${TLMRules.planOf(tlm).T5.r}R / ${TLMRules.planOf(tlm).T10.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T5)} / ₹${_fmt(tlm.targets.T10)}</div></div>
           <div class="sheet-field"><div class="sheet-field-label">Trail</div><div class="sheet-field-value" style="font-size:13px">${tr ? `₹${_fmt(tr.trail)} × ${tr.qty}` : '—'}</div></div>
         </div>
       </div>` : ''}`;

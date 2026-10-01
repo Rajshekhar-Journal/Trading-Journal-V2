@@ -831,9 +831,9 @@ const positionsModule = (() => {
         if (tlm) {
           if (tlm.hardStop !== m.currentStop) _addTargetLine(tlm.hardStop, '#f97316', `Hard stop ₹${calc.formatNumber(tlm.hardStop)}`);
           [['T1', '#eab308'], ['T2', '#22c55e'], ['T5', '#3b82f6'], ['T10', '#a855f7']].forEach(([k, col]) =>
-            _addTargetLine(tlm.targets[k], col, `${(tlm.plan || TLMRules.targetPlan())[k].r}R ₹${calc.formatNumber(tlm.targets[k])}`));
+            _addTargetLine(tlm.targets[k], col, `${TLMRules.planOf(tlm)[k].r}R ₹${calc.formatNumber(tlm.targets[k])}`));
           const tr = TLMEngine.activeTranche(tlm);
-          if (tr) _addTargetLine(tr.trail, '#f59e0b', `Trail ${(tlm.plan || TLMRules.targetPlan())[tr.id].r}R ₹${calc.formatNumber(tr.trail)}`);
+          if (tr) _addTargetLine(tr.trail, '#f59e0b', `Trail ${TLMRules.planOf(tlm)[tr.id].r}R ₹${calc.formatNumber(tr.trail)}`);
         }
 
         // ── Entry & Exit markers on actual candles ────────────────
@@ -1014,19 +1014,26 @@ const positionsModule = (() => {
     const openTrades = await db.getOpenTrades();
     const m          = calc.getTradeMetrics(trade);
     const curStop    = m.currentStop || trade.currentStop || 0;
+    // Lifecycle add (target 1): same qty as the first entry, stop raised per Settings.
+    const tlm        = TLMPanel.stateOf(trade);
+    const tlmPlan    = TLMRules.planOf(tlm);
+    const tlmAdd     = tlm && tlmPlan.T1.on
+      ? { qty: tlm.firstQty, r: tlmPlan.T1.r, stop: TLMIndicators.roundTick(tlm.initialStop + TLMRunner.paramsFrom(settings).stopRaiseAt1R * tlm.r) }
+      : { qty: 0 };
 
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label>
         <input class="form-input" type="date" id="pyr-date" value="${today}"></div>
       <div class="form-group"><label class="form-label">Pyramid Type</label>
         <select class="form-input" id="pyr-type" onchange="
-          if(this.value === 'rest50') { 
-            document.getElementById('pyr-qty').value = ${m.totalQty}; 
-            positionsModule._autoCalcPyramidCharges('${trade.tradeType}'); 
+          if(this.value === 'tlmAdd') {
+            document.getElementById('pyr-qty').value = ${tlmAdd.qty};
+            document.getElementById('pyr-stop').value = ${tlmAdd.stop};
+            positionsModule._autoCalcPyramidCharges('${trade.tradeType}');
           }
         ">
           <option value="manual">Manual Entry</option>
-          <option value="rest50">Add Rest 50% Position (${m.totalQty} Qty)</option>
+          ${tlmAdd.qty ? `<option value="tlmAdd">Lifecycle add at ${tlmAdd.r}R — ${tlmAdd.qty} Qty, stop ₹${calc.formatNumber(tlmAdd.stop)}</option>` : ''}
         </select>
       </div>
       <div class="form-group"><label class="form-label">Entry Price (₹)</label>
@@ -1372,9 +1379,13 @@ const positionsModule = (() => {
           const updated = { ...trade, initialStop: initStop };
           const old = trade.tlmState;
           if (old) {
-            const fresh = TLMEngine.createState({ entryPrice: old.entryPrice, firstQty: old.firstQty, initialStop: initStop });
+            const plan = TLMRules.planOf(old);   // keep this trade's own target levels and on/off
+            const fresh = TLMEngine.createState({ entryPrice: old.entryPrice, firstQty: old.firstQty, initialStop: initStop,
+              params: { target1R: plan.T1.r, target2R: plan.T2.r, target5R: plan.T5.r, target10R: plan.T10.r,
+                        enable1R: plan.T1.on, enable2R: plan.T2.on, enable5R: plan.T5.on, enable10R: plan.T10.on,
+                        tranche5Pct: plan.T5.pct, tranche10Pct: plan.T10.pct } });
             if (!fresh) { app.toast('Initial stop must be below the entry price', 'error'); return; }
-            updated.tlmState = { ...old, initialStop: fresh.initialStop, r: fresh.r, targets: fresh.targets,
+            updated.tlmState = { ...old, initialStop: fresh.initialStop, r: fresh.r, targets: fresh.targets, plan: fresh.plan,
               hardStop: old.stage <= TLMRules.STAGES.ENTERED ? fresh.hardStop : old.hardStop };
           }
 

@@ -137,7 +137,8 @@
     let avg = position.avgEntry;
 
     // LC-09 — any price below the hard stop since the last evaluation, today.
-    const since = Math.max(s.lastEvalAt || 0, Date.parse(today + 'T03:45:00Z')); // 09:15 IST
+    const openMs = Date.parse(today + 'T00:00:00+05:30') + p.marketOpenMinute * 60000;   // market open, IST
+    const since = Math.max(s.lastEvalAt || 0, openMs);
     const recent = (market.intraday || []).filter(c => (c.time + 60) * 1000 > since && c.time * 1000 <= now);
     const firstBreach = recent.find(c => c.low < s.hardStop);
     if (firstBreach || ltp < s.hardStop) {
@@ -163,7 +164,7 @@
     }
 
     // Forward stages. A target that is switched off still advances the stage, silently.
-    const plan = s.plan || R.targetPlan(p);
+    const plan = R.planOf(s);
     const hold = level => I.holdAbove(market.intraday, level, p.targetHoldMin, ltp, now);
     for (let guard = 0; guard < 4; guard++) {
       if (s.stage === STAGES.ENTERED && hold(s.targets.T1)) {                          // LC-02

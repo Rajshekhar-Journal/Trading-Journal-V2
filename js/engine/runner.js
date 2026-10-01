@@ -15,7 +15,8 @@
   let _running = false;
   let _lastRun = null;
 
-  const paramsFrom = settings => ({ ...DEFAULT_PARAMS, ...(settings?.tlmParams || {}) });
+  let _cachedParams = { ...DEFAULT_PARAMS };
+  const paramsFrom = settings => (_cachedParams = { ...DEFAULT_PARAMS, ...(settings?.tlmParams || {}) });
 
   function isHoliday(todayIso, settings) {
     const [y, m, d] = todayIso.split('-');
@@ -71,11 +72,11 @@
     const position = { openQty: m.openQty, avgEntry: m.avgEntryPrice };
     const actions = [];
 
-    if (mk?.daily?.length && minute >= p.briefMinute) {
+    if (mk?.daily?.length && (ctx.force || minute >= p.briefMinute)) {
       const r = E.dayStart({ state, position, market: mk, now, params: p });
       state = r.state; actions.push(...r.actions);
     }
-    if (mk?.ltp && minute >= p.marketOpenMinute) {
+    if (mk?.ltp && (ctx.force || minute >= p.marketOpenMinute)) {
       const r = E.evaluate({ state, position, market: mk, now, params: p });
       state = r.state; actions.push(...r.actions);
       dirty = true;   // lastEvalAt moved
@@ -140,7 +141,7 @@
       const minute = I.istMinutes(now);
       const market = await root.TLMMarketData.load([...real, ...paper, ...watch].map(x => ({ symbol: x.symbol, exchange: x.exchange })));
       const ctx = {
-        settings, p, now, today, minute, market,
+        settings, p, now, today, minute, market, force,
         rpt: await _defaultRpt(settings),
         alertsToday: await db.getAlerts({ since: new Date(Date.parse(today + 'T00:00:00+05:30')).toISOString() }),
       };
@@ -164,12 +165,13 @@
 
   function start() {
     if (_timer) return;
+    db.getSettings().then(paramsFrom).catch(() => {});   // warm the params cache for UI previews
     runCycle().catch(e => console.error('TLM cycle', e));
     _timer = setInterval(() => runCycle().catch(e => console.error('TLM cycle', e)), 60 * 1000);
   }
 
   function stop() { clearInterval(_timer); _timer = null; }
 
-  const api = { start, stop, runCycle, paramsFrom, defaultRpt: _defaultRpt, lastRun: () => _lastRun, isRunning: () => _running };
+  const api = { start, stop, runCycle, paramsFrom, cachedParams: () => _cachedParams, defaultRpt: _defaultRpt, lastRun: () => _lastRun, isRunning: () => _running };
   root.TLMRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -22,10 +22,23 @@
   const STAGES = Object.freeze({ WATCHING: 0, ENTERED: 1, R1: 2, R2: 3, R5: 4, R10: 5 });
   const STAGE_LABELS = ['Watching', 'S1 Entered', 'S2 1R added', 'S3 2R locked', 'S4 5R trail', 'S5 10R trail'];
 
-  /** Stage label using the trade's own target levels, e.g. "S2 1.5R" (falls back to defaults). */
+  /**
+   * The target plan a trade actually follows. New trades carry a frozen `plan`; trades created
+   * before targets became configurable have only `targets`, so their R levels are derived from
+   * those prices (all targets on, default trail %). Never mixes today's settings into an old trade.
+   */
+  function planOf(state) {
+    if (!state) return targetPlanDefault;
+    if (state.plan) return state.plan;
+    const d = targetPlanDefault, r = Number(state.r), e = Number(state.entryPrice);
+    const lvl = k => (r > 0 && state.targets?.[k] ? Math.round(((state.targets[k] - e) / r) * 100) / 100 : d[k].r);
+    return { T1: { ...d.T1, r: lvl('T1') }, T2: { ...d.T2, r: lvl('T2') }, T5: { ...d.T5, r: lvl('T5') }, T10: { ...d.T10, r: lvl('T10') } };
+  }
+
+  /** Stage label using the trade's own target levels, e.g. "S2 1.5R". */
   function stageLabel(state) {
     if (!state) return '—';
-    const t = state.plan || targetPlanDefault;
+    const t = planOf(state);
     const names = ['Watching', 'S1 Entered', `S2 ${t.T1.r}R`, `S3 ${t.T2.r}R`, `S4 ${t.T5.r}R`, `S5 ${t.T10.r}R`];
     return names[state.stage] || '—';
   }
@@ -94,7 +107,7 @@
 
   const targetPlanDefault = targetPlan({});
 
-  const api = { RULES_VERSION, RULES, STAGES, STAGE_LABELS, stageLabel, ALERT_TYPES, DEFAULT_PARAMS, TARGET_R, targetPlan, validateTargets };
+  const api = { RULES_VERSION, RULES, STAGES, STAGE_LABELS, stageLabel, planOf, ALERT_TYPES, DEFAULT_PARAMS, TARGET_R, targetPlan, validateTargets };
   root.TLMRules = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

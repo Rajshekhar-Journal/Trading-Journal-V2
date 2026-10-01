@@ -10,13 +10,13 @@ const TLMPanel = (() => {
   function stateOf(trade) {
     if (trade.tlmState) return trade.tlmState;
     const m = calc.getTradeMetrics(trade);
-    return TLMEngine.stateFromTrade(trade, m.currentStop, TLMRules.DEFAULT_PARAMS);
+    return TLMEngine.stateFromTrade(trade, m.currentStop, TLMRunner.cachedParams());
   }
 
   function html(trade) {
     const s = stateOf(trade);
     if (!s) return '<div class="no-data" style="padding:12px">No lifecycle state — entry or initial stop missing.</div>';
-    const pl = s.plan || TLMRules.targetPlan();
+    const pl = TLMRules.planOf(s);
     const cell = (k, v, hit) => `<div class="tlm-cell ${hit ? 'hit' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
     const tr = (s.tranches || []).map(t =>
       `<tr><td>${pl[t.id] ? pl[t.id].r + 'R' : t.id} tranche</td><td class="font-mono">${t.qty}</td><td class="font-mono">${inr(t.trail)}</td><td>${t.status}</td></tr>`).join('');

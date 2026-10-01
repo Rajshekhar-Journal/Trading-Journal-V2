@@ -345,7 +345,7 @@ const settingsModule = (() => {
 
           ${S('um8','&#128257;','Trade Lifecycle Rule Engine v3.0 &mdash; Guide',`
             <p>One rule engine manages every trade, real and paper, from trigger to exit. It runs every minute from 09:00 to 15:30 IST on trading days while the app is open (<strong>&#10227; Sync now</strong> runs it any time). Real trades get an alert; paper trades are executed automatically with virtual money.</p>
-            <h4>Lifecycle</h4>
+            <h4>Lifecycle (default settings — your own levels are shown in Settings &rarr; Trade Lifecycle &amp; Alerts)</h4>
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;text-align:left;">Stage</th><th style="padding:6px 10px;text-align:left;">When</th><th style="padding:6px 10px;text-align:left;">What happens</th></tr></thead><tbody>
               <tr><td style="padding:6px 10px;">Entry (LC-01)</td><td style="padding:6px 10px;">Price holds 5 min above the watchlist trigger</td><td style="padding:6px 10px;">Buy 50% of full size (RPT &divide; (trigger &minus; stop)); stop = initial stop</td></tr>
               <tr><td style="padding:6px 10px;">1R (LC-02)</td><td style="padding:6px 10px;">Holds 5 min above entry + 1R</td><td style="padding:6px 10px;">Buy the same qty again; stop raised by 0.5R so total risk = 1 RPT</td></tr>
@@ -781,7 +781,7 @@ const settingsModule = (() => {
       ${step(8, 'Charges', `<p>${go('charges', 'Settings → Charges & Brokerage')}: pick your broker and enter its brokerage. Government charges (STT, exchange, SEBI, GST, stamp duty) are pre-filled. Charges are deducted from every P&amp;L, paper trades included.</p>`)}
 
       ${part('C · Rules, alerts and research tools')}
-      ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Lifecycle & Alerts')}: read the rule table (entry → 1R add → 2R lock → 5R / 10R trails → hard stop). Keep the default parameters unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
+      ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Lifecycle & Alerts')}: read the flow and rule table (entry → add → lock → two trails → hard stop; defaults 1R / 2R / 5R / 10R). Change targets or switch any off with <strong>⚙ Lifecycle settings</strong> — changes apply to new trades only. Keep the defaults unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
       ${step(10, 'Telegram alerts', `<p>On the same page, open <strong>📖 Account setup — step-by-step guide</strong> under Telegram, create your bot, paste the token and chat ID, click <strong>📨 Send test message</strong>, then <strong>Save Changes</strong>. Real-trade alerts then reach your phone; paper alerts stay on the Alert Dashboard.</p>`)}
       ${step(11, 'Playbooks', `<p>${nav('playbook', 'Playbook')} → <strong>+ New Playbook</strong> for each setup you trade (e.g. VCP breakout): entry rules, exit rules, checklist. Keep one <em>Active</em> version per setup and tag each trade with it — Analytics then shows which setups make money.</p>`)}
       ${step(12, 'Market Health', `<p>Click <strong>🌡 Market Health</strong> (top bar) → run <strong>Auto Fetch</strong> once. After that it refreshes automatically at 08:45 IST on trading days. Use trend and breadth to decide how aggressive to be.</p>`)}
@@ -985,6 +985,7 @@ const settingsModule = (() => {
           ${row('T10', 4, 'Second trail', 'Drop earlier trail; trail', 'T10')}
         </tbody>
       </table>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-top:6px">A target switched off still moves the stage forward when price reaches it, but takes no action. If you turn <strong>Target 1</strong> off, there is no second buy — consider setting <em>First entry</em> to 100% under Timings and thresholds. The hard stop starts trailing EMA20 once price reaches Target 2's level, even if Target 2 is off.</div>
       <div id="lc-error" style="color:#dc2626;font-size:12px;min-height:16px;margin:6px 0"></div>
       <details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Timings and thresholds</summary>
         <div class="settings-grid" style="margin-top:10px">

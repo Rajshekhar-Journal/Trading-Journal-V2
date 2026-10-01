@@ -202,3 +202,18 @@ test('validateTargets rejects non-ascending targets', () => {
   assert.equal(validateTargets({}), null);
   assert.match(validateTargets({ target2R: 0.5 }), /increase/);
 });
+
+test('open trades keep their frozen plan when settings change later', () => {
+  const s = E.createState({ entryPrice: 100, firstQty: 1000, initialStop: 95 });       // default plan
+  const c = mins(0, [105, 105, 105, 105, 105]);
+  const r = E.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 105, intraday: c, daily: daily(60, 104) },
+    now: after(c), params: { enable1R: false, target1R: 3 } });                       // settings changed afterwards
+  assert.equal(r.actions[0].rule, RULES.ADD_1R);                                       // trade still follows its own plan
+});
+
+test('trades created before configurable targets derive their plan from stored prices', () => {
+  const { planOf, stageLabel } = require('../js/engine/tlm-rules.js');
+  const legacy = { stage: STAGES.R1, entryPrice: 100, r: 5, targets: { T1: 105, T2: 110, T5: 125, T10: 150 } };
+  assert.deepEqual([planOf(legacy).T1.r, planOf(legacy).T5.r], [1, 5]);
+  assert.equal(stageLabel(legacy), 'S2 1R');
+});

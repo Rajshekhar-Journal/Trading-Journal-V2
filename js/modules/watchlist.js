@@ -38,6 +38,7 @@ const WatchlistModule = (() => {
 
     const watchlist    = await db.getWatchlist();
     const rpt          = await TLMRunner.defaultRpt();
+    const params       = TLMRunner.paramsFrom(await db.getSettings());
 
     if (!watchlist || !watchlist.length) {
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px 0;color:var(--text-muted)">
@@ -53,7 +54,7 @@ const WatchlistModule = (() => {
       const trigger      = Number(item.trigger_price) || 0;
       const sl           = Number(item.stop_loss)     || 0;
       const riskPerShare = Math.abs(trigger - sl);
-      const plan         = TLMEngine.planPosition({ trigger, stop: sl, rpt: Number(item.rpt) || rpt });
+      const plan         = TLMEngine.planPosition({ trigger, stop: sl, rpt: Number(item.rpt) || rpt, params });
       const totalQty     = plan?.fullQty || 0;
       const initialQty   = plan?.firstQty || 0;
       const mode         = item.mode || 'both';
@@ -79,7 +80,7 @@ const WatchlistModule = (() => {
         <td id="wl-cmp-${item.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">&#8230;</td>
         <td class="font-mono">&#8377;${calc.formatNumber(sl)}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(riskPerShare)}</td>
-        <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(50% of ${totalQty})</span></td>
+        <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(${params.firstEntryPct}% of ${totalQty})</span></td>
         <td><span class="badge badge-muted">${mode === 'both' ? 'Real + Paper' : mode === 'paper' ? 'Paper' : 'Real'}</span></td>
         <td>${statusCell}</td>
         <td style="text-align:right;white-space:nowrap">${actionsCell}</td>
@@ -131,7 +132,7 @@ const WatchlistModule = (() => {
         <input class="form-input" id="wl-rps" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
       <div class="form-group"><label class="form-label">RPT (&#8377;) <span style="color:var(--text-muted);font-weight:400">default from Settings, editable</span></label>
         <input class="form-input" type="number" id="wl-rpt" step="100" value="${defRPT}" oninput="WatchlistModule._calcQty()"></div>
-      <div class="form-group"><label class="form-label">First entry qty (50%)</label>
+      <div class="form-group"><label class="form-label">First entry qty (${TLMRunner.cachedParams().firstEntryPct}%)</label>
         <input class="form-input" id="wl-qty" disabled placeholder="Auto-calculated" style="opacity:0.7"></div>
       <div class="form-group form-full"><label class="form-label">Notes (Setup / Thesis)</label>
         <input class="form-input" id="wl-notes" placeholder="Pattern, catalyst, confluence..."></div>
@@ -317,7 +318,7 @@ const WatchlistModule = (() => {
 
     const rps      = trigger - stop;
     const rpt      = parseFloat(document.getElementById('wl-rpt')?.value) || await TLMRunner.defaultRpt();
-    const plan     = TLMEngine.planPosition({ trigger, stop, rpt });
+    const plan     = TLMEngine.planPosition({ trigger, stop, rpt, params: TLMRunner.cachedParams() });
     const totalQty = plan?.fullQty || 0;
     const initQty  = plan?.firstQty || 0;
 
