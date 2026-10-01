@@ -15,6 +15,8 @@ const WatchlistModule = (() => {
     const fresh = btn.cloneNode(true);
     btn.parentNode.replaceChild(fresh, btn);
     fresh.addEventListener('click', () => _showAddModal());
+    const imp = document.getElementById('btn-import-watchlist');
+    if (imp) imp.onclick = () => ImportModule.open('watchlist', _renderTable);
   }
 
   // ── CMP Fetch Helper (Supabase Edge Function proxy) ─────────────────────

@@ -7,6 +7,6 @@
     "supabase": "^2.109.1"
   },
   "scripts": {
-    "test": "node --test tests/tlm-engine.test.js"
+    "test": "node --test tests/tlm-engine.test.js tests/import.test.js"
   }
 }

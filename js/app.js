@@ -138,6 +138,7 @@ const app = (() => {
     const overlay = document.getElementById('modal-overlay');
     const container = document.getElementById('modal-container');
     if (!overlay || !container) return;
+    container.classList.remove('modal-wide');
     const actionsHtml = actions.map(a => `<button class="btn ${a.class || 'btn-secondary'}" id="modal-action-${a.id}">${a.label}</button>`).join('');
     container.innerHTML = `
       <div class="modal-header">
@@ -161,7 +162,9 @@ const app = (() => {
 
   function closeModal() {
     document.getElementById('modal-overlay')?.classList.add('hidden');
-    document.getElementById('modal-container').innerHTML = '';
+    const c = document.getElementById('modal-container');
+    c.innerHTML = '';
+    c.classList.remove('modal-wide');
   }
 
   // ── Market Health Modal (premium chart-based) ─────────────────────────────

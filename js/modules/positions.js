@@ -1168,6 +1168,8 @@ const positionsModule = (() => {
     const fresh = btn.cloneNode(true);
     btn.parentNode.replaceChild(fresh, btn);
     fresh.addEventListener('click', async () => { await _showNewTradeModal(); });
+    const imp = document.getElementById('btn-import-positions');
+    if (imp) imp.onclick = () => ImportModule.open('positions', init);
   }
 
   async function _showNewTradeModal() {
