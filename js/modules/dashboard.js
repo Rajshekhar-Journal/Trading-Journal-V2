@@ -317,7 +317,7 @@ const dashboardModule = (() => {
         : Math.abs(m.currentRisk) > m.trueRPT ? 'text-danger'
         : 'text-warning';
       const dayBadge   = m.holdingDays >= 5 ? 'badge-warning' : 'badge-info';
-      const stage      = trade.tlmState ? TLMRules.STAGE_LABELS[trade.tlmState.stage] : '—';
+      const stage      = TLMRules.stageLabel(trade.tlmState);
 
       const expPct  = equity > 0 ? (m.exposure    / equity * 100) : 0;
       const riskPct = equity > 0 ? (m.currentRisk / equity * 100) : 0;

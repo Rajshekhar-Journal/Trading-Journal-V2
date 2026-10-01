@@ -342,7 +342,7 @@ const MobileModule = (() => {
         </div>
       </div>
       <div class="mobile-card-bottom">
-        <span class="mobile-alert-pill alert-ok">● ${isClosed ? 'Closed' : (tlm ? TLMRules.STAGE_LABELS[tlm.stage] : 'Monitoring')}</span>
+        <span class="mobile-alert-pill alert-ok">● ${isClosed ? 'Closed' : (tlm ? TLMRules.stageLabel(tlm) : 'Monitoring')}</span>
         <span style="font-size:11px;color:var(--text-muted)">→ Details</span>
       </div>
     </div>`;
@@ -446,11 +446,11 @@ const MobileModule = (() => {
       </div>
       ${tlm ? `
       <div class="sheet-section">
-        <div class="sheet-section-title">Trade lifecycle — ${TLMRules.STAGE_LABELS[tlm.stage]}</div>
+        <div class="sheet-section-title">Trade lifecycle — ${TLMRules.stageLabel(tlm)}</div>
         <div class="sheet-grid">
           <div class="sheet-field"><div class="sheet-field-label">Hard stop</div><div class="sheet-field-value" style="color:#ef4444">₹${_fmt(tlm.hardStop)}</div></div>
-          <div class="sheet-field"><div class="sheet-field-label">1R / 2R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T1)} / ₹${_fmt(tlm.targets.T2)}</div></div>
-          <div class="sheet-field"><div class="sheet-field-label">5R / 10R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T5)} / ₹${_fmt(tlm.targets.T10)}</div></div>
+          <div class="sheet-field"><div class="sheet-field-label">${(tlm.plan || TLMRules.targetPlan()).T1.r}R / ${(tlm.plan || TLMRules.targetPlan()).T2.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T1)} / ₹${_fmt(tlm.targets.T2)}</div></div>
+          <div class="sheet-field"><div class="sheet-field-label">${(tlm.plan || TLMRules.targetPlan()).T5.r}R / ${(tlm.plan || TLMRules.targetPlan()).T10.r}R</div><div class="sheet-field-value" style="font-size:13px">₹${_fmt(tlm.targets.T5)} / ₹${_fmt(tlm.targets.T10)}</div></div>
           <div class="sheet-field"><div class="sheet-field-label">Trail</div><div class="sheet-field-value" style="font-size:13px">${tr ? `₹${_fmt(tr.trail)} × ${tr.qty}` : '—'}</div></div>
         </div>
       </div>` : ''}`;

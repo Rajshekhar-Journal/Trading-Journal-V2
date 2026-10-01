@@ -73,7 +73,7 @@ const PaperTradesModule = (() => {
     tbody.innerHTML = all.map(t => {
       const { m, total, r } = _pnl(t);
       const s = TLMPanel.stateOf(t);
-      const stage = m.openQty > 0 ? (s ? TLMRules.STAGE_LABELS[s.stage] : '—') : 'Closed';
+      const stage = m.openQty > 0 ? TLMRules.stageLabel(s) : 'Closed';
       return `<tr class="${t.id === _selectedId ? 'row-selected' : ''}" style="cursor:pointer" onclick="PaperTradesModule._open('${t.id}')">
         <td><strong>${esc(t.symbol)}</strong></td>
         <td><span class="badge badge-muted" style="font-size:10px">${esc(t.sector || '—')}</span></td>

@@ -13,7 +13,7 @@
 (function (root) {
   const R = root.TLMRules || (typeof require !== 'undefined' ? require('./tlm-rules.js') : null);
   const I = root.TLMIndicators || (typeof require !== 'undefined' ? require('./indicators.js') : null);
-  const { RULES, STAGES, TARGET_R } = R;
+  const { RULES, STAGES } = R;
 
   const round2 = v => Math.round(v * 100) / 100;
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -36,8 +36,9 @@
     const p = params0(params);
     const r = entryPrice - initialStop;
     if (!(r > 0)) return null;
+    const plan = R.targetPlan(p);
     const targets = {};
-    Object.entries(TARGET_R).forEach(([k, m]) => { targets[k] = round2(entryPrice + m * r); });
+    Object.entries(plan).forEach(([k, t]) => { targets[k] = round2(entryPrice + t.r * r); });
     return {
       rulesVersion: p.rulesVersion,
       stage: STAGES.ENTERED,
@@ -46,6 +47,7 @@
       r: round2(r),
       firstQty,
       targets,
+      plan,                       // frozen per trade: R level, on/off and trail % of each target
       hardStop: round2(initialStop),
       tranches: [],
       lastEvalAt: now || null,
@@ -160,36 +162,40 @@
       }
     }
 
-    // Forward stages.
+    // Forward stages. A target that is switched off still advances the stage, silently.
+    const plan = s.plan || R.targetPlan(p);
     const hold = level => I.holdAbove(market.intraday, level, p.targetHoldMin, ltp, now);
     for (let guard = 0; guard < 4; guard++) {
       if (s.stage === STAGES.ENTERED && hold(s.targets.T1)) {                          // LC-02
+        s.stage = STAGES.R1;
+        if (!plan.T1.on) continue;
         const qty = s.firstQty;
         const stop = I.roundTick(s.initialStop + p.stopRaiseAt1R * s.r);
         s.hardStop = Math.max(s.hardStop, stop);
         avg = (avg * open + ltp * qty) / (open + qty);
         open += qty;
-        s.stage = STAGES.R1;
-        actions.push({ rule: RULES.ADD_1R, kind: 'BUY', qty, price: ltp, fill: ltp, stop: s.hardStop });
+        actions.push({ rule: RULES.ADD_1R, kind: 'BUY', qty, price: ltp, fill: ltp, stop: s.hardStop, r: plan.T1.r });
       } else if (s.stage === STAGES.R1 && hold(s.targets.T2)) {                        // LC-03
-        const stop = Math.max(s.hardStop, I.roundTick(avg), emaStop(market.daily, today, p));
-        s.hardStop = stop;
         s.stage = STAGES.R2;
-        actions.push({ rule: RULES.LOCK_2R, kind: 'STOP', price: ltp, stop });
+        if (!plan.T2.on) continue;
+        s.hardStop = Math.max(s.hardStop, I.roundTick(avg), emaStop(market.daily, today, p));
+        actions.push({ rule: RULES.LOCK_2R, kind: 'STOP', price: ltp, stop: s.hardStop, r: plan.T2.r });
       } else if (s.stage === STAGES.R2 && hold(s.targets.T5)) {                        // LC-04
-        const qty = Math.floor(open * p.tranche5Pct / 100);
+        s.stage = STAGES.R5;
+        if (!plan.T5.on) continue;
+        const qty = Math.floor(open * plan.T5.pct / 100);
         const trail = Math.max(trailBase(market.daily, today, p), s.hardStop);
         s.tranches.push({ id: 'T5', rule: RULES.BOOK_5R, qty, trail, status: 'active', openedAt: today });
-        s.stage = STAGES.R5;
-        actions.push({ rule: RULES.BOOK_5R, kind: 'TRAIL', qty, price: ltp, trail, trancheId: 'T5' });
+        actions.push({ rule: RULES.BOOK_5R, kind: 'TRAIL', qty, price: ltp, trail, trancheId: 'T5', r: plan.T5.r });
       } else if (s.stage === STAGES.R5 && hold(s.targets.T10)) {                       // LC-05
+        s.stage = STAGES.R10;
+        if (!plan.T10.on) continue;
         const prev = activeTranche(s);
         if (prev) prev.status = 'dropped';
-        const qty = Math.floor(open * p.tranche10Pct / 100);
+        const qty = Math.floor(open * plan.T10.pct / 100);
         const trail = Math.max(trailBase(market.daily, today, p), s.hardStop);
         s.tranches.push({ id: 'T10', rule: RULES.BOOK_10R, qty, trail, status: 'active', openedAt: today });
-        s.stage = STAGES.R10;
-        actions.push({ rule: RULES.BOOK_10R, kind: 'TRAIL', qty, price: ltp, trail, trancheId: 'T10', dropped: prev ? prev.id : null });
+        actions.push({ rule: RULES.BOOK_10R, kind: 'TRAIL', qty, price: ltp, trail, trancheId: 'T10', dropped: prev ? prev.id : null, r: plan.T10.r });
       } else break;
     }
 

@@ -166,3 +166,39 @@ test('large-candle day: trail base = day low + half the move', () => {
   hist[hist.length - 1] = { ...hist[hist.length - 1], close: 110, low: 101 };  // +10 move vs ATR ≈ 2
   assert.equal(E.trailBase(hist, DAY, require('../js/engine/tlm-rules.js').DEFAULT_PARAMS), 106);
 });
+
+test('custom targets: levels follow the configured R multiples', () => {
+  const s = E.createState({ entryPrice: 100, firstQty: 1000, initialStop: 95, params: { target1R: 1.5, target2R: 3, target5R: 6, target10R: 12 } });
+  assert.deepEqual(s.targets, { T1: 107.5, T2: 115, T5: 130, T10: 160 });
+  assert.equal(s.plan.T1.r, 1.5);
+});
+
+test('a target switched off advances the stage silently', () => {
+  const p = { enable1R: false };
+  const s = E.createState({ entryPrice: 100, firstQty: 1000, initialStop: 95, params: p });
+  const c = mins(0, [105, 105, 105, 105, 105]);
+  const r = E.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 105, intraday: c, daily: daily(60, 104) }, now: after(c), params: p });
+  assert.equal(r.actions.length, 0);          // no add, no stop raise
+  assert.equal(r.state.stage, STAGES.R1);
+  assert.equal(r.state.hardStop, 95);
+});
+
+test('5R trail off, 10R on: 10R trail sized on full open qty, nothing to drop', () => {
+  let s = E.createState({ entryPrice: 100, firstQty: 1000, initialStop: 95, params: { enable5R: false } });
+  s.stage = STAGES.R2; s.hardStop = 102.5;
+  let c = mins(0, [125, 125, 125, 125, 125]);
+  let r = E.evaluate({ state: s, position: { openQty: 2000, avgEntry: 102.5 }, market: { ltp: 125, intraday: c, daily: daily(60, 104, 121.4) }, now: after(c) });
+  assert.equal(r.actions.length, 0);
+  assert.equal(r.state.stage, STAGES.R5);
+  c = mins(10, [150, 150, 150, 150, 150]);
+  r = E.evaluate({ state: r.state, position: { openQty: 2000, avgEntry: 102.5 }, market: { ltp: 150, intraday: c, daily: daily(60, 104, 146) }, now: after(c) });
+  assert.equal(r.actions[0].rule, RULES.BOOK_10R);
+  assert.equal(r.actions[0].qty, 1000);
+  assert.equal(r.actions[0].dropped, null);
+});
+
+test('validateTargets rejects non-ascending targets', () => {
+  const { validateTargets } = require('../js/engine/tlm-rules.js');
+  assert.equal(validateTargets({}), null);
+  assert.match(validateTargets({ target2R: 0.5 }), /increase/);
+});

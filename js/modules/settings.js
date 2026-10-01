@@ -819,51 +819,92 @@ const settingsModule = (() => {
   }
 
   // ── PAGE: Trade Lifecycle & Alerts (rule engine v3.0) ──────────────────────
+  /** Timings and thresholds edited in the Lifecycle settings dialog (targets are edited separately). */
   const TLM_PARAM_FIELDS = [
-    { key: 'entryHoldMin',       label: 'Entry hold above trigger',        unit: 'min' },
-    { key: 'targetHoldMin',      label: 'Target hold (1R / 2R / 5R / 10R)', unit: 'min' },
-    { key: 'trailHoldMin',       label: 'Trail exit — time below trail',    unit: 'min' },
-    { key: 'trailDeepBreakPct',  label: 'Trail exit at once — % below',     unit: '%' },
-    { key: 'firstEntryPct',      label: 'First entry — % of full size',     unit: '%' },
-    { key: 'stopRaiseAt1R',      label: 'Stop raise at 1R',                 unit: 'R' },
-    { key: 'emaBufferPct',       label: 'Hard stop — % below EMA20',        unit: '%' },
-    { key: 'tranche5Pct',        label: '5R trail — % of open qty',         unit: '%' },
-    { key: 'tranche10Pct',       label: '10R trail — % of open qty',        unit: '%' },
-    { key: 'largeCandleAtrMult', label: 'Large candle = move above',        unit: '× ATR14' },
+    { key: 'entryHoldMin',       label: 'Entry hold above trigger',          unit: 'min' },
+    { key: 'targetHoldMin',      label: 'Target hold above each target',     unit: 'min' },
+    { key: 'trailHoldMin',       label: 'Trail exit — time below trail',     unit: 'min' },
+    { key: 'trailDeepBreakPct',  label: 'Trail exit at once — % below',      unit: '%' },
+    { key: 'firstEntryPct',      label: 'First entry — % of full size',      unit: '%' },
+    { key: 'stopRaiseAt1R',      label: 'Stop raise at target 1',            unit: 'R' },
+    { key: 'emaBufferPct',       label: 'Hard stop — % below EMA20',         unit: '%' },
+    { key: 'largeCandleAtrMult', label: 'Large candle = move above',         unit: '× ATR14' },
     { key: 'alertResendPct',     label: 'Re-send same alert if value moves', unit: '%' },
-    { key: 'breachRepeatMin',    label: 'Repeat stop-breach alert every',   unit: 'min' },
+    { key: 'breachRepeatMin',    label: 'Repeat stop-breach alert every',    unit: 'min' },
   ];
 
-  const TLM_RULE_ROWS = [
-    ['LC-01', 'Entry', 'Price holds above trigger', 'Buy 50% of RPT size; stop = initial stop'],
-    ['LC-02', '1R', 'Holds above entry + 1R', 'Buy same qty; stop + 0.5R (risk = 1 RPT)'],
-    ['LC-03', '2R', 'Holds above entry + 2R', 'Stop = max(avg entry, EMA20 − 2%)'],
-    ['LC-04', '5R', 'Holds above entry + 5R', 'Trail 40% of open qty on max(prev day low, hard stop)'],
-    ['LC-05', '10R', 'Holds above entry + 10R', 'Drop unsold 5R trail; trail 50% of open qty'],
-    ['LC-06', 'Trail update', 'Every day start', 'Trail = max(trail, prev day low*, hard stop)'],
-    ['LC-07', 'Trail exit', '15 min below trail, or 2% below', 'Sell the tranche at market'],
-    ['LC-08', 'Hard-stop trail', 'Every day start, from 2R', 'Hard stop = max(stop, EMA20 − 2%)'],
-    ['LC-09', 'Hard stop', 'Price below hard stop', 'Sell all open qty at once'],
-    ['LC-10', 'Day start', '09:00 IST', 'Set-stop-loss alert for each open position'],
-  ];
+  /** Rule table rows, worded with the current target settings. */
+  function _tlmRuleRows(p) {
+    const t = TLMRules.targetPlan(p);
+    const off = on => on ? '' : ' <span class="badge badge-muted" style="font-size:10px">off</span>';
+    return [
+      ['LC-01', 'Entry', `Price holds ${p.entryHoldMin} min above trigger`, `Buy ${p.firstEntryPct}% of RPT size; stop = initial stop`],
+      ['LC-02', `${t.T1.r}R${off(t.T1.on)}`, `Holds above entry + ${t.T1.r}R`, `Buy same qty; stop + ${p.stopRaiseAt1R}R`],
+      ['LC-03', `${t.T2.r}R${off(t.T2.on)}`, `Holds above entry + ${t.T2.r}R`, `Stop = max(avg entry, EMA20 − ${p.emaBufferPct}%)`],
+      ['LC-04', `${t.T5.r}R${off(t.T5.on)}`, `Holds above entry + ${t.T5.r}R`, `Trail ${t.T5.pct}% of open qty on max(prev day low, hard stop)`],
+      ['LC-05', `${t.T10.r}R${off(t.T10.on)}`, `Holds above entry + ${t.T10.r}R`, `Drop unsold earlier trail; trail ${t.T10.pct}% of open qty`],
+      ['LC-06', 'Trail update', 'Every day start', 'Trail = max(trail, prev day low*, hard stop)'],
+      ['LC-07', 'Trail exit', `${p.trailHoldMin} min below trail, or ${p.trailDeepBreakPct}% below`, 'Sell the tranche at market'],
+      ['LC-08', 'Hard-stop trail', `Every day start, from ${t.T2.r}R`, `Hard stop = max(stop, EMA20 − ${p.emaBufferPct}%)`],
+      ['LC-09', 'Hard stop', 'Price below hard stop', 'Sell all open qty at once'],
+      ['LC-10', 'Day start', '09:00 IST', 'Set-stop-loss alert for each open position'],
+    ];
+  }
+
+  /** Flow diagram of a trade's lifecycle, drawn with the current target settings. */
+  function _tlmFlowSvg(p) {
+    const t = TLMRules.targetPlan(p);
+    const box = (x, y, w, title, sub, kind, on = true) => {
+      const fill = { gray: 'var(--bg)', stage: 'rgba(91,106,240,0.08)', red: 'rgba(239,68,68,0.08)', teal: 'rgba(16,185,129,0.10)' }[kind];
+      const stroke = { gray: 'var(--border)', stage: 'var(--primary)', red: '#ef4444', teal: '#10b981' }[kind];
+      const cx = x + w / 2;
+      return `<g opacity="${on ? 1 : 0.55}">
+        <rect x="${x}" y="${y}" width="${w}" height="52" rx="8" fill="${on ? fill : 'none'}" stroke="${on ? stroke : 'var(--text-muted)'}" stroke-width="1" ${on ? '' : 'stroke-dasharray="4 3"'}/>
+        <text x="${cx}" y="${y + 20}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text)">${title}</text>
+        <text x="${cx}" y="${y + 38}" text-anchor="middle" font-size="11.5" fill="var(--text-muted)">${sub}</text></g>`;
+    };
+    const arrow = (d) => `<path d="${d}" fill="none" stroke="var(--text-muted)" stroke-width="1" marker-end="url(#tlm-arr)"/>`;
+    const X = 100, W = 320, rows = [16, 96, 176, 256, 336, 416, 496, 576];
+    const off = on => on ? '' : ' (off)';
+    return `<svg viewBox="0 0 680 640" width="100%" style="max-width:720px;display:block" role="img" aria-label="Trade lifecycle flow">
+      <defs><marker id="tlm-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/></marker></defs>
+      ${box(X, rows[0], W, 'Watchlist setup', 'Trigger, stop, RPT, mode', 'gray')}
+      ${box(460, rows[0], 200, 'Manual new trade', 'Positions → + New Trade', 'gray')}
+      ${arrow(`M260 ${rows[0] + 52} V${rows[1] - 2}`)}
+      ${box(X, rows[1], W, `Entry confirmed (${p.entryHoldMin} min hold)`, 'Real: alert, you buy · Paper: auto-buy', 'stage')}
+      ${arrow(`M260 ${rows[1] + 52} V${rows[2] - 2}`)}
+      ${arrow(`M560 ${rows[0] + 52} V${rows[2] + 26} H${X + W + 4}`)}
+      ${box(X, rows[2], W, `S1 Entered — ${p.firstEntryPct}% size`, 'Stop = initial stop, targets fixed', 'stage')}
+      ${arrow(`M260 ${rows[2] + 52} V${rows[3] - 2}`)}
+      ${box(X, rows[3], W, `S2 ${t.T1.r}R — add same qty${off(t.T1.on)}`, `Stop up ${p.stopRaiseAt1R}R`, 'stage', t.T1.on)}
+      ${arrow(`M260 ${rows[3] + 52} V${rows[4] - 2}`)}
+      ${box(X, rows[4], W, `S3 ${t.T2.r}R — lock${off(t.T2.on)}`, `Stop = max(avg, EMA20 − ${p.emaBufferPct}%)`, 'stage', t.T2.on)}
+      ${arrow(`M260 ${rows[4] + 52} V${rows[5] - 2}`)}
+      ${box(X, rows[5], W, `S4 ${t.T5.r}R — trail ${t.T5.pct}%${off(t.T5.on)}`, 'Trail = max(prev day low, hard stop)', 'stage', t.T5.on)}
+      ${arrow(`M260 ${rows[5] + 52} V${rows[6] - 2}`)}
+      ${box(X, rows[6], W, `S5 ${t.T10.r}R — trail ${t.T10.pct}%${off(t.T10.on)}`, 'Drops the unsold earlier trail', 'stage', t.T10.on)}
+      ${arrow(`M260 ${rows[6] + 52} V${rows[7] - 2}`)}
+      ${box(460, rows[4], 200, 'Hard stop hit', 'Any stage: sell all now', 'red')}
+      ${arrow(`M560 ${rows[4] + 52} V${rows[7] + 26} H${X + W + 4}`)}
+      ${box(X, rows[7], W, 'Closed — open qty = 0', 'Moves to Trades / Paper history', 'teal')}
+    </svg>`;
+  }
 
   async function _pageAlerts() {
     const settings = await db.getSettings();
     const p = TLMRunner.paramsFrom(settings);
     return `<div class="settings-page">
-      <div class="settings-section-header">Trade Lifecycle rules (v${p.rulesVersion})</div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Real and paper trades follow the same pre-defined rules. Real trades get an alert (Telegram + Alert Dashboard); paper trades are executed automatically.</div>
+      <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Trade Lifecycle rules (v${p.rulesVersion})</span>
+        <button class="btn btn-primary btn-sm" onclick="settingsModule._openLifecycleSettings()">⚙ Lifecycle settings</button>
+      </div>
+      <div class="alert-banner info" style="margin-bottom:14px">ℹ Real and paper trades follow the same rules. Real trades get an alert (Telegram + Alert Dashboard); paper trades are executed automatically. Change targets and timings with <strong>⚙ Lifecycle settings</strong>.</div>
+      <div class="card" style="padding:12px;margin-bottom:16px">${_tlmFlowSvg(p)}</div>
       <table class="data-table" style="font-size:12px;margin-bottom:6px">
         <thead><tr><th>Rule</th><th>Stage</th><th>Trigger</th><th>Action</th></tr></thead>
-        <tbody>${TLM_RULE_ROWS.map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody>
+        <tbody>${_tlmRuleRows(p).map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody>
       </table>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">* On a large-candle day (close-to-close move above ${p.largeCandleAtrMult} × ATR14) the base is day low + ½ the move. Stages only move forward; stops and trails never move down.</div>
-
-      <div class="settings-section-header">Rule parameters</div>
-      <div class="settings-grid">
-        ${TLM_PARAM_FIELDS.map(f => `<div class="form-group"><label class="form-label">${f.label} (${f.unit})</label>
-          <input class="form-input" type="number" step="any" id="tlm-${f.key}" value="${p[f.key]}"></div>`).join('')}
-      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">* On a large-candle day (close-to-close move above ${p.largeCandleAtrMult} × ATR14) the base is day low + ½ the move. Stages only move forward; stops and trails never move down. A target that is off still moves the stage forward, but takes no action.</div>
 
       <div class="settings-section-header" style="margin-top:24px">Market Holidays</div>
       <div class="alert-banner info" style="margin-bottom:14px">ℹ Comma-separated dates (DD-MM-YYYY). The engine does not run on these days.</div>
@@ -913,20 +954,73 @@ const settingsModule = (() => {
 
   async function _saveAlerts() {
     const settings = await db.getSettings();
-    const overrides = {};
-    for (const f of TLM_PARAM_FIELDS) {
-      const v = parseFloat(document.getElementById(`tlm-${f.key}`)?.value);
-      if (!(v >= 0)) { app.toast(`${f.label}: enter a number`, 'error'); return; }
-      if (v !== TLMRules.DEFAULT_PARAMS[f.key]) overrides[f.key] = v;
-    }
-    settings.tlmParams = overrides;
     delete settings.alerts;   // v2 alert toggles are replaced by the rule set
     settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
     settings.telegramBotToken = document.getElementById('al-telegram-token')?.value || '';
     settings.telegramChatId = document.getElementById('al-telegram-chat')?.value || '';
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Trade lifecycle settings saved', 'success');
+    app.toast('Holidays and Telegram settings saved', 'success');
+  }
+
+  /** Dialog: target levels (on/off, R, trail %) and engine timings. Saves settings.tlmParams. */
+  async function _openLifecycleSettings(useDefaults = false) {
+    const settings = await db.getSettings();
+    const p = useDefaults ? { ...TLMRules.DEFAULT_PARAMS } : TLMRunner.paramsFrom(settings);
+    const t = TLMRules.targetPlan(p);
+    const row = (key, n, name, action, pctKey) => `<tr>
+        <td><label class="toggle-switch"><input type="checkbox" id="lc-on-${key}" ${t[key].on ? 'checked' : ''}><span class="toggle-slider"></span></label></td>
+        <td><strong>Target ${n}</strong><div style="font-size:11px;color:var(--text-muted)">${name}</div></td>
+        <td><input class="form-input" type="number" step="0.25" min="0.25" id="lc-r-${key}" value="${t[key].r}" style="width:80px"></td>
+        <td style="font-size:12px">${action}${pctKey ? ` <input class="form-input" type="number" step="5" min="1" max="100" id="lc-pct-${key}" value="${t[key].pct}" style="width:64px;display:inline-block"> % of open qty` : ''}</td>
+      </tr>`;
+    const content = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Targets are R multiples of the first entry's risk and must increase from target 1 to 4. Changes apply to <strong>new</strong> trades; open trades keep the levels they started with.</div>
+      <table class="data-table" style="font-size:13px">
+        <thead><tr><th>On</th><th>Target</th><th>At (R)</th><th>Action</th></tr></thead>
+        <tbody>
+          ${row('T1', 1, 'Add', 'Buy the same qty again; raise stop')}
+          ${row('T2', 2, 'Lock', 'Stop = max(avg entry, EMA20 − buffer)')}
+          ${row('T5', 3, 'First trail', 'Trail', 'T5')}
+          ${row('T10', 4, 'Second trail', 'Drop earlier trail; trail', 'T10')}
+        </tbody>
+      </table>
+      <div id="lc-error" style="color:#dc2626;font-size:12px;min-height:16px;margin:6px 0"></div>
+      <details style="margin-top:4px"><summary style="cursor:pointer;font-weight:600;font-size:13px">Timings and thresholds</summary>
+        <div class="settings-grid" style="margin-top:10px">
+          ${TLM_PARAM_FIELDS.map(f => `<div class="form-group"><label class="form-label">${f.label} (${f.unit})</label>
+            <input class="form-input" type="number" step="any" id="tlm-${f.key}" value="${p[f.key]}"></div>`).join('')}
+        </div>
+      </details>`;
+    app.openModal('⚙ Lifecycle settings', content, [
+      { id: 'lc-defaults', label: 'Reset to defaults', class: 'btn-secondary', onClick: () => _openLifecycleSettings(true) },
+      { id: 'lc-cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'lc-save', label: 'Save', class: 'btn-primary', onClick: async () => {
+        const next = {};
+        ['T1', 'T2', 'T5', 'T10'].forEach(k => {
+          const suffix = k.slice(1) + 'R';
+          next['target' + suffix] = parseFloat(document.getElementById(`lc-r-${k}`).value);
+          next['enable' + suffix] = document.getElementById(`lc-on-${k}`).checked;
+        });
+        next.tranche5Pct = parseFloat(document.getElementById('lc-pct-T5').value);
+        next.tranche10Pct = parseFloat(document.getElementById('lc-pct-T10').value);
+        for (const f of TLM_PARAM_FIELDS) {
+          const v = parseFloat(document.getElementById(`tlm-${f.key}`).value);
+          if (!(v >= 0)) { document.getElementById('lc-error').textContent = `${f.label}: enter a number.`; return; }
+          next[f.key] = v;
+        }
+        const err = TLMRules.validateTargets(next);
+        if (err) { document.getElementById('lc-error').textContent = err; return; }
+        const overrides = {};
+        Object.entries(next).forEach(([k, v]) => { if (v !== TLMRules.DEFAULT_PARAMS[k]) overrides[k] = v; });
+        const s = await db.getSettings();
+        s.tlmParams = overrides;
+        await db.saveSettings(s);
+        app.closeModal();
+        app.toast('Lifecycle settings saved — they apply to new trades', 'success');
+        if (_activePage === 'alerts') await _showPage('alerts');
+      }},
+    ]);
   }
 
   /** Send a sample alert to Telegram with the token / chat ID currently typed in. */
@@ -1155,12 +1249,12 @@ const settingsModule = (() => {
   async function _resetPage() {
     const defaults = db.getDefaultSettings();
     const settings = await db.getSettings();
-    const pageMap = { general: 'general', trading: 'tradingDefaults', risk: 'riskManagement', charges: 'charges', alerts: 'alerts' };
+    const pageMap = { general: 'general', trading: 'tradingDefaults', risk: 'riskManagement', charges: 'charges', alerts: 'tlmParams' };
     const key = pageMap[_activePage];
     if (key && defaults[key]) { settings[key] = JSON.parse(JSON.stringify(defaults[key])); await db.saveSettings(settings); }
     app.toast('Page reset to defaults', 'info');
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();

@@ -7,8 +7,8 @@
   const { RULES } = root.TLMRules;
 
   const LABEL = {
-    [RULES.ENTRY]: 'LC-01 Entry', [RULES.ADD_1R]: 'LC-02 1R add', [RULES.LOCK_2R]: 'LC-03 2R lock',
-    [RULES.BOOK_5R]: 'LC-04 5R trail', [RULES.BOOK_10R]: 'LC-05 10R trail', [RULES.TRAIL_EXIT]: 'LC-07 Trail exit',
+    [RULES.ENTRY]: 'LC-01 Entry', [RULES.ADD_1R]: 'LC-02 Target 1 add', [RULES.LOCK_2R]: 'LC-03 Target 2 lock',
+    [RULES.BOOK_5R]: 'LC-04 Target 3 trail', [RULES.BOOK_10R]: 'LC-05 Target 4 trail', [RULES.TRAIL_EXIT]: 'LC-07 Trail exit',
     [RULES.HARD_TRAIL]: 'LC-08 Hard-stop trail', [RULES.HARD_EXIT]: 'LC-09 Hard stop', [RULES.DAY_BRIEF]: 'LC-10 Day start',
   };
   const source = (rule, mode) => `${LABEL[rule] || rule}${mode === 'paper' ? ' (Paper)' : ''}`;

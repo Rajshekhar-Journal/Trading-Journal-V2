@@ -3,7 +3,7 @@
  * Shows stage, targets, hard stop, tranches and the entry-day chart snapshots.
  */
 const TLMPanel = (() => {
-  const { STAGES, STAGE_LABELS } = TLMRules;
+  const { STAGES } = TLMRules;
   const inr = v => v ? '₹' + Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 
   /** Lifecycle state of a trade (stored, or derived for trades opened before v3.0). */
@@ -16,19 +16,20 @@ const TLMPanel = (() => {
   function html(trade) {
     const s = stateOf(trade);
     if (!s) return '<div class="no-data" style="padding:12px">No lifecycle state — entry or initial stop missing.</div>';
+    const pl = s.plan || TLMRules.targetPlan();
     const cell = (k, v, hit) => `<div class="tlm-cell ${hit ? 'hit' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
     const tr = (s.tranches || []).map(t =>
-      `<tr><td>${t.id === 'T5' ? '5R' : '10R'} tranche</td><td class="font-mono">${t.qty}</td><td class="font-mono">${inr(t.trail)}</td><td>${t.status}</td></tr>`).join('');
+      `<tr><td>${pl[t.id] ? pl[t.id].r + 'R' : t.id} tranche</td><td class="font-mono">${t.qty}</td><td class="font-mono">${inr(t.trail)}</td><td>${t.status}</td></tr>`).join('');
     return `
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:13px;font-weight:600">Trade lifecycle <span class="tlm-stage">${STAGE_LABELS[s.stage]}</span></div>
+        <div style="font-size:13px;font-weight:600">Trade lifecycle <span class="tlm-stage">${TLMRules.stageLabel(s)}</span></div>
         <div style="font-size:11px;color:var(--text-muted)">Rules v${s.rulesVersion} · 1R = ${inr(s.r)}</div>
       </div>
       <div class="tlm-grid">
-        ${cell('1R · add', inr(s.targets.T1), s.stage >= STAGES.R1)}
-        ${cell('2R · lock', inr(s.targets.T2), s.stage >= STAGES.R2)}
-        ${cell('5R · 40% trail', inr(s.targets.T5), s.stage >= STAGES.R5)}
-        ${cell('10R · 50% trail', inr(s.targets.T10), s.stage >= STAGES.R10)}
+        ${cell(`${pl.T1.r}R · ${pl.T1.on ? 'add' : 'off'}`, inr(s.targets.T1), s.stage >= STAGES.R1)}
+        ${cell(`${pl.T2.r}R · ${pl.T2.on ? 'lock' : 'off'}`, inr(s.targets.T2), s.stage >= STAGES.R2)}
+        ${cell(`${pl.T5.r}R · ${pl.T5.on ? pl.T5.pct + '% trail' : 'off'}`, inr(s.targets.T5), s.stage >= STAGES.R5)}
+        ${cell(`${pl.T10.r}R · ${pl.T10.on ? pl.T10.pct + '% trail' : 'off'}`, inr(s.targets.T10), s.stage >= STAGES.R10)}
       </div>
       <div class="tlm-grid">
         ${cell('Hard stop', inr(s.hardStop))}

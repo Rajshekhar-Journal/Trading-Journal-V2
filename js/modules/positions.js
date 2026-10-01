@@ -200,7 +200,7 @@ const positionsModule = (() => {
       exposurePct, riskPct, unrealPct, netPct, netPnl }) => {
       const unrealR   = m.trueRPT > 0 ? (unrealPnl / m.trueRPT) : 0;
       const stage     = TLMPanel.stateOf(trade);
-      const alertBadge= (stage ? `<span class="tlm-stage">${TLMRules.STAGE_LABELS[stage.stage]}</span> ` : '')
+      const alertBadge= (stage ? `<span class="tlm-stage">${TLMRules.stageLabel(stage)}</span> ` : '')
         + (pending[trade.id] ? `<span class="badge badge-warning">⚠ ${pending[trade.id]}</span>` : '');
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
       const riskRCls  = m.currentRisk >= 0 ? 'text-success'
@@ -831,9 +831,9 @@ const positionsModule = (() => {
         if (tlm) {
           if (tlm.hardStop !== m.currentStop) _addTargetLine(tlm.hardStop, '#f97316', `Hard stop ₹${calc.formatNumber(tlm.hardStop)}`);
           [['T1', '#eab308'], ['T2', '#22c55e'], ['T5', '#3b82f6'], ['T10', '#a855f7']].forEach(([k, col]) =>
-            _addTargetLine(tlm.targets[k], col, `${k.slice(1)}R ₹${calc.formatNumber(tlm.targets[k])}`));
+            _addTargetLine(tlm.targets[k], col, `${(tlm.plan || TLMRules.targetPlan())[k].r}R ₹${calc.formatNumber(tlm.targets[k])}`));
           const tr = TLMEngine.activeTranche(tlm);
-          if (tr) _addTargetLine(tr.trail, '#f59e0b', `Trail ${tr.id === 'T5' ? '5R' : '10R'} ₹${calc.formatNumber(tr.trail)}`);
+          if (tr) _addTargetLine(tr.trail, '#f59e0b', `Trail ${(tlm.plan || TLMRules.targetPlan())[tr.id].r}R ₹${calc.formatNumber(tr.trail)}`);
         }
 
         // ── Entry & Exit markers on actual candles ────────────────
@@ -1358,7 +1358,7 @@ const positionsModule = (() => {
         <input class="form-input" type="number" id="edit-initial-stop" step="0.05" value="${trade.initialStop || ''}"></div>
       <div class="form-full">
         <p style="font-size:12px;color:var(--text-muted);margin-top:10px;">
-          Changing the initial stop recalculates 1R and the 1R / 2R / 5R / 10R targets. The lifecycle stage is kept.
+          Changing the initial stop recalculates 1R and all four targets. The lifecycle stage is kept.
         </p>
       </div>
     </div>`;

@@ -10,7 +10,7 @@
  * Real alerts go to Telegram + Alert Dashboard; paper alerts to the dashboard only.
  */
 (function (root) {
-  const { RULES, ALERT_TYPES, STAGE_LABELS } = root.TLMRules;
+  const { RULES, ALERT_TYPES } = root.TLMRules;
 
   const inr = v => '₹' + Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const qtyFmt = v => Number(v).toLocaleString('en-IN');
@@ -23,7 +23,7 @@
           ? `Buy Qty ${qtyFmt(a.qty)} · Set stop loss ${inr(a.stop)}`
           : `Buy Qty ${qtyFmt(a.qty)} · Revise stop loss to ${inr(a.stop)}`;
       case 'STOP':     return `Revise stop loss to ${inr(a.stop)}`;
-      case 'TRAIL':    return `${a.dropped ? 'Cancel 5R trail · ' : ''}Trail Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
+      case 'TRAIL':    return `${a.dropped ? 'Cancel previous trail · ' : ''}Trail Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
       case 'SELL':     return `Exit Qty ${qtyFmt(a.qty)} at market price`;
       case 'EXIT_ALL': return `Exit Qty ${qtyFmt(a.qty)} (all open) at market price`;
       case 'BRIEF':    return `Set stop loss ${inr(a.stop)} for Qty ${qtyFmt(a.qty)}` + (a.trail ? ` · Trail stop ${inr(a.trail)} for Qty ${qtyFmt(a.trailQty)}` : '');
@@ -36,7 +36,7 @@
     switch (a.kind) {
       case 'BUY':      return `Executed: Bought ${qtyFmt(a.qty)} @ ${inr(a.fill ?? a.price)} · Stop ${inr(a.stop)}`;
       case 'STOP':     return `Executed: Stop loss revised to ${inr(a.stop)}`;
-      case 'TRAIL':    return `Executed: ${a.dropped ? '5R trail dropped · ' : ''}Trailing Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
+      case 'TRAIL':    return `Executed: ${a.dropped ? 'previous trail dropped · ' : ''}Trailing Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
       case 'SELL':
       case 'EXIT_ALL': return `Executed: Sold ${qtyFmt(a.qty)} @ ${inr(a.fill ?? a.price)}`;
       case 'BRIEF':    return `Executed: Stop loss ${inr(a.stop)}` + (a.trail ? ` · Trail ${inr(a.trail)}` : '');
@@ -45,7 +45,7 @@
   }
 
   function message({ action, symbol, mode, cmp }) {
-    const type = ALERT_TYPES[action.rule] || action.rule;
+    const type = action.r ? `Target reached — ${action.r}R` : (ALERT_TYPES[action.rule] || action.rule);
     const sugg = mode === 'paper' ? executedText(action) : suggestion(action);
     return {
       alertType: type,
@@ -111,6 +111,6 @@
     for (const a of open) await db.updateAlert(a.id, { status: 'Executed', executed_at: new Date().toISOString() });
   }
 
-  const api = { dispatch, shouldSend, message, suggestion, markExecuted, stageLabel: s => STAGE_LABELS[s] || '' };
+  const api = { dispatch, shouldSend, message, suggestion, markExecuted };
   root.TLMAlerts = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
