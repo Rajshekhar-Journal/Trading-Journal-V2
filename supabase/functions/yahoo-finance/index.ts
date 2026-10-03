@@ -1,55 +1,32 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+// yahoo-finance — authenticated proxy to Yahoo Finance chart data for the signed-in user.
+// Only valid tickers and known range/interval values are forwarded (no open proxy).
+import { corsHeaders, json, getUser } from '../_shared/http.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const TICKER   = /^[A-Za-z0-9^&._=-]{1,25}$/;
+const RANGES   = new Set(['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'ytd', 'max']);
+const INTERVAL = new Set(['1m', '2m', '5m', '15m', '30m', '60m', '90m', '1h', '1d', '5d', '1wk', '1mo', '3mo']);
 
-serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
-  }
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (req.method !== 'GET') return json({ error: 'GET only' }, 405);
+
+  const user = await getUser(req);
+  if (!user) return json({ error: 'Sign in required' }, 401);
+
+  const url = new URL(req.url);
+  const ticker = url.searchParams.get('ticker') || '';
+  const range = url.searchParams.get('range') || '1mo';
+  const interval = url.searchParams.get('interval') || '1d';
+  if (!TICKER.test(ticker)) return json({ error: 'Invalid ticker' }, 400);
+  if (!RANGES.has(range) || !INTERVAL.has(interval)) return json({ error: 'Invalid range or interval' }, 400);
 
   try {
-    const url = new URL(req.url);
-    const ticker = url.searchParams.get('ticker');
-    
-    if (!ticker) {
-      return new Response(
-        JSON.stringify({ error: 'Ticker parameter is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Default to 1-day interval and 1-month range if not specified
-    const interval = url.searchParams.get('interval') || '1d';
-    const range = url.searchParams.get('range') || '1mo';
-    
-    const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?range=${range}&interval=${interval}`;
-    
-    const yahooResponse = await fetch(yahooUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': 'application/json'
-      }
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=${interval}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', Accept: 'application/json' },
     });
-
-    if (!yahooResponse.ok) {
-      const errorText = await yahooResponse.text();
-      throw new Error(`Yahoo Finance API error: ${yahooResponse.status} ${errorText}`);
-    }
-
-    const data = await yahooResponse.json();
-
-    return new Response(
-      JSON.stringify(data),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-  } catch (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    if (!r.ok) return json({ error: `Yahoo Finance returned ${r.status}` }, 502);
+    return json(await r.json(), 200, { 'Cache-Control': interval.endsWith('m') || interval === '1h' ? 'no-store' : 'private, max-age=300' });
+  } catch (e) {
+    return json({ error: (e as Error).message }, 502);
   }
-})
+});

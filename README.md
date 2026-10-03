@@ -56,15 +56,23 @@ Real and paper trades follow one pre-defined rule set (spec: *Trade Lifecycle Ru
 | `js/engine/indicators.js` | EMA (SMA-seeded), ATR, tick rounding, 5-min / 15-min hold checks, IST time helpers |
 | `js/engine/tlm-rules.js` | Rule IDs LC-01…LC-10, stages, alert types, default parameters |
 | `js/engine/tlm-engine.js` | Pure engine: `planPosition`, `createState`, `evaluateWatch`, `dayStart`, `evaluate` |
-| `js/engine/market-data.js` | 1-min + daily candles via the `yahoo-finance` Edge Function |
-| `js/engine/alert-service.js` | 3-line alerts, once-a-day / 1% / 15-min rules, Telegram (real only), `alert_log` |
+| `js/engine/market-data.js` | 1-min + daily candles; pluggable source (browser: `yahoo-finance` function, server: direct) |
+| `js/engine/alert-service.js` | 3-line alerts, once-a-day / 1% / 15-min rules, pluggable notifier (Telegram on the server, real only), `alert_log` |
 | `js/engine/executors.js` | Paper auto-execution (pyramids, stops, exits, charges) |
-| `js/engine/runner.js` | Runs every minute 09:00–15:31 IST while the app is open; `Sync now` forces a run |
+| `js/engine/runner.js` | One cycle; runs on the server (`tlm-runner`, every minute via pg_cron). The browser defers to it and falls back if its heartbeat is >3 min old |
 | `js/modules/alert-dashboard.js` | Dashboard card + full-screen alert log |
 | `js/modules/tlm-panel.js` | Lifecycle panel (stage, targets, hard stop, trails, entry-day charts) |
 
 Database: run `supabase/migrations/004_paper_trades_watchlist.sql` and `005_tlm_engine.sql` in the Supabase SQL Editor.
 
-Tests: `npm test` (pure engine, worked example and scenarios).
+Tests: `npm test` (pure engine, worked example and scenarios, Excel import, server runner).
+
+## Backend rule runner + security (Steps 1–2, 2026-10-03)
+
+- `supabase/functions/tlm-runner` runs the same engine files server-side (copied by `npm run sync-engine` into `supabase/functions/_shared/engine`; a test fails if they drift). pg_cron calls it every minute (migration `006_backend_runner.sql`); one lock in `runner_status` keeps browser and server from running together.
+- Secrets live only in Supabase: `TELEGRAM_BOT_TOKEN`, `CRON_SECRET` (+ Vault `tlm_cron_secret`). No tokens in files; the push script reads `GITHUB_TOKEN` from the environment.
+- Edge Functions accept only a signed-in user's token (`js/auth.js` attaches it); `yahoo-finance` validates ticker, range and interval.
+- `node scripts/vendor-libs.mjs` self-hosts supabase-js, Chart.js and Lightweight Charts in `js/vendor/`.
+- Deployment steps: `DEPLOY_STEP1_2.md`.
 
 Retired code is in `_archive/`; the pre-v3.0 code is backed up in `_backup_pre_tlm_v3/`.

@@ -201,7 +201,7 @@ const tradesModule = (() => {
     if (!el) return;
     const yfSymbol = trade.symbol + '.NS';
     try {
-      const res  = await fetch('/api/ohlc?symbol=' + encodeURIComponent(yfSymbol) + '&range=2y');
+      const res  = await fetch(`${APP_CONFIG.SUPABASE_URL}/functions/v1/yahoo-finance?ticker=${encodeURIComponent(yfSymbol)}&interval=1d&range=2y`);
       if (!res.ok) throw new Error('HTTP ' + res.status + ' from Yahoo Finance');
       const json = await res.json();
       const result = json && json.chart && json.chart.result && json.chart.result[0];

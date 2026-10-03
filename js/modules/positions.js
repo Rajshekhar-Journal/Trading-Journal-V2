@@ -64,8 +64,10 @@ const positionsModule = (() => {
 
   async function _syncNow() {
     app.toast('Running rule engine…', 'info', 1500);
-    const ran = await TLMRunner.runCycle({ force: true });
-    if (!ran) app.toast('Nothing to evaluate', 'info');
+    try {
+      const ran = await TLMRunner.runCycle({ force: true });
+      if (!ran) app.toast('Nothing to evaluate', 'info');
+    } catch (e) { app.toast(e.message, 'error'); }
   }
 
   /** Mark / dismiss a lifecycle alert from the detail panel. */

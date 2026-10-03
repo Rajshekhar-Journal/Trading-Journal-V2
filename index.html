@@ -19,11 +19,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="TradeJournal">
   <meta name="theme-color" content="#0f1117">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="js/vendor/chart.umd.min.js?v=4.4.0"></script>
   <!-- Phase 2: TradingView Lightweight Charts -->
-  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="js/vendor/lightweight-charts.standalone.production.js?v=4.1.3"></script>
   <!-- Phase 2: Supabase client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/vendor/supabase.js?v=2.117.2"></script>
 </head>
 <body>
 
@@ -438,41 +438,41 @@
 
   <!-- SCRIPTS — load order -->
   <!-- 0. Config (Supabase URL/key — single source) -->
-  <script src="js/config.js?v=3.0.7"></script>
+  <script src="js/config.js?v=3.0.8"></script>
   <!-- 1. Auth (must load before db-cloud) -->
-  <script src="js/auth.js?v=3.0.7"></script>
+  <script src="js/auth.js?v=3.0.8"></script>
   <!-- 2. Cloud DB layer -->
-  <script src="js/db-cloud.js?v=3.0.7"></script>
+  <script src="js/db-cloud.js?v=3.0.8"></script>
   <!-- 3. Core logic -->
-  <script src="js/calculations.js?v=3.0.7"></script>
-  <script src="js/charts.js?v=3.0.7"></script>
+  <script src="js/calculations.js?v=3.0.8"></script>
+  <script src="js/charts.js?v=3.0.8"></script>
   <!-- 4. Trade Lifecycle rule engine v3.0 (pure engine → executors → alerts → runner) -->
-  <script src="js/engine/indicators.js?v=3.0.7"></script>
-  <script src="js/engine/tlm-rules.js?v=3.0.7"></script>
-  <script src="js/engine/tlm-engine.js?v=3.0.7"></script>
-  <script src="js/engine/market-data.js?v=3.0.7"></script>
-  <script src="js/engine/alert-service.js?v=3.0.7"></script>
-  <script src="js/engine/executors.js?v=3.0.7"></script>
-  <script src="js/engine/runner.js?v=3.0.7"></script>
+  <script src="js/engine/indicators.js?v=3.0.8"></script>
+  <script src="js/engine/tlm-rules.js?v=3.0.8"></script>
+  <script src="js/engine/tlm-engine.js?v=3.0.8"></script>
+  <script src="js/engine/market-data.js?v=3.0.8"></script>
+  <script src="js/engine/alert-service.js?v=3.0.8"></script>
+  <script src="js/engine/executors.js?v=3.0.8"></script>
+  <script src="js/engine/runner.js?v=3.0.8"></script>
   <!-- 5. Module view-controllers -->
-  <script src="js/import/xlsx-lite.js?v=3.0.7"></script>
-  <script src="js/import/import-rules.js?v=3.0.7"></script>
-  <script src="js/modules/importer.js?v=3.0.7"></script>
-  <script src="js/modules/tlm-panel.js?v=3.0.7"></script>
-  <script src="js/modules/alert-dashboard.js?v=3.0.7"></script>
-  <script src="js/modules/dashboard.js?v=3.0.7"></script>
-  <script src="js/modules/watchlist.js?v=3.0.7"></script>
-  <script src="js/modules/positions.js?v=3.0.7"></script>
-  <script src="js/modules/trades.js?v=3.0.7"></script>
-  <script src="js/modules/playbook.js?v=3.0.7"></script>
-  <script src="js/modules/analytics.js?v=3.0.7"></script>
-  <script src="js/modules/capital.js?v=3.0.7"></script>
-  <script src="js/modules/settings.js?v=3.0.7"></script>
-  <script src="js/modules/paper-trades.js?v=3.0.7"></script>
+  <script src="js/import/xlsx-lite.js?v=3.0.8"></script>
+  <script src="js/import/import-rules.js?v=3.0.8"></script>
+  <script src="js/modules/importer.js?v=3.0.8"></script>
+  <script src="js/modules/tlm-panel.js?v=3.0.8"></script>
+  <script src="js/modules/alert-dashboard.js?v=3.0.8"></script>
+  <script src="js/modules/dashboard.js?v=3.0.8"></script>
+  <script src="js/modules/watchlist.js?v=3.0.8"></script>
+  <script src="js/modules/positions.js?v=3.0.8"></script>
+  <script src="js/modules/trades.js?v=3.0.8"></script>
+  <script src="js/modules/playbook.js?v=3.0.8"></script>
+  <script src="js/modules/analytics.js?v=3.0.8"></script>
+  <script src="js/modules/capital.js?v=3.0.8"></script>
+  <script src="js/modules/settings.js?v=3.0.8"></script>
+  <script src="js/modules/paper-trades.js?v=3.0.8"></script>
   <!-- 6. App router (last — kicks off auth check then init) -->
-  <script src="js/app.js?v=3.0.7"></script>
+  <script src="js/app.js?v=3.0.8"></script>
   <!-- 7. Mobile module (PWA + card layout, activates only on <=767px) -->
-  <script src="js/mobile.js?v=3.0.7"></script>
+  <script src="js/mobile.js?v=3.0.8"></script>
   <!-- Mobile bottom nav container (injected by mobile.js) -->
   <div id="mobile-bottom-nav"></div>
   <!-- Service Worker registration -->

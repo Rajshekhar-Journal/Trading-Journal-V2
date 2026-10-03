@@ -56,6 +56,7 @@ const settingsModule = (() => {
     const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
     if (asyncPages[id]) {
       el.innerHTML = await asyncPages[id]();
+      if (id === 'alerts') _showTelegramStatus();
     } else {
       el.innerHTML = `<div class="no-data">Page not found.</div>`;
     }
@@ -344,7 +345,7 @@ const settingsModule = (() => {
             <p>Toggle in Settings &rarr; General or press <code>Ctrl+Shift+P</code>. Blurs all &#8377; amounts across the entire app. R-multiples and percentages remain visible. Safe for screen-sharing or screenshots.</p>`)}
 
           ${S('um8','&#128257;','Trade Lifecycle Rule Engine v3.0 &mdash; Guide',`
-            <p>One rule engine manages every trade, real and paper, from trigger to exit. It runs every minute from 09:00 to 15:30 IST on trading days while the app is open (<strong>&#10227; Sync now</strong> runs it any time). Real trades get an alert; paper trades are executed automatically with virtual money.</p>
+            <p>One rule engine manages every trade, real and paper, from trigger to exit. It runs on the server every minute from 09:00 to 15:31 IST on trading days, whether or not the app is open (<strong>&#10227; Sync now</strong> runs it any time). If the server runner is offline, an open app tab takes over until it is back. Real trades get an alert; paper trades are executed automatically with virtual money.</p>
             <h4>Lifecycle (default settings — your own levels are shown in Settings &rarr; Trade Lifecycle &amp; Alerts)</h4>
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;text-align:left;">Stage</th><th style="padding:6px 10px;text-align:left;">When</th><th style="padding:6px 10px;text-align:left;">What happens</th></tr></thead><tbody>
               <tr><td style="padding:6px 10px;">Entry (LC-01)</td><td style="padding:6px 10px;">Price holds 5 min above the watchlist trigger</td><td style="padding:6px 10px;">Buy 50% of full size (RPT &divide; (trigger &minus; stop)); stop = initial stop</td></tr>
@@ -368,7 +369,8 @@ const settingsModule = (() => {
               <li>Open Telegram &rarr; search <strong>@BotFather</strong> (blue tick) &rarr; send <code>/newbot</code>.</li>
               <li>Enter display name (e.g., &quot;My Trading Alerts&quot;).</li>
               <li>Enter username ending in <code>bot</code> (e.g., <code>RajTradingJournalBot</code>).</li>
-              <li>Copy the <strong>HTTP API Token</strong> provided.</li>
+              <li>Copy the <strong>HTTP API Token</strong> provided and store it as a <strong>server secret</strong> (never in the app):
+                in PowerShell, in the project folder, run <code>npx supabase secrets set TELEGRAM_BOT_TOKEN=&lt;token&gt;</code>.</li>
             </ol>
             <h4>Step 2 &mdash; Get Your Chat ID</h4><ol>
               <li>Open your new bot &rarr; press <strong>Start</strong>.</li>
@@ -377,8 +379,8 @@ const settingsModule = (() => {
             </ol>
             <h4>Step 3 &mdash; Connect &amp; Test</h4><ol>
               <li>Go to <strong>Settings &rarr; Alerts &amp; Notifications</strong>.</li>
-              <li>Paste Bot Token and Chat ID &rarr; Save Changes.</li>
-              <li>Go to Positions &rarr; click <strong>&#128260; Sync Live Data</strong>. If an alert condition is met, your phone will notify within seconds.</li>
+              <li>Paste your Chat ID &rarr; click <strong>&#128232; Send test message</strong> (it saves the Chat ID first).</li>
+              <li>Alerts are sent by the server rule runner every minute in market hours &mdash; the app does not need to be open.</li>
             </ol>`)}
 
           ${S('um11','&#119891;','Key Calculations Reference',`
@@ -782,7 +784,7 @@ const settingsModule = (() => {
 
       ${part('C · Rules, alerts and research tools')}
       ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Lifecycle & Alerts')}: read the flow and rule table (entry → add → lock → two trails → hard stop; defaults 1R / 2R / 5R / 10R). Change targets or switch any off with <strong>⚙ Lifecycle settings</strong> — changes apply to new trades only. Keep the defaults unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
-      ${step(10, 'Telegram alerts', `<p>On the same page, open <strong>📖 Account setup — step-by-step guide</strong> under Telegram, create your bot, paste the token and chat ID, click <strong>📨 Send test message</strong>, then <strong>Save Changes</strong>. Real-trade alerts then reach your phone; paper alerts stay on the Alert Dashboard.</p>`)}
+      ${step(10, 'Telegram alerts', `<p>On the same page, open <strong>📖 Account setup — step-by-step guide</strong> under Telegram, create your bot, store the bot token as the server secret <code>TELEGRAM_BOT_TOKEN</code>, paste your chat ID and click <strong>📨 Send test message</strong>. Real-trade alerts then reach your phone from the server runner, even with the app closed; paper alerts stay on the Alert Dashboard.</p>`)}
       ${step(11, 'Playbooks', `<p>${nav('playbook', 'Playbook')} → <strong>+ New Playbook</strong> for each setup you trade (e.g. VCP breakout): entry rules, exit rules, checklist. Keep one <em>Active</em> version per setup and tag each trade with it — Analytics then shows which setups make money.</p>`)}
       ${step(12, 'Market Health', `<p>Click <strong>🌡 Market Health</strong> (top bar) → run <strong>Auto Fetch</strong> once. After that it refreshes automatically at 08:45 IST on trading days. Use trend and breadth to decide how aggressive to be.</p>`)}
 
@@ -919,23 +921,24 @@ const settingsModule = (() => {
           <li><strong>Install Telegram</strong> on your phone (or open web.telegram.org) and sign in.</li>
           <li><strong>Create your bot:</strong> search for <strong>@BotFather</strong> (blue tick), open it and send <code>/newbot</code>.</li>
           <li>Send a <strong>display name</strong> (e.g. <em>My Trade Alerts</em>), then a <strong>username</strong> ending in <code>bot</code> (e.g. <em>rajsekhar_trade_alerts_bot</em>).</li>
-          <li>BotFather replies with a <strong>token</strong> like <code>123456789:AAH…</code>. Copy it and paste it into <strong>Telegram Bot Token</strong> below. Keep it private — anyone with it can send messages as your bot.</li>
+          <li>BotFather replies with a <strong>token</strong> like <code>123456789:AAH…</code>. Keep it private — anyone with it can send messages as your bot. Store it on the server, not in the app: in PowerShell, in the project folder, run <code>npx supabase secrets set TELEGRAM_BOT_TOKEN=&lt;token&gt;</code>. The status line below turns green once the server has it.</li>
           <li><strong>Start the bot:</strong> tap the link BotFather gives (t.me/&lt;your_bot&gt;) and press <strong>Start</strong>. Telegram will not deliver alerts until you do this.</li>
           <li><strong>Get your Chat ID:</strong> search for <strong>@userinfobot</strong>, press Start, and copy the number it shows as <em>Id</em>. Paste it into <strong>Telegram Chat ID</strong> below.</li>
-          <li>Click <strong>📨 Send test message</strong>. You should receive “Telegram alerts are working” within a few seconds.</li>
-          <li>Click <strong>Save Changes</strong>. From now on, real-trade alerts (entries, targets, partial exits, stop-loss breaches and the 09:00 stop-loss brief) arrive on Telegram. Paper-trade alerts stay on the Alert Dashboard only.</li>
+          <li>Click <strong>📨 Send test message</strong> (it saves the Chat ID first). You should receive a test message from the server within a few seconds.</li>
+          <li>From now on, real-trade alerts (entries, targets, partial exits, stop-loss breaches and the 09:00 stop-loss brief) arrive on Telegram. Paper-trade alerts stay on the Alert Dashboard only.</li>
         </ol>
         <div style="margin-top:8px;color:var(--text-muted)">
           <strong>Troubleshooting:</strong> “Unauthorized” = wrong or revoked token (create a new one with <code>/token</code> in BotFather) ·
           “chat not found” = you have not pressed Start in the bot chat, or the Chat ID is wrong ·
-          alerts only go out while the app is open in a browser during market hours (09:00–15:30 IST).
+          “TELEGRAM_BOT_TOKEN secret is not set” = run the <code>supabase secrets set</code> command above ·
+          the server runner sends alerts every minute 09:00–15:31 IST on trading days, whether or not the app is open.
         </div>
       </details>
       <div class="settings-grid">
         <div class="form-group">
           <label class="form-label">Telegram Bot Token</label>
-          <input type="password" class="form-input" id="al-telegram-token" value="${settings?.telegramBotToken || ''}" placeholder="e.g. 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Get this from @BotFather on Telegram.</div>
+          <div class="form-input" id="al-telegram-token-status" style="opacity:0.8">Checking the server…</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Held only as the server secret <code>TELEGRAM_BOT_TOKEN</code> — never stored in the app or database.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Telegram Chat ID</label>
@@ -945,7 +948,7 @@ const settingsModule = (() => {
       </div>
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px;">
         <button class="btn btn-secondary btn-sm" id="al-telegram-test" onclick="settingsModule._testTelegram()">📨 Send test message</button>
-        <span id="al-telegram-result" style="font-size:12px;color:var(--text-muted)">Uses the token and chat ID above (no need to save first).</span>
+        <span id="al-telegram-result" style="font-size:12px;color:var(--text-muted)">Saves the Chat ID, then the server sends a test message.</span>
       </div>
 
       ${_saveBtn('saveAlerts')}
@@ -956,8 +959,8 @@ const settingsModule = (() => {
     const settings = await db.getSettings();
     delete settings.alerts;   // v2 alert toggles are replaced by the rule set
     settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
-    settings.telegramBotToken = document.getElementById('al-telegram-token')?.value || '';
-    settings.telegramChatId = document.getElementById('al-telegram-chat')?.value || '';
+    delete settings.telegramBotToken;   // the bot token lives only in the server secret TELEGRAM_BOT_TOKEN
+    settings.telegramChatId = (document.getElementById('al-telegram-chat')?.value || '').trim();
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Holidays and Telegram settings saved', 'success');
@@ -1024,28 +1027,50 @@ const settingsModule = (() => {
     ]);
   }
 
-  /** Send a sample alert to Telegram with the token / chat ID currently typed in. */
+  /** POST an action to the backend rule runner (auth.js attaches the signed-in user's token). */
+  async function _runnerApi(action) {
+    const r = await fetch(`${APP_CONFIG.SUPABASE_URL}/functions/v1/tlm-runner`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
+    });
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, data };
+  }
+
+  /** Show whether the server holds the Telegram bot token. */
+  async function _showTelegramStatus() {
+    const el = document.getElementById('al-telegram-token-status');
+    if (!el) return;
+    try {
+      const { ok, status, data } = await _runnerApi('status');
+      if (!ok) { el.textContent = status === 404 ? '⚠ Server runner not deployed yet' : `⚠ Server runner error (${status})`; el.style.color = '#d97706'; return; }
+      el.textContent = data.telegramConfigured ? '✅ Set on the server' : '⚠ Not set — run: npx supabase secrets set TELEGRAM_BOT_TOKEN=<token>';
+      el.style.color = data.telegramConfigured ? '#059669' : '#d97706';
+    } catch (e) {
+      el.textContent = '⚠ Could not reach the server runner'; el.style.color = '#d97706';
+    }
+  }
+
+  /** Save the chat ID, then ask the server runner to send a test message. */
   async function _testTelegram() {
-    const token  = document.getElementById('al-telegram-token')?.value.trim();
     const chatId = document.getElementById('al-telegram-chat')?.value.trim();
     const out    = document.getElementById('al-telegram-result');
     const btn    = document.getElementById('al-telegram-test');
     const show = (msg, ok) => { if (out) { out.textContent = msg; out.style.color = ok ? '#059669' : '#dc2626'; } };
-    if (!token || !chatId) { show('Enter both the bot token and the chat ID first.', false); return; }
-    const time = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-    const text = `Alert type : Test message · TradeJournal\nCMP        : —\nSuggestion : Telegram alerts are working (${time} IST)`;
+    if (!chatId) { show('Enter your Telegram Chat ID first.', false); return; }
     if (btn) btn.disabled = true;
-    show('Sending…', true);
+    show('Saving the Chat ID and sending…', true);
     try {
-      const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok && data.ok) show('✅ Sent — check Telegram. Remember to Save Changes.', true);
-      else show(`❌ Telegram said: ${data.description || r.status}. Check the token, and that you have pressed Start in a chat with the bot.`, false);
+      const settings = await db.getSettings();
+      if (settings.telegramChatId !== chatId || settings.telegramBotToken) {
+        settings.telegramChatId = chatId;
+        delete settings.telegramBotToken;
+        await db.saveSettings(settings);
+      }
+      const { ok, status, data } = await _runnerApi('test-telegram');
+      if (ok && data.ok) show('✅ Sent by the server — check Telegram.', true);
+      else show('❌ ' + (data.error || (status === 404 ? 'Server runner not deployed yet.' : `Server runner error ${status}`)), false);
     } catch (e) {
-      show('❌ Could not reach Telegram: ' + e.message, false);
+      show('❌ Could not reach the server runner: ' + e.message, false);
     } finally {
       if (btn) btn.disabled = false;
     }

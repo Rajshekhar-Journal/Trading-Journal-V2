@@ -1,0 +1,19 @@
+# Published to .github/workflows/test.yml by: node push-tlm-v3.mjs --with-ci  (token needs the Workflows permission)
+# Runs the unit tests on every push and pull request to main.
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Engine copies in sync
+        run: node scripts/sync-engine.mjs && git diff --exit-code -- supabase/functions/_shared/engine
+      - name: Unit tests
+        run: npm test

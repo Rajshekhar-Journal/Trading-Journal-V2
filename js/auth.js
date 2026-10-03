@@ -11,6 +11,20 @@ const auth = (() => {
   // Supabase client — initialised once
   const _client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+  // Edge Functions accept only a signed-in user's token (the public anon key proves nothing),
+  // so every call to /functions/v1/* gets the current session token attached here, in one place.
+  const _FN_BASE = SUPABASE_URL + '/functions/v1/';
+  const _fetch = window.fetch.bind(window);
+  window.fetch = async (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input && input.url) || '';
+    if (!url.startsWith(_FN_BASE)) return _fetch(input, init);
+    const { data } = await _client.auth.getSession();
+    const headers = new Headers(init.headers || (typeof input === 'string' ? undefined : input.headers));
+    if (data?.session?.access_token) headers.set('Authorization', `Bearer ${data.session.access_token}`);
+    headers.set('apikey', SUPABASE_KEY);
+    return _fetch(input, { ...init, headers });
+  };
+
   let currentUser = null;
   let _onAuthChange = null;
 

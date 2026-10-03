@@ -13,3 +13,8 @@ project_handoff_summary.md
 
 _archive/
 _backup_pre_tlm_v3/
+
+# Local helper scripts (never commit tokens)
+push.mjs
+deploy-v2.ps1
+push-to-github.ps1

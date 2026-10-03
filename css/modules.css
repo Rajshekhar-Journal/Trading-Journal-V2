@@ -244,3 +244,8 @@ input:checked + .toggle-slider:before { transform: translateX(16px); }
 .imp-muted { color: var(--text-muted, #94a3b8); font-size: 12px; }
 @media (max-width: 640px) { .imp-pick { flex-direction: column; align-items: stretch; } }
 .imp-nowrap { white-space: nowrap; }
+
+/* ── Rule runner host badge (Alert Dashboard) ───────────────────────── */
+.ad-host { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.ad-host-server { color: #059669; }
+.ad-host-browser { color: #d97706; }

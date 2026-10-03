@@ -72,12 +72,16 @@ const AlertDashboard = (() => {
       .sort((a, b) => (b.rule_id === 'LC-09' && b.status === 'New') - (a.rule_id === 'LC-09' && a.status === 'New') || b.created_at.localeCompare(a.created_at));
     const chip = (k, label) => `<button class="filter-btn ${_filter === k ? 'active' : ''}" data-ad-filter="${k}">${label}${k === 'all' ? ` ${all.length}` : ` ${counts[k]}`}</button>`;
     const last = TLMRunner.lastRun();
+    const srv = TLMRunner.serverStatus?.();
+    const engineLine = TLMRunner.host?.() === 'server'
+      ? `<span class="ad-host ad-host-server" title="Rules run on the server every minute, even with this app closed">● Server runner${srv?.last_finished_at ? ' · ' + time(srv.last_finished_at) : ''}</span>`
+      : `<span class="ad-host ad-host-browser" title="The server runner has not reported in the last 3 minutes, so this browser tab runs the rules (dashboard alerts only, no Telegram)">● Browser fallback${last ? ' · ' + time(new Date(last).toISOString()) : ''}</span>`;
 
     el.innerHTML = `
       <div class="card-header">
         <span class="card-title">Alert Dashboard — today ${counts.open ? '<span class="ad-dot"></span>' : ''}</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <span class="card-subtitle">${last ? 'Engine ran ' + time(new Date(last).toISOString()) : 'Engine idle'}</span>
+          <span class="card-subtitle">${engineLine}</span>
           <button class="btn btn-sm btn-secondary" id="ad-sync" title="Run the rule engine now">⟳ Sync now</button>
           <button class="btn btn-sm btn-secondary" id="ad-max" title="Open the full alert log">⛶ Full log</button>
         </div>
@@ -96,7 +100,7 @@ const AlertDashboard = (() => {
     el.querySelector('#ad-max').addEventListener('click', openFull);
     el.querySelector('#ad-sync').addEventListener('click', async () => {
       app.toast('Running rule engine…', 'info', 1500);
-      await TLMRunner.runCycle({ force: true });
+      try { await TLMRunner.runCycle({ force: true }); } catch (e) { app.toast(e.message, 'error'); }
       render();
     });
     _bindActions(el, render);
@@ -177,6 +181,7 @@ const AlertDashboard = (() => {
   function _autoRefresh() {
     const visible = () => document.getElementById('mod-dashboard')?.classList.contains('active');
     window.addEventListener('tlm:cycle', () => { if (visible()) render(); if (_full) _renderFull(); });
+    window.addEventListener('tlm:host', () => { if (visible()) render(); });
   }
   _autoRefresh();
 

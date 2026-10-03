@@ -7,6 +7,9 @@
     "supabase": "^2.109.1"
   },
   "scripts": {
-    "test": "node --test tests/tlm-engine.test.js tests/import.test.js"
+    "test": "node --test tests/tlm-engine.test.js tests/import.test.js tests/server-runner.test.js",
+    "sync-engine": "node scripts/sync-engine.mjs",
+    "vendor-libs": "node scripts/vendor-libs.mjs",
+    "deploy:functions": "node scripts/sync-engine.mjs && supabase functions deploy tlm-runner --no-verify-jwt && supabase functions deploy yahoo-finance --no-verify-jwt"
   }
 }
