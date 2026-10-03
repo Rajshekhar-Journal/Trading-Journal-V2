@@ -48,6 +48,7 @@ G.TLMMarketData.setSource(async (tk: string, interval: string, range: string) =>
   return data?.chart?.result?.[0] || null;
 });
 
+let lastTelegramError = '';   // Telegram's own reason for the latest failure (shown by the test button)
 async function telegram(chatId: string | undefined, text: string): Promise<'sent' | 'failed' | 'skipped'> {
   if (!BOT_TOKEN || !chatId) return 'skipped';
   try {
@@ -55,8 +56,20 @@ async function telegram(chatId: string | undefined, text: string): Promise<'sent
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: chatId, text }),
     });
-    return r.ok ? 'sent' : 'failed';
-  } catch { return 'failed'; }
+    if (r.ok) return 'sent';
+    const body = await r.json().catch(() => ({}));
+    lastTelegramError = `${r.status} ${body?.description || ''}`.trim();
+    console.error('Telegram send failed:', lastTelegramError);
+    return 'failed';
+  } catch (e) { lastTelegramError = String((e as Error).message); return 'failed'; }
+}
+
+/** Plain-language fix for Telegram's error. */
+function telegramHint(err: string): string {
+  if (/401|Unauthorized/i.test(err)) return 'Telegram says the bot token is invalid (401 Unauthorized). Copy the current token from @BotFather and run: npx supabase secrets set "TELEGRAM_BOT_TOKEN=<token>"';
+  if (/chat not found/i.test(err)) return 'Telegram says "chat not found": press Start in your bot, and check the Chat ID (from @userinfobot, same Telegram account).';
+  if (/blocked/i.test(err)) return 'Telegram says the bot is blocked: open the bot and tap Restart / Unblock.';
+  return `Telegram rejected the message (${err || 'no reason given'}).`;
 }
 // deno-lint-ignore no-explicit-any
 G.TLMAlerts.setNotifier((text: string, settings: any) => telegram(settings?.telegramChatId, text));
@@ -145,7 +158,7 @@ Deno.serve(async (req) => {
     if (!settings?.telegramChatId) return json({ ok: false, error: 'Add your Telegram Chat ID in Settings first.' }, 400);
     const res = await telegram(settings.telegramChatId,
       `✅ Trading Journal test message\nSent by the server rule runner at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.`);
-    return res === 'sent' ? json({ ok: true }) : json({ ok: false, error: 'Telegram rejected the message — check the chat id and that you pressed Start in the bot.' }, 502);
+    return res === 'sent' ? json({ ok: true }) : json({ ok: false, error: telegramHint(lastTelegramError) }, 502);
   }
 
   if (action === 'status') {
