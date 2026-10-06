@@ -175,7 +175,7 @@
     throw new Error('Choose an .xlsx or .csv file.');
   }
 
-  const api = { readXlsx, parseCsv, writeXlsx, readFile };
+  const api = { readXlsx, parseCsv, writeXlsx, readFile, zip: _zip };
   root.XlsxLite = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

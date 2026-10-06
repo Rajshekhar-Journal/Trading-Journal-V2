@@ -12,11 +12,12 @@ function createMemoryClient(tables = {}) {
     eq(k, v) { this.f.push(r => r[k] === v); return this; }
     gte(k, v) { this.f.push(r => r[k] >= v); return this; }
     lte(k, v) { this.f.push(r => r[k] <= v); return this; }
+    neq(k, v) { this.f.push(r => r[k] !== v); return this; }
     order(k, o) { this.o = [k, o && o.ascending === false ? -1 : 1]; return this; }
     limit(n) { this.lim = n; return this; }
     single() { this.one = 'single'; return this; }
     maybeSingle() { this.one = 'maybe'; return this; }
-    upsert(p) { this.op = 'upsert'; this.payload = p; return this; }
+    upsert(p, o) { this.op = 'upsert'; this.payload = p; this.conflict = o && o.onConflict; return this; }
     insert(p) { this.op = 'insert'; this.payload = p; return this; }
     update(p) { this.op = 'update'; this.payload = p; return this; }
     delete() { this.op = 'delete'; return this; }
@@ -32,8 +33,8 @@ function createMemoryClient(tables = {}) {
         if (this.one === 'single' && !d[0]) out.error = { message: 'not found' };
       } else if (this.op === 'upsert' || this.op === 'insert') {
         (Array.isArray(this.payload) ? this.payload : [this.payload]).forEach(p => {
-          const key = this.t === 'settings' ? 'user_id' : 'id';
-          const i = rows.findIndex(r => r[key] === p[key]);
+          const keys = (this.conflict || (this.t === 'settings' ? 'user_id' : 'id')).split(',');
+          const i = rows.findIndex(r => keys.every(k => r[k] === p[k]));
           if (i >= 0) rows[i] = { ...rows[i], ...clone(p) }; else rows.push(clone(p));
         });
       } else if (this.op === 'update') {

@@ -50,26 +50,65 @@
     return calc.getCurrentR(equity, settings);
   }
 
-  /** Save one chart snapshot per entry / pyramid record not yet captured. */
-  async function _snapshots(trade, mode, mk, today) {
-    const s = trade.tlmState;
-    if (!s || !mk?.daily?.length) return false;
-    const taken = new Set(s.snapshotsTaken || []);
-    const records = [...(trade.entries || []).map(r => ({ r, rule: RULES.ENTRY })), ...(trade.pyramids || []).map(r => ({ r, rule: RULES.ADD_1R }))];
-    let added = false;
-    for (const { r, rule } of records) {
-      if (!r.id || taken.has(r.id)) continue;
-      await db.saveSnapshot({
-        trade_id: trade.id, mode, rule_id: rule, entry_ref: r.id, entry_date: r.date,
-        daily: mk.daily.filter(c => c.date <= r.date).slice(-120),
-        intraday: r.date === today ? mk.intraday : [],
-        levels: { initialStop: s.initialStop, targets: s.targets, fill: r.price, qty: r.qty },
-      });
-      taken.add(r.id);
-      added = true;
+  /**
+   * Save or finalise trade charts for the Chartbook (engine/chartbook.js): entry, 1R add and exit charts,
+   * real and paper trades. Normal runs cover open trades and trades closed in the last 10 days;
+   * `backfill` covers every trade (Chartbook → Build missing charts). At most `limit` charts per call.
+   * @returns { saved, failed, remaining } — remaining = charts still to take
+   */
+  async function captureCharts({ backfill = false, limit = 10, now = Date.now(), settings } = {}) {
+    const C = root.TLMChartbook, MD = root.TLMMarketData;
+    const empty = { saved: 0, failed: 0, remaining: 0 };
+    if (!C || !db.getSnapshotIndex) return empty;
+    const rows = await db.getSnapshotIndex();
+    if (!rows) return empty;                                   // migration 007 not applied yet
+    settings = settings || await db.getSettings();
+    const p = paramsFrom(settings);
+    const today = I.istDate(now);
+    const afterClose = I.istMinutes(now) >= p.marketCloseMinute + 3;
+    const [real, paper] = await Promise.all([db.getTrades(), db.getPaperTrades()]);
+    const index = C.indexOf(rows);
+    const recent = C.addDays(today, -10);
+
+    const work = [];
+    for (const [mode, list] of [['real', real], ['paper', paper]]) {
+      for (const t of list || []) {
+        if (!(t.entries || []).length) continue;
+        const x = C.exitDate(t);
+        if (!backfill && x && x < recent) continue;
+        for (const ev of C.pending(t, index, { today, afterClose, provisional: !backfill })) work.push({ t, mode, ev });
+      }
     }
-    s.snapshotsTaken = [...taken];
-    return added;
+    const batch = work.slice(0, limit);
+
+    // One history fetch per symbol (from the earliest date any chart needs), one 1-min fetch per symbol/day.
+    const from = {};
+    for (const { t, ev } of batch) {
+      const f = C.historyFrom(t, ev);
+      if (!from[t.symbol] || f < from[t.symbol].from) from[t.symbol] = { from: f, exchange: t.exchange };
+    }
+    const hist = {}, intra = {};
+    let saved = 0, failed = 0;
+    for (const { t, mode, ev } of batch) {
+      try {
+        if (!hist[t.symbol]) hist[t.symbol] = await MD.history(t.symbol, t.exchange, from[t.symbol].from);
+        const k = t.symbol + '|' + ev.date;
+        if (!(k in intra)) intra[k] = await MD.intradayOn(t.symbol, t.exchange, ev.date).catch(() => []);
+        let result = null;
+        if (ev.kind === C.KINDS.EXIT && typeof calc !== 'undefined') {
+          const m = calc.getTradeMetrics(t);
+          result = { r: m.profitR, pnl: m.realizedPnl, holdingDays: m.holdingDays };
+        }
+        const snap = C.build({ trade: t, mode, ev, daily: hist[t.symbol], intraday: intra[k], final: ev.final, now, result });
+        if (!snap.daily.length) throw new Error('no daily candles');
+        await db.saveChartSnapshot(snap);
+        saved++;
+      } catch (e) {
+        failed++;
+        _errors.push({ symbol: t.symbol, error: 'chart: ' + String(e?.message || e) });
+      }
+    }
+    return { saved, failed, remaining: work.length - batch.length };
   }
 
   async function _handleTrade(trade, mode, ctx) {
@@ -96,7 +135,6 @@
 
     let updated = { ...trade, tlmState: state, cmp: mk?.ltp || trade.cmp };
     if (mode === 'paper' && actions.length) updated = X.applyPaper(updated, actions, { settings, date: today, openQty: m.openQty });
-    if (await _snapshots(updated, mode, mk, today)) dirty = true;
 
     if (dirty || actions.length || updated.cmp !== trade.cmp) {
       await (mode === 'paper' ? db.savePaperTrade(updated) : db.saveTrade(updated));
@@ -125,7 +163,6 @@
       const state = E.createState({ entryPrice: action.price, firstQty: plan.firstQty, initialStop: action.stop, params: p, now });
       if (state) {
         const trade = X.createPaperTrade({ item, action, plan, state, settings, date: today });
-        await _snapshots(trade, 'paper', mk, today);
         await db.savePaperTrade(trade);
         await A.dispatch({ action: { ...action, qty: plan.firstQty }, symbol: item.symbol, mode: 'paper', tradeId: trade.id,
           stage: state.stage, cmp: mk.ltp, settings, params: p, alertsToday: ctx.alertsToday, now });
@@ -207,6 +244,7 @@
       for (const t of real) await _safe(() => _handleTrade(t, 'real', ctx), t.symbol);
       for (const t of paper) await _safe(() => _handleTrade(t, 'paper', ctx), t.symbol);
 
+      if (!isServer()) await captureCharts({ limit: 5, now, settings }).catch(() => {});   // the server does this every minute itself
       _lastRun = now;
       root.dispatchEvent?.(new CustomEvent('tlm:cycle', { detail: { at: now, host: isServer() ? 'server' : 'browser' } }));
       return true;
@@ -230,7 +268,7 @@
 
   function stop() { clearInterval(_timer); _timer = null; }
 
-  const api = { start, stop, runCycle, paramsFrom, cachedParams: () => _cachedParams, defaultRpt: _defaultRpt,
+  const api = { start, stop, runCycle, captureCharts, paramsFrom, cachedParams: () => _cachedParams, defaultRpt: _defaultRpt,
     lastRun: () => _lastRun, isRunning: () => _running, lastErrors: () => _errors, host: () => _host, serverStatus: () => _serverStatus, serverActive };
   root.TLMRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

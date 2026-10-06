@@ -71,6 +71,27 @@
     return out;
   }
 
-  const api = { load, intraday, daily, ticker, setSource };
+  /**
+   * Daily candles from `fromIso` up to today, fetched fresh (no per-day cache, so a chart taken after the
+   * close has the complete day). Range chosen to reach `fromIso`.
+   */
+  async function history(symbol, exchange, fromIso) {
+    const today = I.istDate(Date.now());
+    const range = root.TLMChartbook ? root.TLMChartbook.rangeFor(fromIso, today) : '2y';
+    return _candles(await _chart(ticker(symbol, exchange), '1d', range))
+      .map(c => ({ ...c, date: I.istDate(c.time * 1000) }))
+      .filter(c => c.date >= fromIso);
+  }
+
+  /** 1-min candles of one IST day. Yahoo keeps 1-min data for only a few days, so older days give []. */
+  async function intradayOn(symbol, exchange, dateIso) {
+    const today = I.istDate(Date.now());
+    const age = Math.round((Date.parse(today) - Date.parse(dateIso)) / 864e5);
+    if (age < 0 || age > 6) return [];
+    const r = await _chart(ticker(symbol, exchange), '1m', age === 0 ? '1d' : '5d');
+    return _candles(r).filter(c => I.istDate(c.time * 1000) === dateIso);
+  }
+
+  const api = { load, intraday, daily, ticker, setSource, history, intradayOn };
   root.TLMMarketData = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -17,7 +17,7 @@ const { createMemoryClient } = require('./helpers/memory-supabase.js');
 
 const ROOT = path.join(__dirname, '..');
 const SHARED_DIR = path.join(ROOT, 'supabase/functions/_shared/engine');
-const ORDER = ['calculations.js', 'db-cloud.js', 'indicators.js', 'tlm-rules.js', 'tlm-engine.js',
+const ORDER = ['calculations.js', 'db-cloud.js', 'indicators.js', 'tlm-rules.js', 'tlm-engine.js', 'chartbook.js',
   'market-data.js', 'alert-service.js', 'executors.js', 'runner.js'];
 const sourceOf = f => fs.existsSync(path.join(ROOT, 'js', f)) ? path.join(ROOT, 'js', f) : path.join(ROOT, 'js/engine', f);
 

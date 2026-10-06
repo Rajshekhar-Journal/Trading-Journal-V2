@@ -584,6 +584,38 @@ const db = (() => {
     return data || [];
   }
 
+  /** Light list of saved charts (no candle data) — null when migration 007 is not applied. */
+  async function getSnapshotIndex() {
+    const { data, error } = await _sb().from('trade_snapshots').select('id,trade_id,kind,rule_id,entry_ref,final').eq('user_id', _uid()).limit(20000);
+    if (error) { console.warn('getSnapshotIndex:', error.message); return null; }
+    return data || [];
+  }
+
+  /** Save (or replace) one Chartbook chart; removes older copies of the same chart. */
+  async function saveChartSnapshot(snap) {
+    const uid = _uid();
+    const record = { ...snap, user_id: uid };
+    const { error } = await _sb().from('trade_snapshots').upsert(record, { onConflict: 'id' });
+    if (error) throw new Error(error.message);
+    await _sb().from('trade_snapshots').delete().eq('user_id', uid).eq('trade_id', snap.trade_id)
+      .eq('entry_ref', snap.entry_ref).eq('rule_id', snap.rule_id).neq('id', snap.id);
+    _notifyChange('charts');
+    return record;
+  }
+
+  /** Chartbook notes & lessons: { tradeId: text }. */
+  async function getChartbookNotes() {
+    const { data, error } = await _sb().from('chartbook_notes').select('trade_id,notes').eq('user_id', _uid());
+    if (error) { console.warn('getChartbookNotes:', error.message); return {}; }
+    return Object.fromEntries((data || []).map(r => [r.trade_id, r.notes || '']));
+  }
+
+  async function saveChartbookNote(tradeId, mode, notes) {
+    const { error } = await _sb().from('chartbook_notes').upsert(
+      { user_id: _uid(), trade_id: tradeId, mode, notes, updated_at: new Date().toISOString() }, { onConflict: 'user_id,trade_id' });
+    if (error) _fail('Note save failed', error);
+  }
+
   // ════════════════════════════════════════════════════════════════════════
   // RULE RUNNER STATUS + LOCK  (migration 006)
   // ════════════════════════════════════════════════════════════════════════
@@ -626,6 +658,8 @@ const db = (() => {
     getWatchlist, saveWatchlistItem, deleteWatchlistItem,
     // Alert log + snapshots
     getAlerts, insertAlert, updateAlert, saveSnapshot, getSnapshots,
+    // Chartbook
+    getSnapshotIndex, saveChartSnapshot, getChartbookNotes, saveChartbookNote,
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
     // Paper Trades

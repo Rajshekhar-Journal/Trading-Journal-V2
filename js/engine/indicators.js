@@ -34,6 +34,17 @@
     return e;
   }
 
+  /** EMA at every point (SMA-seeded like ema()); null until `period` values exist. Used for chart lines. */
+  function emaSeries(values, period) {
+    const out = new Array((values || []).length).fill(null);
+    if (!values || values.length < period) return out;
+    const k = 2 / (period + 1);
+    let e = values.slice(0, period).reduce((s, v) => s + v, 0) / period;
+    out[period - 1] = e;
+    for (let i = period; i < values.length; i++) { e = values[i] * k + e * (1 - k); out[i] = e; }
+    return out;
+  }
+
   /** Wilder ATR over candles [{high,low,close}]. Returns null if not enough data. */
   function atr(candles, period = 14) {
     if (!candles || candles.length <= period) return null;
@@ -92,7 +103,7 @@
     return (daily || []).filter(c => c.date < todayIso);
   }
 
-  const api = { istDate, istMinutes, istWeekday, ema, atr, tickSize, roundTick, completedMinutes, holdAbove, holdBelow, closedDays };
+  const api = { emaSeries, istDate, istMinutes, istWeekday, ema, atr, tickSize, roundTick, completedMinutes, holdAbove, holdBelow, closedDays };
   root.TLMIndicators = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

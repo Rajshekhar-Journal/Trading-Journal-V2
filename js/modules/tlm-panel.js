@@ -38,44 +38,47 @@ const TLMPanel = (() => {
         ${cell('Qty per leg', s.firstQty)}
       </div>
       ${tr ? `<table class="data-table" style="font-size:12px;margin-top:6px"><thead><tr><th>Trail</th><th>Qty</th><th>Trail stop</th><th>Status</th></tr></thead><tbody>${tr}</tbody></table>` : ''}
-      <div style="font-size:13px;font-weight:600;margin:14px 0 6px">Entry-day charts</div>
+      <div style="font-size:13px;font-weight:600;margin:14px 0 6px">Trade charts</div>
       <div id="tlm-snaps-${trade.id}" style="font-size:12px;color:var(--text-muted)">Loading…</div>`;
   }
 
-  /** Render stored entry-day snapshots as small candlestick charts with the trade levels. */
+  /** Render the trade's saved charts (entry, 1R add, exit) — same renderer as the Chartbook. */
   async function loadSnapshots(trade) {
     const box = document.getElementById(`tlm-snaps-${trade.id}`);
     if (!box) return;
-    const snaps = await db.getSnapshots(trade.id);
-    if (!snaps.length) { box.textContent = 'No snapshot yet — saved automatically on the next engine cycle after an entry.'; return; }
-    box.innerHTML = snaps.map(sn => `<div style="margin-bottom:10px"><div style="margin-bottom:4px">${sn.rule_id === 'LC-01' ? 'Entry' : '1R add'} · ${sn.entry_date} · fill ${inr(sn.levels?.fill)} × ${sn.levels?.qty ?? ''}</div><div id="snap-${sn.id}" style="height:220px"></div></div>`).join('');
-    if (!window.LightweightCharts) return;
-    for (const sn of snaps) {
-      const el = document.getElementById(`snap-${sn.id}`);
-      const chart = LightweightCharts.createChart(el, { height: 220, width: el.clientWidth || box.clientWidth || 400, localization: { locale: 'en-IN' }, layout: { background: { color: 'transparent' }, textColor: '#64748b', fontSize: 10 }, grid: { vertLines: { visible: false }, horzLines: { color: '#eef1f5' } }, timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false } });
-      // Keep the fill, the stop and the first target in view (not only the candles).
-      const keep = [sn.levels?.fill, sn.levels?.initialStop, sn.levels?.targets?.T1].map(Number).filter(v => v > 0);
-      const series = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#ef4444', borderVisible: false,
-        autoscaleInfoProvider: original => {
-          const r = original();
-          if (!r || !keep.length) return r;
-          return { ...r, priceRange: { minValue: Math.min(r.priceRange.minValue, ...keep), maxValue: Math.max(r.priceRange.maxValue, ...keep) } };
-        } });
-      const candles = (sn.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }));
-      series.setData(candles);
-      if (candles.some(c => c.time === sn.entry_date)) {
-        series.setMarkers([{ time: sn.entry_date, position: 'belowBar', color: '#3b82f6', shape: 'arrowUp', text: sn.rule_id === 'LC-01' ? 'Entry' : '1R add' }]);
-      }
-      const line = (price, color, title) => price && series.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title });
-      line(sn.levels?.fill, '#3b82f6', 'Fill');
-      line(sn.levels?.initialStop, '#ef4444', 'SL');
-      Object.entries(sn.levels?.targets || {}).forEach(([k, v]) => line(v, '#94a3b8', k.replace('T', '') + 'R'));
-      chart.timeScale().fitContent();
-      // The panel may still be laying out when the chart is created — follow the box width.
-      if (window.ResizeObserver) new ResizeObserver(() => { if (el.clientWidth) { chart.applyOptions({ width: el.clientWidth }); chart.timeScale().fitContent(); } }).observe(el);
+    const order = { entry: 0, add: 1, exit: 2 };
+    const snaps = (await db.getSnapshots(trade.id))
+      .sort((a, b) => (order[ChartRender.kindOf(a)] - order[ChartRender.kindOf(b)]) || String(a.entry_date).localeCompare(String(b.entry_date)));
+    if (!snaps.length) {
+      box.innerHTML = 'No chart yet — the server saves one on the next cycle after an entry, and the final chart after the close. Older trades: Chartbook → <strong>Build missing charts</strong>.';
+      return;
     }
+    _snaps[trade.id] = snaps;
+    box.innerHTML = snaps.map((sn, i) => {
+      const lv = sn.levels || {};
+      const kind = ChartRender.kindOf(sn);
+      const what = kind === 'exit'
+        ? `Exit · ${sn.entry_date}${lv.result ? ` · ${calc.formatR(lv.result.r)}` : ''}`
+        : `${ChartRender.KIND_LABEL[kind]} · ${sn.entry_date} · fill ${inr(lv.fill)} × ${lv.qty ?? ''}`;
+      return `<div class="cr-block">
+        <div class="cr-head"><span>${what}${sn.final ? '' : ' <span class="cr-prov" title="Taken during the session; replaced by the final chart after the close">provisional</span>'}</span>
+          <span><button class="btn btn-secondary btn-sm" onclick="TLMPanel._enlarge('${trade.id}', ${i})">⤢ Enlarge${(sn.intraday || []).length ? ' / 1-min' : ''}</button></span></div>
+        <div id="snap-${trade.id}-${i}" class="cr-chart"></div>${ChartRender.legendHtml(sn)}
+      </div>`;
+    }).join('');
+    if (!window.LightweightCharts) return;
+    snaps.forEach((sn, i) => {
+      const el = document.getElementById(`snap-${trade.id}-${i}`);
+      if (el) ChartRender.daily(el, sn, { height: 300 });
+    });
   }
 
-  return { html, loadSnapshots, stateOf };
+  const _snaps = {};
+  function _enlarge(tradeId, i) {
+    const sn = _snaps[tradeId]?.[i];
+    if (sn) ChartRender.enlarge(sn, `${ChartRender.KIND_LABEL[ChartRender.kindOf(sn)]} chart · ${sn.entry_date}`);
+  }
+
+  return { html, loadSnapshots, stateOf, _enlarge };
 })();
 window.TLMPanel = TLMPanel;

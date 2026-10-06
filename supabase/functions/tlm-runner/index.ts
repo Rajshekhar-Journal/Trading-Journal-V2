@@ -4,6 +4,7 @@
 //   POST {action:"run"}            signed-in user ("Sync live data"): run this user's cycle now.
 //   POST {action:"test-telegram"}  signed-in user: send a test message to the chat id in Settings.
 //   POST {action:"status"}         signed-in user: heartbeat + whether Telegram is configured.
+//   POST {action:"chartbook-backfill"} signed-in user: take missing Chartbook charts (a batch per call).
 //
 // The rule engine, data mapping and calculations are the SAME files the browser uses
 // (copied into ../_shared/engine by `npm run sync-engine`; a test fails if the copies drift).
@@ -18,6 +19,7 @@ import '../_shared/engine/db-cloud.js';
 import '../_shared/engine/indicators.js';
 import '../_shared/engine/tlm-rules.js';
 import '../_shared/engine/tlm-engine.js';
+import '../_shared/engine/chartbook.js';
 import '../_shared/engine/market-data.js';
 import '../_shared/engine/alert-service.js';
 import '../_shared/engine/executors.js';
@@ -94,7 +96,10 @@ async function writeStatus(patch: Record<string, unknown>) {
 async function runUser(uid: string, force: boolean) {
   return asUser(uid, async () => {
     const ran = await G.TLMRunner.runCycle({ force });
-    return { ran, errors: G.TLMRunner.lastErrors().length };
+    const errors = G.TLMRunner.lastErrors().length;
+    // Chartbook: entry/add charts during the day, final + exit charts after the close (cheap when nothing is due).
+    const charts = await G.TLMRunner.captureCharts({ limit: 10 }).catch((e: Error) => ({ saved: 0, failed: 1, remaining: 0, error: e.message }));
+    return { ran, errors, charts };
   });
 }
 
@@ -110,7 +115,7 @@ Deno.serve(async (req) => {
     if (!CRON_SECRET || !safeEqual(req.headers.get('x-cron-secret') || '', CRON_SECRET)) return json({ error: 'Forbidden' }, 403);
     if (!(await lock())) return json({ ran: false, reason: 'locked' });
     const started = new Date().toISOString();
-    const result = { users: 0, ran: 0, errors: 0, failedUsers: 0 };
+    const result = { users: 0, ran: 0, errors: 0, charts: 0, failedUsers: 0 };
     try {
       const { data: users, error } = await admin.from('settings').select('user_id');
       if (error) throw new Error(error.message);
@@ -120,6 +125,7 @@ Deno.serve(async (req) => {
           const r = await runUser(user_id, false);
           if (r.ran) result.ran++;
           result.errors += r.errors;
+          result.charts += r.charts?.saved || 0;
         } catch (e) {
           result.failedUsers++;
           console.error('tlm-runner user failed', user_id, e);
@@ -159,6 +165,11 @@ Deno.serve(async (req) => {
     const res = await telegram(settings.telegramChatId,
       `✅ Trading Journal test message\nSent by the server rule runner at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.`);
     return res === 'sent' ? json({ ok: true }) : json({ ok: false, error: telegramHint(lastTelegramError) }, 502);
+  }
+
+  if (action === 'chartbook-backfill') {
+    const r = await asUser(user.id, () => G.TLMRunner.captureCharts({ backfill: true, limit: 12 }));
+    return json(r);
   }
 
   if (action === 'status') {

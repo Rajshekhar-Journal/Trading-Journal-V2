@@ -76,3 +76,10 @@ Tests: `npm test` (pure engine, worked example and scenarios, Excel import, serv
 - Deployment steps: `DEPLOY_STEP1_2.md`.
 
 Retired code is in `_archive/`; the pre-v3.0 code is backed up in `_backup_pre_tlm_v3/`.
+
+## Chartbook (v3.1, 2026-10-06)
+
+- `js/engine/chartbook.js` decides which charts a trade needs — entry, each 1R add, and exit once fully closed — and builds them (daily candles, entry-day 1-min candles, levels, markers, stop-loss path). Charts taken during the session are provisional and are re-taken as final after the close. The server runner (`tlm-runner`) does this every minute; `chartbook-backfill` builds charts for older trades in batches.
+- `js/modules/chart-render.js` draws them (20-day EMA, fill / stop / target lines, entry-add-exit markers) for the Trade lifecycle panel, the **Chartbook** page and export.
+- `js/modules/chartbook.js` — Chartbook page: filters (real/paper, result, dates, playbook, R, symbol), notes & lessons, Build missing charts, Export PDF / Word (`js/export/*`, no third-party libraries).
+- Database: run `supabase/migrations/007_chartbook.sql`.
