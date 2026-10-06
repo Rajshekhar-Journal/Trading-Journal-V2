@@ -44,16 +44,16 @@ const ChartRender = (() => {
   }
 
   /** Show every candle with a little room on the right for the last marker and labels. */
-  function _fit(chart, n) {
-    chart.__fit = () => _fit(chart, n);
-    if (n > 1) chart.timeScale().setVisibleLogicalRange({ from: -1, to: n + 3 }); else chart.timeScale().fitContent();
+  function _fit(chart, n, win = n) {
+    chart.__fit = () => _fit(chart, n, win);
+    if (n > 1) chart.timeScale().setVisibleLogicalRange({ from: Math.max(-1, n - win - 1), to: n + 3 }); else chart.timeScale().fitContent();
   }
 
   /** First candle date on or after `d` (markers must sit on a candle). */
   const snapDate = (dates, d) => dates.find(x => x >= d) || dates.at(-1);
 
   /** Daily chart of a snapshot. Returns the chart (call .remove() when done). */
-  function daily(el, snap, { height = 300, interactive = true } = {}) {
+  function daily(el, snap, { height = 360, interactive = true, window: win } = {}) {
     const kind = kindOf(snap), lv = snap.levels || {};
     const data = (snap.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }));
     const chart = _chart(el, height, { interactive });
@@ -101,12 +101,13 @@ const ChartRender = (() => {
     }
     markers.sort((a, b) => String(a.time).localeCompare(String(b.time)));
     if (markers.length) series.setMarkers(markers);
-    _fit(chart, data.length);
+    // Entry / add charts open on the last ~6 months (scroll or zoom out for the full year); exit charts show the whole trade.
+    _fit(chart, data.length, win ?? (kind === 'exit' ? data.length : 130));
     return chart;
   }
 
   /** 1-minute chart of the event day (IST times). */
-  function intraday(el, snap, { height = 300, interactive = true } = {}) {
+  function intraday(el, snap, { height = 360, interactive = true } = {}) {
     const lv = snap.levels || {};
     const data = (snap.intraday || []).map(c => ({ time: c.time + IST, open: c.open, high: c.high, low: c.low, close: c.close }));
     const chart = _chart(el, height, { interactive, timeVisible: true });
@@ -133,14 +134,14 @@ const ChartRender = (() => {
         <button class="filter-btn active" data-cr-view="daily">Daily</button>
         ${has1m ? '<button class="filter-btn" data-cr-view="intraday">1-min (event day)</button>' : '<span style="font-size:12px;color:var(--text-muted);align-self:center">1-min candles are only kept for the last few days</span>'}
       </div>
-      <div id="cr-big" style="height:520px"></div>${legendHtml(snap)}`, [{ id: 'close', label: 'Close', class: 'btn-secondary', onClick: app.closeModal }]);
+      <div id="cr-big" style="height:560px"></div>${legendHtml(snap)}`, [{ id: 'close', label: 'Close', class: 'btn-secondary', onClick: app.closeModal }]);
     document.getElementById('modal-container')?.classList.add('modal-wide');
     let chart = null;
     const show = view => {
       const el = document.getElementById('cr-big');
       if (!el) return;
       if (chart) chart.remove();
-      chart = view === 'intraday' ? intraday(el, snap, { height: 520 }) : daily(el, snap, { height: 520 });
+      chart = view === 'intraday' ? intraday(el, snap, { height: 560 }) : daily(el, snap, { height: 560, window: (snap.daily || []).length });
       document.querySelectorAll('[data-cr-view]').forEach(b => b.classList.toggle('active', b.dataset.crView === view));
     };
     document.querySelectorAll('[data-cr-view]').forEach(b => b.addEventListener('click', () => show(b.dataset.crView)));

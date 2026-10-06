@@ -13,7 +13,7 @@
 (function (root) {
   const KINDS = Object.freeze({ ENTRY: 'entry', ADD: 'add', EXIT: 'exit' });
   const RULE = { entry: 'LC-01', add: 'LC-02', exit: 'EXIT' };
-  const ENTRY_DAYS = 130;       // daily candles shown up to the entry day (~6 months)
+  const ENTRY_DAYS = 250;       // daily candles saved up to the entry day (~1 year; the chart opens on the last ~6 months)
   const EXIT_LEAD_DAYS = 75;    // calendar days before the first entry on the exit chart (room for the 20-day EMA)
 
   const num = v => Number(v) || 0;
@@ -50,10 +50,14 @@
     return out;
   }
 
-  /** Index of saved charts: Map("tradeId|kind|ref" → { final }). Accepts rows from getSnapshotIndex(). */
-  function indexOf(rows) {
+  /**
+   * Index of saved charts: Map("tradeId|kind|ref" → { final }). Accepts rows from getSnapshotIndex().
+   * rebuildBefore (ISO time): charts taken earlier count as missing, so they are taken again.
+   */
+  function indexOf(rows, rebuildBefore) {
     const m = new Map();
     for (const r of rows || []) {
+      if (rebuildBefore && (!r.taken_at || r.taken_at < rebuildBefore)) continue;
       const kind = r.kind || (r.rule_id === 'LC-02' ? KINDS.ADD : r.rule_id === 'EXIT' ? KINDS.EXIT : KINDS.ENTRY);
       const k = `${r.trade_id}|${kind}|${r.entry_ref}`;
       const prev = m.get(k);

@@ -69,7 +69,7 @@ const TLMPanel = (() => {
     if (!window.LightweightCharts) return;
     snaps.forEach((sn, i) => {
       const el = document.getElementById(`snap-${trade.id}-${i}`);
-      if (el) ChartRender.daily(el, sn, { height: 300 });
+      if (el) ChartRender.daily(el, sn, { height: 360 });
     });
   }
 

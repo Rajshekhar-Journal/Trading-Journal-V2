@@ -586,7 +586,7 @@ const db = (() => {
 
   /** Light list of saved charts (no candle data) — null when migration 007 is not applied. */
   async function getSnapshotIndex() {
-    const { data, error } = await _sb().from('trade_snapshots').select('id,trade_id,kind,rule_id,entry_ref,final').eq('user_id', _uid()).limit(20000);
+    const { data, error } = await _sb().from('trade_snapshots').select('id,trade_id,kind,rule_id,entry_ref,final,taken_at').eq('user_id', _uid()).limit(20000);
     if (error) { console.warn('getSnapshotIndex:', error.message); return null; }
     return data || [];
   }
@@ -595,6 +595,8 @@ const db = (() => {
   async function saveChartSnapshot(snap) {
     const uid = _uid();
     const record = { ...snap, user_id: uid };
+    // 1-min candles can't be re-fetched after a few days: when none came back, keep the ones already saved.
+    if (!(record.intraday || []).length) delete record.intraday;
     const { error } = await _sb().from('trade_snapshots').upsert(record, { onConflict: 'id' });
     if (error) throw new Error(error.message);
     await _sb().from('trade_snapshots').delete().eq('user_id', uid).eq('trade_id', snap.trade_id)

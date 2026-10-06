@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/components.css">
-  <link rel="stylesheet" href="css/modules.css">
-  <link rel="stylesheet" href="css/mobile.css">
+  <link rel="stylesheet" href="css/style.css?v=3.1.1">
+  <link rel="stylesheet" href="css/components.css?v=3.1.1">
+  <link rel="stylesheet" href="css/modules.css?v=3.1.1">
+  <link rel="stylesheet" href="css/mobile.css?v=3.1.1">
   <!-- PWA -->
   <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/icon-192.png">
@@ -450,47 +450,47 @@
 
   <!-- SCRIPTS — load order -->
   <!-- 0. Config (Supabase URL/key — single source) -->
-  <script src="js/config.js?v=3.1.0"></script>
+  <script src="js/config.js?v=3.1.1"></script>
   <!-- 1. Auth (must load before db-cloud) -->
-  <script src="js/auth.js?v=3.1.0"></script>
+  <script src="js/auth.js?v=3.1.1"></script>
   <!-- 2. Cloud DB layer -->
-  <script src="js/db-cloud.js?v=3.1.0"></script>
+  <script src="js/db-cloud.js?v=3.1.1"></script>
   <!-- 3. Core logic -->
-  <script src="js/calculations.js?v=3.1.0"></script>
-  <script src="js/charts.js?v=3.1.0"></script>
+  <script src="js/calculations.js?v=3.1.1"></script>
+  <script src="js/charts.js?v=3.1.1"></script>
   <!-- 4. Trade Lifecycle rule engine v3.0 (pure engine → executors → alerts → runner) -->
-  <script src="js/engine/indicators.js?v=3.1.0"></script>
-  <script src="js/engine/tlm-rules.js?v=3.1.0"></script>
-  <script src="js/engine/tlm-engine.js?v=3.1.0"></script>
-  <script src="js/engine/chartbook.js?v=3.1.0"></script>
-  <script src="js/engine/market-data.js?v=3.1.0"></script>
-  <script src="js/engine/alert-service.js?v=3.1.0"></script>
-  <script src="js/engine/executors.js?v=3.1.0"></script>
-  <script src="js/engine/runner.js?v=3.1.0"></script>
+  <script src="js/engine/indicators.js?v=3.1.1"></script>
+  <script src="js/engine/tlm-rules.js?v=3.1.1"></script>
+  <script src="js/engine/tlm-engine.js?v=3.1.1"></script>
+  <script src="js/engine/chartbook.js?v=3.1.1"></script>
+  <script src="js/engine/market-data.js?v=3.1.1"></script>
+  <script src="js/engine/alert-service.js?v=3.1.1"></script>
+  <script src="js/engine/executors.js?v=3.1.1"></script>
+  <script src="js/engine/runner.js?v=3.1.1"></script>
   <!-- 5. Module view-controllers -->
-  <script src="js/import/xlsx-lite.js?v=3.1.0"></script>
-  <script src="js/import/import-rules.js?v=3.1.0"></script>
-  <script src="js/modules/importer.js?v=3.1.0"></script>
-  <script src="js/modules/chart-render.js?v=3.1.0"></script>
-  <script src="js/export/pdf-lite.js?v=3.1.0"></script>
-  <script src="js/export/docx-lite.js?v=3.1.0"></script>
-  <script src="js/export/chartbook-export.js?v=3.1.0"></script>
-  <script src="js/modules/tlm-panel.js?v=3.1.0"></script>
-  <script src="js/modules/alert-dashboard.js?v=3.1.0"></script>
-  <script src="js/modules/dashboard.js?v=3.1.0"></script>
-  <script src="js/modules/watchlist.js?v=3.1.0"></script>
-  <script src="js/modules/positions.js?v=3.1.0"></script>
-  <script src="js/modules/trades.js?v=3.1.0"></script>
-  <script src="js/modules/playbook.js?v=3.1.0"></script>
-  <script src="js/modules/analytics.js?v=3.1.0"></script>
-  <script src="js/modules/capital.js?v=3.1.0"></script>
-  <script src="js/modules/settings.js?v=3.1.0"></script>
-  <script src="js/modules/paper-trades.js?v=3.1.0"></script>
-  <script src="js/modules/chartbook.js?v=3.1.0"></script>
+  <script src="js/import/xlsx-lite.js?v=3.1.1"></script>
+  <script src="js/import/import-rules.js?v=3.1.1"></script>
+  <script src="js/modules/importer.js?v=3.1.1"></script>
+  <script src="js/modules/chart-render.js?v=3.1.1"></script>
+  <script src="js/export/pdf-lite.js?v=3.1.1"></script>
+  <script src="js/export/docx-lite.js?v=3.1.1"></script>
+  <script src="js/export/chartbook-export.js?v=3.1.1"></script>
+  <script src="js/modules/tlm-panel.js?v=3.1.1"></script>
+  <script src="js/modules/alert-dashboard.js?v=3.1.1"></script>
+  <script src="js/modules/dashboard.js?v=3.1.1"></script>
+  <script src="js/modules/watchlist.js?v=3.1.1"></script>
+  <script src="js/modules/positions.js?v=3.1.1"></script>
+  <script src="js/modules/trades.js?v=3.1.1"></script>
+  <script src="js/modules/playbook.js?v=3.1.1"></script>
+  <script src="js/modules/analytics.js?v=3.1.1"></script>
+  <script src="js/modules/capital.js?v=3.1.1"></script>
+  <script src="js/modules/settings.js?v=3.1.1"></script>
+  <script src="js/modules/paper-trades.js?v=3.1.1"></script>
+  <script src="js/modules/chartbook.js?v=3.1.1"></script>
   <!-- 6. App router (last — kicks off auth check then init) -->
-  <script src="js/app.js?v=3.1.0"></script>
+  <script src="js/app.js?v=3.1.1"></script>
   <!-- 7. Mobile module (PWA + card layout, activates only on <=767px) -->
-  <script src="js/mobile.js?v=3.1.0"></script>
+  <script src="js/mobile.js?v=3.1.1"></script>
   <!-- Mobile bottom nav container (injected by mobile.js) -->
   <div id="mobile-bottom-nav"></div>
   <!-- Service Worker registration -->

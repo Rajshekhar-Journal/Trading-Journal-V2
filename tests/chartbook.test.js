@@ -47,7 +47,7 @@ test('pending: provisional on the day, final after the close or any later day, n
 
 test('build: entry chart window and levels; exit chart markers, stop path and 20-EMA lead-in', () => {
   const daily = [];
-  for (let i = 300; i >= 0; i--) daily.push({ date: day(-i), open: 90, high: 92, low: 88, close: 91 });
+  for (let i = 400; i >= 0; i--) daily.push({ date: day(-i), open: 90, high: 92, low: 88, close: 91 });
   const t = trade({
     tlmState: { initialStop: 95, targets: { T1: 105, T2: 110 }, hardStop: 95 },
     pyramids: [{ id: 'py1', date: day(-12), price: 105, qty: 10 }],
@@ -58,7 +58,7 @@ test('build: entry chart window and levels; exit chart markers, stop path and 20
   const [entry, , exit] = C.events(t);
   const e = C.build({ trade: t, mode: 'real', ev: entry, daily, intraday: [], final: true });
   assert.equal(e.id, 'sn_tr1_entry_en1');
-  assert.equal(e.daily.length, 130);
+  assert.equal(e.daily.length, 250);
   assert.equal(e.daily.at(-1).date, day(-20));
   assert.equal(e.levels.fill, 100);
   assert.equal(e.levels.targets.T1, 105);
@@ -138,7 +138,20 @@ test('captureCharts: provisional → final after close, exit chart for closed tr
   assert.equal(r.remaining, 0);
   const old = tables.trade_snapshots.filter(s => s.trade_id === 't-old');
   assert.equal(old.length, 2);
-  assert.ok(old.every(s => s.intraday.length === 0), 'no 1-min data for old days');
+  assert.ok(old.every(s => !(s.intraday || []).length), 'no 1-min data for old days');
   assert.ok(fetched.some(f => f.startsWith('CCC.NS:1d:2y')), 'history range reaches the old entry');
   assert.ok(tables.trade_snapshots.every(s => s.user_id === 'u1'));
+
+  // Rebuild all: every chart is taken again; saved 1-min candles survive when none can be fetched.
+  const before = tables.trade_snapshots.find(s => s.trade_id === 't-open').intraday.length;
+  const marker = new Date(Date.now() + 60000).toISOString();
+  let total = 0;
+  for (let i = 0; i < 5; i++) {
+    r = await R.captureCharts({ now: evening, backfill: true, rebuildBefore: marker, limit: 2 });
+    total += r.saved;
+    if (!r.remaining) break;
+  }
+  assert.ok(total >= 5, `rebuilt ${total}`);
+  G.TLMMarketData.setSource(async () => null);   // no data at all now
+  assert.equal(tables.trade_snapshots.find(s => s.trade_id === 't-open').intraday.length, before);
 });

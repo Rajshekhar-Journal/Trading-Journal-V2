@@ -85,6 +85,7 @@ const ChartbookModule = (() => {
           <label class="cb-lbl">to <input type="number" step="0.5" class="form-input cb-in cb-r" id="cb-rmax" value="${_f.rmax}"></label>
           <span style="flex:1"></span>
           <button class="btn btn-secondary btn-sm" id="cb-build" title="Take charts for trades that have none (uses the server runner)">🛠 Build missing charts</button>
+          <button class="btn btn-secondary btn-sm" id="cb-rebuild" title="Take every chart again with the latest layout (1 year of daily history)">↻ Rebuild all</button>
           <button class="btn btn-secondary btn-sm" id="cb-pdf">⬇ Export PDF</button>
           <button class="btn btn-secondary btn-sm" id="cb-docx">⬇ Export Word</button>
         </div>
@@ -96,7 +97,10 @@ const ChartbookModule = (() => {
     }));
     const bind = (id, key) => document.getElementById(id)?.addEventListener(id === 'cb-q' ? 'input' : 'change', e => { _f[key] = e.target.value; _shown = PAGE; _renderList(); });
     bind('cb-q', 'q'); bind('cb-from', 'from'); bind('cb-to', 'to'); bind('cb-pb', 'playbook'); bind('cb-rmin', 'rmin'); bind('cb-rmax', 'rmax');
-    document.getElementById('cb-build').addEventListener('click', _buildMissing);
+    document.getElementById('cb-build').addEventListener('click', () => _buildMissing(false));
+    document.getElementById('cb-rebuild').addEventListener('click', () => {
+      if (confirm('Take every saved chart again? Existing charts are replaced; 1-min candles older than a few days cannot be re-fetched.')) _buildMissing(true);
+    });
     document.getElementById('cb-pdf').addEventListener('click', () => _export('pdf'));
     document.getElementById('cb-docx').addEventListener('click', () => _export('docx'));
   }
@@ -190,7 +194,7 @@ const ChartbookModule = (() => {
         continue;
       }
       slot.innerHTML = '';
-      if (window.LightweightCharts) ChartRender.daily(slot, sn, { height: 280 });
+      if (window.LightweightCharts) ChartRender.daily(slot, sn, { height: 380 });
       const i = snaps.indexOf(sn);
       act.innerHTML = `${sn.final ? '' : '<span class="cr-prov">provisional</span> '}<a href="#" data-cb-big="${i}">⤢ Enlarge${(sn.intraday || []).length ? ' / 1-min' : ''}</a>`;
     }
@@ -214,15 +218,16 @@ const ChartbookModule = (() => {
   }
 
   // ── Build missing charts (server runner, in batches) ──────────────────────
-  async function _buildMissing() {
-    const btn = document.getElementById('cb-build'), prog = document.getElementById('cb-progress');
+  async function _buildMissing(rebuild) {
+    const btn = document.getElementById(rebuild ? 'cb-rebuild' : 'cb-build'), prog = document.getElementById('cb-progress');
+    const rebuildBefore = rebuild ? new Date().toISOString() : undefined;
     btn.disabled = true;
     let total = 0, failed = 0;
     try {
       for (let round = 0; round < 60; round++) {
         prog.textContent = ` · building charts… ${total} saved`;
         const r = await fetch(`${APP_CONFIG.SUPABASE_URL}/functions/v1/tlm-runner`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'chartbook-backfill' }),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'chartbook-backfill', rebuildBefore }),
         });
         const out = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(out.error || `server runner ${r.status}`);

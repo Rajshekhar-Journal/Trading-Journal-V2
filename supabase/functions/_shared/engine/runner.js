@@ -53,10 +53,11 @@
   /**
    * Save or finalise trade charts for the Chartbook (engine/chartbook.js): entry, 1R add and exit charts,
    * real and paper trades. Normal runs cover open trades and trades closed in the last 10 days;
-   * `backfill` covers every trade (Chartbook → Build missing charts). At most `limit` charts per call.
+   * `backfill` covers every trade (Chartbook → Build missing charts); with `rebuildBefore` (ISO time) charts taken
+   * before that moment are taken again (Rebuild all). At most `limit` charts per call.
    * @returns { saved, failed, remaining } — remaining = charts still to take
    */
-  async function captureCharts({ backfill = false, limit = 10, now = Date.now(), settings } = {}) {
+  async function captureCharts({ backfill = false, rebuildBefore = null, limit = 10, now = Date.now(), settings } = {}) {
     const C = root.TLMChartbook, MD = root.TLMMarketData;
     const empty = { saved: 0, failed: 0, remaining: 0 };
     if (!C || !db.getSnapshotIndex) return empty;
@@ -67,7 +68,7 @@
     const today = I.istDate(now);
     const afterClose = I.istMinutes(now) >= p.marketCloseMinute + 3;
     const [real, paper] = await Promise.all([db.getTrades(), db.getPaperTrades()]);
-    const index = C.indexOf(rows);
+    const index = C.indexOf(rows, backfill ? rebuildBefore : null);
     const recent = C.addDays(today, -10);
 
     const work = [];

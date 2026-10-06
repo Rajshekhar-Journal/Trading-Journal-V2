@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
   }
 
   if (action === 'chartbook-backfill') {
-    const r = await asUser(user.id, () => G.TLMRunner.captureCharts({ backfill: true, limit: 12 }));
+    const r = await asUser(user.id, () => G.TLMRunner.captureCharts({ backfill: true, limit: 12, rebuildBefore: typeof body?.rebuildBefore === 'string' ? body.rebuildBefore : null }));
     return json(r);
   }
 
