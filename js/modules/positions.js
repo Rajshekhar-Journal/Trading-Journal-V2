@@ -357,7 +357,7 @@ const positionsModule = (() => {
           </div>
 
 
-          <div class="card" style="padding:12px;margin:12px 0">${TLMPanel.html(trade)}</div>
+          <div class="card tlm-card" style="padding:12px;margin:12px 0">${TLMPanel.html(trade)}</div>
 
           <div class="quick-actions">
             <button class="quick-action-btn exit" onclick="positionsModule._showExitModal('${tradeId}', 'partial')">Partial Exit</button>

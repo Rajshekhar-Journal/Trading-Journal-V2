@@ -249,3 +249,6 @@ input:checked + .toggle-slider:before { transform: translateX(16px); }
 .ad-host { font-size: 12px; font-weight: 600; white-space: nowrap; }
 .ad-host-server { color: #059669; }
 .ad-host-browser { color: #d97706; }
+
+/* Lifecycle panel inside a scrolling flex column: never shrink (that clipped the entry-day charts). */
+.tlm-card { flex-shrink: 0; overflow: visible; }

@@ -52,14 +52,27 @@ const TLMPanel = (() => {
     if (!window.LightweightCharts) return;
     for (const sn of snaps) {
       const el = document.getElementById(`snap-${sn.id}`);
-      const chart = LightweightCharts.createChart(el, { height: 220, width: el.clientWidth || 400, layout: { background: { color: 'transparent' }, textColor: '#64748b', fontSize: 10 }, grid: { vertLines: { visible: false }, horzLines: { color: '#eef1f5' } }, timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false } });
-      const series = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#ef4444', borderVisible: false });
-      series.setData((sn.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close })));
+      const chart = LightweightCharts.createChart(el, { height: 220, width: el.clientWidth || box.clientWidth || 400, localization: { locale: 'en-IN' }, layout: { background: { color: 'transparent' }, textColor: '#64748b', fontSize: 10 }, grid: { vertLines: { visible: false }, horzLines: { color: '#eef1f5' } }, timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false } });
+      // Keep the fill, the stop and the first target in view (not only the candles).
+      const keep = [sn.levels?.fill, sn.levels?.initialStop, sn.levels?.targets?.T1].map(Number).filter(v => v > 0);
+      const series = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', wickUpColor: '#10b981', wickDownColor: '#ef4444', borderVisible: false,
+        autoscaleInfoProvider: original => {
+          const r = original();
+          if (!r || !keep.length) return r;
+          return { ...r, priceRange: { minValue: Math.min(r.priceRange.minValue, ...keep), maxValue: Math.max(r.priceRange.maxValue, ...keep) } };
+        } });
+      const candles = (sn.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }));
+      series.setData(candles);
+      if (candles.some(c => c.time === sn.entry_date)) {
+        series.setMarkers([{ time: sn.entry_date, position: 'belowBar', color: '#3b82f6', shape: 'arrowUp', text: sn.rule_id === 'LC-01' ? 'Entry' : '1R add' }]);
+      }
       const line = (price, color, title) => price && series.createPriceLine({ price, color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title });
       line(sn.levels?.fill, '#3b82f6', 'Fill');
       line(sn.levels?.initialStop, '#ef4444', 'SL');
       Object.entries(sn.levels?.targets || {}).forEach(([k, v]) => line(v, '#94a3b8', k.replace('T', '') + 'R'));
       chart.timeScale().fitContent();
+      // The panel may still be laying out when the chart is created — follow the box width.
+      if (window.ResizeObserver) new ResizeObserver(() => { if (el.clientWidth) { chart.applyOptions({ width: el.clientWidth }); chart.timeScale().fitContent(); } }).observe(el);
     }
   }
 

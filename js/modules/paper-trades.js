@@ -124,7 +124,7 @@ const PaperTradesModule = (() => {
           <div class="tlm-cell"><div class="k">Realized</div><div class="v" style="color:${color(m.realizedPnl)}">${money(m.realizedPnl)}</div></div>
           <div class="tlm-cell"><div class="k">Total (R)</div><div class="v" style="color:${color(total)}">${calc.formatR(r)}</div></div>
         </div>
-        <div class="card" style="padding:12px;margin:12px 0">${TLMPanel.html(trade)}</div>
+        <div class="card tlm-card" style="padding:12px;margin:12px 0">${TLMPanel.html(trade)}</div>
         <div style="font-size:13px;font-weight:600;margin-bottom:6px">Auto-executed lifecycle</div>
         <table class="data-table" style="font-size:12px"><thead><tr><th>Date</th><th>Rule</th><th>Detail</th></tr></thead>
           <tbody>${events.map(e => `<tr><td>${e.date || '—'}</td><td>${esc(e.type)}</td><td>${e.detail}</td></tr>`).join('')}</tbody></table>
