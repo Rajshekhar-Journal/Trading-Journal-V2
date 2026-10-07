@@ -115,6 +115,24 @@
   }
 
   /**
+   * Make sure the event day has its own daily candle. Yahoo's daily series can lack the current day
+   * (early in the session, or when the series was fetched before the open); the 1-min candles of that
+   * day then give it: open = first, high = max, low = min, close = last.
+   * @returns { daily, hasDay, fromIntraday }
+   */
+  function withEventDay(daily, date, intraday) {
+    const list = (daily || []).slice();
+    if (list.some(c => c.date === date)) return { daily: list, hasDay: true, fromIntraday: false };
+    const m = (intraday || []).filter(c => c && c.open != null);
+    if (!m.length) return { daily: list, hasDay: false, fromIntraday: false };
+    const day = { date, open: m[0].open, high: Math.max(...m.map(c => c.high)), low: Math.min(...m.map(c => c.low)), close: m.at(-1).close,
+      volume: m.reduce((s, c) => s + (c.volume || 0), 0) };
+    list.push(day);
+    list.sort((a, b) => a.date.localeCompare(b.date));
+    return { daily: list, hasDay: true, fromIntraday: true };
+  }
+
+  /**
    * The snapshot row for one chart.
    * @param daily     daily candles with `date` (any span; trimmed here)
    * @param intraday  1-min candles of the event day ([] when not available)
@@ -122,6 +140,8 @@
    */
   function build({ trade, mode, ev, daily, intraday, final, now, result }) {
     const s = trade.tlmState || {};
+    const fixed = withEventDay(daily, ev.date, intraday);
+    daily = fixed.daily;
     const first = (trade.entries || [])[0] || {};
     let days, levels;
     if (ev.kind === KINDS.EXIT) {
@@ -146,8 +166,9 @@
       id: snapId(trade.id, ev.kind, ev.ref),
       trade_id: trade.id, mode, kind: ev.kind, rule_id: RULE[ev.kind], entry_ref: ev.ref, entry_date: ev.date,
       final: !!final, taken_at: new Date(now || Date.now()).toISOString(),
-      daily: days.map(c => ({ date: c.date, open: c.open, high: c.high, low: c.low, close: c.close })),
-      intraday: (intraday || []).map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })),
+      dayMissing: !fixed.hasDay,   // not stored: the capture pass retries instead of saving a chart without its event day
+      daily: days.map(c => ({ date: c.date, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 })),
+      intraday: (intraday || []).map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 })),
       levels,
     };
   }
@@ -164,7 +185,7 @@
     return '10y';
   }
 
-  const api = { KINDS, snapId, openQty, exitDate, events, indexOf, pending, historyFrom, lifecycleMarks, build, rangeFor, addDays, daysBetween };
+  const api = { KINDS, snapId, openQty, exitDate, events, indexOf, pending, historyFrom, lifecycleMarks, withEventDay, build, rangeFor, addDays, daysBetween };
   root.TLMChartbook = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

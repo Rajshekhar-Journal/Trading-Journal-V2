@@ -43,6 +43,18 @@ const ChartRender = (() => {
     });
   }
 
+  /**
+   * Volume bars in the bottom fifth of the chart (green on up days, red on down days).
+   * Charts saved before volume was recorded have none — Chartbook → Rebuild all adds it.
+   */
+  function _volume(chart, series, rows) {
+    if (!rows.some(c => c.volume > 0)) return;
+    series.priceScale().applyOptions({ scaleMargins: { top: 0.06, bottom: 0.24 } });
+    const vol = chart.addHistogramSeries({ priceScaleId: 'vol', priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false, title: 'Vol' });
+    chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    vol.setData(rows.map(c => ({ time: c.time, value: c.volume || 0, color: c.close >= c.open ? 'rgba(16,185,129,0.45)' : 'rgba(239,68,68,0.45)' })));
+  }
+
   /** Show every candle with a little room on the right for the last marker and labels. */
   function _fit(chart, n, win = n) {
     chart.__fit = () => _fit(chart, n, win);
@@ -50,17 +62,19 @@ const ChartRender = (() => {
   }
 
   /** First candle date on or after `d` (markers must sit on a candle). */
-  const snapDate = (dates, d) => dates.find(x => x >= d) || dates.at(-1);
+  // The event's own candle, or the next trading day's; never an earlier day (that would mislabel the chart).
+  const snapDate = (dates, d) => dates.find(x => x >= d) || null;
 
   /** Daily chart of a snapshot. Returns the chart (call .remove() when done). */
   function daily(el, snap, { height = 360, interactive = true, window: win } = {}) {
     const kind = kindOf(snap), lv = snap.levels || {};
-    const data = (snap.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close }));
+    const data = (snap.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 }));
     const chart = _chart(el, height, { interactive });
     const stops = (lv.stopPath || []).map(s => num(s.stop));
     const keep = kind === 'exit' ? [num(lv.fill), num(lv.exitPrice), ...stops] : [num(lv.fill), num(lv.initialStop), num(lv.targets?.T1)];
     const series = _candles(chart, keep);
-    series.setData(data);
+    series.setData(data.map(({ volume, ...c }) => c));
+    _volume(chart, series, data);
     const dates = data.map(c => c.time);
 
     // 20-day EMA
@@ -91,13 +105,13 @@ const ChartRender = (() => {
         partial: { position: 'aboveBar', color: COL.exit, shape: 'arrowDown', text: 'Partial' },
         exit:    { position: 'aboveBar', color: COL.exit, shape: 'arrowDown', text: 'Exit' },
       };
-      markers = (lv.markers || []).filter(m => dates.length).map(m => ({ time: snapDate(dates, m.date), ...style[m.type] || style.entry, text: `${(style[m.type] || style.entry).text} ${m.qty || ''}`.trim() }));
+      markers = (lv.markers || []).filter(m => snapDate(dates, m.date)).map(m => ({ time: snapDate(dates, m.date), ...style[m.type] || style.entry, text: `${(style[m.type] || style.entry).text} ${m.qty || ''}`.trim() }));
     } else {
       line(lv.fill, COL.fill, kind === 'add' ? 'Add' : 'Fill');
       line(lv.initialStop, COL.sl, 'SL');
       if (kind === 'add' && num(lv.stop) > num(lv.initialStop)) line(lv.stop, COL.sl, 'Stop', 0);
       Object.entries(lv.targets || {}).forEach(([k, v]) => line(v, COL.target, k.replace('T', '') + 'R', 3));
-      if (dates.length && snap.entry_date) markers = [{ time: snapDate(dates, snap.entry_date), position: 'belowBar', color: kind === 'add' ? COL.add : COL.fill, shape: 'arrowUp', text: KIND_LABEL[kind] }];
+      if (snap.entry_date && snapDate(dates, snap.entry_date)) markers = [{ time: snapDate(dates, snap.entry_date), position: 'belowBar', color: kind === 'add' ? COL.add : COL.fill, shape: 'arrowUp', text: KIND_LABEL[kind] }];
     }
     markers.sort((a, b) => String(a.time).localeCompare(String(b.time)));
     if (markers.length) series.setMarkers(markers);
@@ -109,10 +123,11 @@ const ChartRender = (() => {
   /** 1-minute chart of the event day (IST times). */
   function intraday(el, snap, { height = 360, interactive = true } = {}) {
     const lv = snap.levels || {};
-    const data = (snap.intraday || []).map(c => ({ time: c.time + IST, open: c.open, high: c.high, low: c.low, close: c.close }));
+    const data = (snap.intraday || []).map(c => ({ time: c.time + IST, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 }));
     const chart = _chart(el, height, { interactive, timeVisible: true });
     const series = _candles(chart, [num(lv.fill), num(lv.initialStop)]);
-    series.setData(data);
+    series.setData(data.map(({ volume, ...c }) => c));
+    _volume(chart, series, data);
     const line = (price, color, title) => num(price) > 0 && series.createPriceLine({ price: num(price), color, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title });
     line(lv.fill || lv.exitPrice, COL.fill, kindOf(snap) === 'exit' ? 'Exit' : 'Fill');
     line(lv.initialStop, COL.sl, 'SL');
@@ -123,7 +138,7 @@ const ChartRender = (() => {
   const legendHtml = snap => {
     const exit = kindOf(snap) === 'exit';
     const dot = (c, t, dash) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:14px;height:0;border-top:2px ${dash ? 'dashed' : 'solid'} ${c}"></span>${t}</span>`;
-    return `<div class="cr-legend">${dot(COL.ema, 'EMA 20')}${exit ? dot(COL.stop, 'Stop path', 1) + dot(COL.fill, 'Entry', 1) + dot(COL.exit, 'Exit', 1) : dot(COL.fill, 'Fill', 1) + dot(COL.sl, 'Stop loss', 1) + dot(COL.target, 'Targets', 1)}</div>`;
+    return `<div class="cr-legend">${dot(COL.ema, 'EMA 20')}${(snap.daily || []).some(c => c.volume > 0) ? dot('rgba(16,185,129,0.6)', 'Volume') : ''}${exit ? dot(COL.stop, 'Stop path', 1) + dot(COL.fill, 'Entry', 1) + dot(COL.exit, 'Exit', 1) : dot(COL.fill, 'Fill', 1) + dot(COL.sl, 'Stop loss', 1) + dot(COL.target, 'Targets', 1)}</div>`;
   };
 
   /** Full-size view in the app dialog, with a Daily / 1-min switch when 1-min candles exist. */

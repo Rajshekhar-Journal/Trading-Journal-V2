@@ -29,9 +29,9 @@
   function _candles(result) {
     if (!result?.timestamp) return [];
     const q = result.indicators.quote[0];
-    return result.timestamp.map((t, i) => ({ time: t, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i] }))
+    return result.timestamp.map((t, i) => ({ time: t, open: q.open[i], high: q.high[i], low: q.low[i], close: q.close[i], volume: q.volume?.[i] || 0 }))
       .filter(c => c.open != null && c.high != null && c.low != null && c.close != null)
-      .map(c => ({ time: c.time, open: +c.open.toFixed(2), high: +c.high.toFixed(2), low: +c.low.toFixed(2), close: +c.close.toFixed(2) }));
+      .map(c => ({ time: c.time, open: +c.open.toFixed(2), high: +c.high.toFixed(2), low: +c.low.toFixed(2), close: +c.close.toFixed(2), volume: Math.round(c.volume) }));
   }
 
   /** Intraday 1-min candles and last traded price. */

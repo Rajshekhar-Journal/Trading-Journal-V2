@@ -102,6 +102,10 @@
         }
         const snap = C.build({ trade: t, mode, ev, daily: hist[t.symbol], intraday: intra[k], final: ev.final, now, result });
         if (!snap.daily.length) throw new Error('no daily candles');
+        // Never save a chart whose last candle is the day before the event (that misplaces the entry marker).
+        // Retry on later runs; after 5 days give up waiting (holiday or wrong date) and save what there is.
+        if (snap.dayMissing && C.daysBetween(ev.date, today) <= 5) throw new Error(`no ${ev.date} candle yet`);
+        delete snap.dayMissing;
         await db.saveChartSnapshot(snap);
         saved++;
       } catch (e) {

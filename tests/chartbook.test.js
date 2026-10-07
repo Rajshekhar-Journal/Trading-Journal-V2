@@ -72,6 +72,20 @@ test('build: entry chart window and levels; exit chart markers, stop path and 20
   assert.equal(x.levels.result.r, 2.1);
 });
 
+test('withEventDay: the event day gets its own candle, built from 1-min candles when the daily series lacks it', () => {
+  const daily = [{ date: day(-2), open: 1, high: 1, low: 1, close: 1 }, { date: day(-1), open: 2, high: 2, low: 2, close: 2 }];
+  const intr = [{ time: 1, open: 10, high: 12, low: 9, close: 11 }, { time: 2, open: 11, high: 15, low: 10, close: 14 }];
+  const r = C.withEventDay(daily, TODAY, intr);
+  assert.equal(r.hasDay, true);
+  assert.deepEqual(r.daily.at(-1), { date: TODAY, open: 10, high: 15, low: 9, close: 14, volume: 0 });
+  assert.equal(C.withEventDay(daily, TODAY, []).hasDay, false);
+  assert.equal(C.withEventDay(daily, day(-1), intr).fromIntraday, false, 'an existing daily candle wins');
+  const t = trade({ entries: [{ id: 'en1', date: TODAY, price: 100, qty: 10 }] });
+  const snap = C.build({ trade: t, mode: 'real', ev: C.events(t)[0], daily, intraday: intr, final: false });
+  assert.equal(snap.daily.at(-1).date, TODAY, 'entry chart ends on the entry day, not the day before');
+  assert.equal(snap.dayMissing, false);
+});
+
 test('emaSeries matches ema() at every point', () => {
   const v = Array.from({ length: 40 }, (_, i) => 100 + Math.sin(i) * 5);
   const s = I.emaSeries(v, 20);
@@ -144,7 +158,7 @@ test('captureCharts: provisional → final after close, exit chart for closed tr
 
   // Rebuild all: every chart is taken again; saved 1-min candles survive when none can be fetched.
   const before = tables.trade_snapshots.find(s => s.trade_id === 't-open').intraday.length;
-  const marker = new Date(Date.now() + 60000).toISOString();
+  const marker = new Date(evening + 60000).toISOString();   // charts above were stamped with `evening`
   let total = 0;
   for (let i = 0; i < 5; i++) {
     r = await R.captureCharts({ now: evening, backfill: true, rebuildBefore: marker, limit: 2 });
