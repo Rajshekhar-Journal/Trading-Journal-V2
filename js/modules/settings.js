@@ -13,6 +13,7 @@ const settingsModule = (() => {
     { id: 'risk', label: '🛡 Risk Management', icon: '🛡️' },
     { id: 'charges', label: '💳 Charges & Brokerage', icon: '💳' },
     { id: 'alerts', label: '🔁 Trade Lifecycle & Alerts', icon: '🔁' },
+    { id: 'execution', label: '🔌 Auto Trade – Broker Link', icon: '🔌' },
     { id: 'data', label: '🗄 Data Management', icon: '🗄️' },
     { id: 'app', label: '📱 Application', icon: '📱' },
     { id: 'formulas', label: '𝑓 Formula Manager', icon: '🔢' },
@@ -53,7 +54,7 @@ const settingsModule = (() => {
   async function _showPage(id) {
     const el = document.getElementById('settings-content');
     if (!el) return;
-    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
+    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, execution: _pageExecution, data: _pageData, app: _pageApp, formulas: _pageFormulas };
     if (asyncPages[id]) {
       el.innerHTML = await asyncPages[id]();
       if (id === 'alerts') _showTelegramStatus();
@@ -1272,6 +1273,96 @@ const settingsModule = (() => {
     });
   }
 
+  // ── PAGE: Auto Trade – Broker Link (Phase 1, read only) ───────────────────
+  // Shows what the Order Gateway reports. No broker secret is ever entered or shown here:
+  // API key, API secret, static IP and the daily Kite login live on the gateway's own page.
+  const _DRIFT_TEXT = {
+    QTY_MISMATCH: 'Journal and broker quantities differ',
+    JOURNAL_ONLY: 'Open in journal, not held at broker',
+    BROKER_ONLY: 'Held at broker, not in journal',
+    NO_STOP_GTT: 'No stop GTT at broker',
+    GTT_QTY_MISMATCH: 'Stop GTT quantity differs from position',
+    GTT_TRIGGER_MISMATCH: 'Stop GTT trigger differs from journal stop',
+    ORPHAN_GTT: 'Sell GTT without an open position',
+  };
+  const _escX = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  async function _pageExecution() {
+    const settings = await db.getSettings();
+    const ex = settings.execution || {};
+    const [st, drift] = await Promise.all([db.getExecState(), db.getOpenDrift()]);
+    const fmt = t => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+    const ageSec = st?.heartbeat_at ? (Date.now() - new Date(st.heartbeat_at).getTime()) / 1000 : Infinity;
+    const online = ageSec < 180;
+    const tokenOk = online && st?.broker_connected && st?.token_valid_until && new Date(st.token_valid_until) > new Date();
+    const ipText = { match: 'Matches', mismatch: 'Does not match', not_configured: 'Not set yet', lookup_failed: 'Could not check', not_checked: 'Not checked yet', expected_ip_invalid: 'Invalid' }[st?.ip_status] || '—';
+    const col = ok => ok === true ? 'var(--success, #22c55e)' : ok === false ? 'var(--danger, #ef4444)' : 'var(--warning, #f59e0b)';
+    const tile = (label, value, ok) => `<div class="app-info-item"><div class="app-info-label">${label}</div><div class="app-info-value" style="color:${col(ok)}">${_escX(value)}</div></div>`;
+    const high = drift.filter(d => d.severity === 'high').length;
+
+    const tiles = !st
+      ? `<div class="no-data" style="margin-bottom:16px">The Order Gateway has not reported yet. Run migration 009, start the gateway on your home machine and link the journal account there.</div>`
+      : `<div class="app-info-grid">
+          ${tile('Gateway', online ? 'Online' : `Offline since ${fmt(st.heartbeat_at)}`, online)}
+          ${tile('Kite login today', tokenOk ? `Valid until ${fmt(st.token_valid_until)}` : 'Login required', tokenOk ? true : null)}
+          ${tile('Static IP', online ? ipText : '—', st.ip_status === 'match' ? true : st.ip_status === 'mismatch' ? false : null)}
+          ${tile('Last broker sync', fmt(st.last_sync_at), online && st.last_sync_at ? true : null)}
+          ${tile('Open differences', st.last_sync_at ? `${drift.length}${high ? ` (${high} need attention)` : ''}` : '—', st.last_sync_at ? high === 0 : null)}
+          ${tile('Order sending', 'Off — Phase 1 is read only', null)}
+        </div>`;
+
+    const rows = drift.map(d => `<tr>
+        <td><strong>${_escX(d.symbol)}</strong></td>
+        <td>${_escX(_DRIFT_TEXT[d.kind] || d.kind)}</td>
+        <td style="text-align:right">${_escX(d.journal_qty ?? '—')}</td>
+        <td style="text-align:right">${_escX(d.broker_qty ?? '—')}</td>
+        <td><span style="color:${d.severity === 'high' ? col(false) : 'var(--text-muted)'}">${d.severity === 'high' ? 'Needs attention' : 'For information'}</span></td>
+        <td>${fmt(d.first_seen_at)}</td></tr>`).join('');
+
+    return `<div class="settings-page">
+      <div class="settings-section-header">Auto Trade – Broker Link</div>
+      <p style="color:var(--text-muted);margin:0 0 14px">Phase 1 links the journal to Zerodha in read-only form. The journal cannot place orders yet. API key, API secret, static IP and the daily Kite login are entered on the Order Gateway page on your home machine — never here.</p>
+      ${tiles}
+      <div class="form-section-title">Journal vs broker (reconcile report)</div>
+      ${drift.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Difference</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th>Level</th><th>First seen</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p style="color:var(--text-muted);font-size:12px">Differences are reported only. Nothing in the journal or at the broker is changed automatically.</p>`
+        : `<div class="no-data">${st?.last_sync_at ? 'No differences. Journal and broker agree.' : 'No reconcile report yet.'}</div>`}
+      <div class="form-section-title" style="margin-top:20px">Order Gateway address</div>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Address of the gateway page (home network or VPN)</label>
+          <input class="form-input" id="ex-gw-url" placeholder="http://192.168.1.20:8787" value="${_escX(ex.gatewayUrl || '')}"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="settingsModule._saveExecution()">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="settingsModule._openGateway()">Open gateway page</button>
+        <button class="btn btn-secondary btn-sm" onclick="settingsModule._goPage('execution')">Refresh</button>
+      </div>
+    </div>`;
+  }
+
+  function _gatewayUrlFromInput() {
+    const v = (document.getElementById('ex-gw-url')?.value || '').trim().replace(/\/+$/, '');
+    if (v && !/^https?:\/\/[a-z0-9.\-]+(:\d{2,5})?$/i.test(v)) { app.toast('Enter the address like http://192.168.1.20:8787', 'error'); return null; }
+    return v;
+  }
+
+  async function _saveExecution() {
+    const url = _gatewayUrlFromInput();
+    if (url === null) return;
+    const settings = await db.getSettings();
+    settings.execution = { ...(settings.execution || {}), gatewayUrl: url };
+    await db.saveSettings(settings);
+    _hasUnsaved = false;
+    app.toast('Gateway address saved', 'success');
+  }
+
+  function _openGateway() {
+    const url = _gatewayUrlFromInput();
+    if (url === null) return;
+    if (!url) { app.toast('Enter the gateway address first', 'info'); return; }
+    window.open(url, '_blank', 'noopener');
+  }
+
   async function _resetPage() {
     const defaults = db.getDefaultSettings();
     const settings = await db.getSettings();
@@ -1282,5 +1373,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _openGateway, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();

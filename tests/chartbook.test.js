@@ -169,3 +169,11 @@ test('captureCharts: provisional → final after close, exit chart for closed tr
   G.TLMMarketData.setSource(async () => null);   // no data at all now
   assert.equal(tables.trade_snapshots.find(s => s.trade_id === 't-open').intraday.length, before);
 });
+
+test('dropHolidays: zero-volume placeholder candles (exchange holidays) are removed from daily series', () => {
+  require('../js/engine/market-data.js');
+  const D = G.TLMMarketData.dropHolidays;
+  const rows = [{ volume: 10 }, { volume: 0 }, { volume: 12 }];
+  assert.equal(D(rows).length, 2);
+  assert.equal(D([{ volume: 0 }, { volume: 0 }]).length, 2, 'series without volume data are kept as they are');
+});

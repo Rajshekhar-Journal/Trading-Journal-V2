@@ -68,7 +68,8 @@ const ChartRender = (() => {
   /** Daily chart of a snapshot. Returns the chart (call .remove() when done). */
   function daily(el, snap, { height = 360, interactive = true, window: win } = {}) {
     const kind = kindOf(snap), lv = snap.levels || {};
-    const data = (snap.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 }));
+    let data = (snap.daily || []).map(c => ({ time: c.date, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume || 0 }));
+    if (data.some(c => c.volume > 0)) data = data.filter(c => c.volume > 0);   // holiday placeholder candles (zero volume)
     const chart = _chart(el, height, { interactive });
     const stops = (lv.stopPath || []).map(s => num(s.stop));
     const keep = kind === 'exit' ? [num(lv.fill), num(lv.exitPrice), ...stops] : [num(lv.fill), num(lv.initialStop), num(lv.targets?.T1)];

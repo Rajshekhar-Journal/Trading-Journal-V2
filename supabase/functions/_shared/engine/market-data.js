@@ -34,6 +34,14 @@
       .map(c => ({ time: c.time, open: +c.open.toFixed(2), high: +c.high.toFixed(2), low: +c.low.toFixed(2), close: +c.close.toFixed(2), volume: Math.round(c.volume) }));
   }
 
+  /**
+   * Yahoo adds a zero-volume placeholder candle on exchange holidays (e.g. 02-10). Drop it from daily
+   * series so it never counts as the "previous day" for trails, EMA or ATR, and never shows on charts.
+   */
+  function dropHolidays(candles) {
+    return candles.some(c => c.volume > 0) ? candles.filter(c => c.volume > 0) : candles;
+  }
+
   /** Intraday 1-min candles and last traded price. */
   async function intraday(symbol, exchange) {
     const r = await _chart(ticker(symbol, exchange), '1m', '1d');
@@ -47,7 +55,7 @@
     const tk = ticker(symbol, exchange);
     const today = I.istDate(Date.now());
     if (_dailyCache[tk]?.day === today) return _dailyCache[tk].candles;
-    const candles = _candles(await _chart(tk, '1d', '6mo')).map(c => ({ ...c, date: I.istDate(c.time * 1000) }));
+    const candles = dropHolidays(_candles(await _chart(tk, '1d', '6mo'))).map(c => ({ ...c, date: I.istDate(c.time * 1000) }));
     _dailyCache[tk] = { day: today, candles };
     return candles;
   }
@@ -78,7 +86,7 @@
   async function history(symbol, exchange, fromIso) {
     const today = I.istDate(Date.now());
     const range = root.TLMChartbook ? root.TLMChartbook.rangeFor(fromIso, today) : '2y';
-    return _candles(await _chart(ticker(symbol, exchange), '1d', range))
+    return dropHolidays(_candles(await _chart(ticker(symbol, exchange), '1d', range)))
       .map(c => ({ ...c, date: I.istDate(c.time * 1000) }))
       .filter(c => c.date >= fromIso);
   }
@@ -92,6 +100,6 @@
     return _candles(r).filter(c => I.istDate(c.time * 1000) === dateIso);
   }
 
-  const api = { load, intraday, daily, ticker, setSource, history, intradayOn };
+  const api = { load, intraday, daily, ticker, setSource, history, intradayOn, dropHolidays };
   root.TLMMarketData = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

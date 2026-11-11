@@ -640,6 +640,28 @@ const db = (() => {
     await _sb().rpc('tlm_runner_unlock', { p_holder: holder });
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  // AUTO TRADE ENGINE — Phase 1, read only  (migration 009)
+  // ════════════════════════════════════════════════════════════════════════
+
+  /** Order Gateway health row, or null when migration 009 is not applied / the gateway never ran. */
+  async function getExecState() {
+    const uid = _uid();
+    if (!uid) return null;
+    const { data, error } = await _sb().from('exec_state').select('*').eq('user_id', uid).maybeSingle();
+    if (error) return null;
+    return data;
+  }
+
+  /** Open journal-vs-broker differences reported by the gateway (never auto-corrected). */
+  async function getOpenDrift() {
+    const uid = _uid();
+    if (!uid) return [];
+    const { data, error } = await _sb().from('drift_log').select('*').eq('user_id', uid).eq('status', 'open').order('severity', { ascending: true }).order('symbol');
+    if (error) return [];
+    return data || [];
+  }
+
   // ── Utility ───────────────────────────────────────────────────────────────
   function generateId(prefix = 'id') { return _generateId(prefix); }
 
@@ -664,6 +686,8 @@ const db = (() => {
     getSnapshotIndex, saveChartSnapshot, getChartbookNotes, saveChartbookNote,
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
+    // Auto Trade Engine (read only)
+    getExecState, getOpenDrift,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility
