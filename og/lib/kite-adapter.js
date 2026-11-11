@@ -1,9 +1,11 @@
 /**
- * og/lib/kite-adapter.js — Zerodha Kite Connect adapter, PHASE 1: READ ONLY.
+ * og/lib/kite-adapter.js — Zerodha Kite Connect adapter.
  *
- * This file can log in and read. It has no method that places, modifies or cancels an order or a
- * GTT, and `_get` is the only request helper besides the login exchange. Order methods arrive in
- * P3/P4 behind the guards; until then there is no code path that can move money.
+ * By default it can only log in and read. With `allowGttWrites: true` (set by the gateway only when
+ * stop-GTT placement is switched on and the static IP matches) it can also place and modify a
+ * stop-loss GTT. With `allowSellOrders: true` (exits switched on, static IP matching) it can also send
+ * one market SELL of delivery shares, cancel an order and delete a stop GTT. It has NO method that
+ * places a BUY or any priced order.
  */
 'use strict';
 const crypto = require('crypto');
@@ -18,7 +20,7 @@ class KiteError extends Error {
   }
 }
 
-function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, fetchImpl, timeoutMs = 10000 }) {
+function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, fetchImpl, timeoutMs = 10000, allowGttWrites = false, allowSellOrders = false }) {
   const _fetch = fetchImpl || globalThis.fetch;
   let _token = accessToken || '';
 
@@ -46,8 +48,39 @@ function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, 
   }
   const _get = path => _call('GET', path);
 
+  /** Form body of a single-leg stop-loss sell GTT (LIMIT, CNC). */
+  function _gttForm({ symbol, exchange = 'NSE', trigger, limit, qty, lastPrice }) {
+    return {
+      type: 'single',
+      condition: JSON.stringify({ exchange, tradingsymbol: symbol, trigger_values: [trigger], last_price: lastPrice }),
+      orders: JSON.stringify([{ exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: qty, order_type: 'LIMIT', product: 'CNC', price: limit }]),
+    };
+  }
+  const gttWrites = allowGttWrites ? {
+    /** @returns { triggerId } */
+    async placeStopGtt(spec) { const d = await _call('POST', '/gtt/triggers', { form: _gttForm(spec) }); return { triggerId: String(d.trigger_id) }; },
+    async modifyStopGtt(id, spec) { const d = await _call('PUT', `/gtt/triggers/${encodeURIComponent(id)}`, { form: _gttForm(spec) }); return { triggerId: String(d.trigger_id ?? id) }; },
+  } : {};
+
+  // Exits (Phase 4): one market SELL for delivery shares, cancelling that order, and deleting a stop GTT.
+  // There is deliberately no way to pass a BUY, a price, or any other order type through this adapter.
+  const sellWrites = allowSellOrders ? {
+    /** @returns { orderId } */
+    async placeMarketSell({ symbol, exchange = 'NSE', qty, tag, protection = -1 }) {
+      // -1 = Zerodha's automatic protection; 5 and 10 are used only by the Emergency Exit ladder. Nothing else is accepted.
+      if (![-1, 5, 10].includes(protection)) throw new KiteError('market protection must be -1, 5 or 10', { status: 0, errorType: 'InputException' });
+      const d = await _call('POST', '/orders/regular', { form: { tradingsymbol: symbol, exchange, transaction_type: 'SELL', order_type: 'MARKET',
+        quantity: String(qty), product: 'CNC', validity: 'DAY', market_protection: String(protection), tag } });
+      return { orderId: String(d.order_id) };
+    },
+    async cancelOrder(orderId) { await _call('DELETE', `/orders/regular/${encodeURIComponent(orderId)}`); return { orderId: String(orderId) }; },
+    async deleteGtt(id) { await _call('DELETE', `/gtt/triggers/${encodeURIComponent(id)}`); return { triggerId: String(id) }; },
+  } : {};
+
   return {
-    readOnly: true,
+    readOnly: !allowGttWrites && !allowSellOrders,
+    ...gttWrites,
+    ...sellWrites,
     setAccessToken(t) { _token = t || ''; },
     hasToken() { return !!_token; },
 

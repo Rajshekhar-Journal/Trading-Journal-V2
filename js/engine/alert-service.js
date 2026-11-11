@@ -112,6 +112,6 @@
     for (const a of open) await db.updateAlert(a.id, { status: 'Executed', executed_at: new Date().toISOString() });
   }
 
-  const api = { dispatch, shouldSend, message, suggestion, markExecuted, setNotifier };
+  const api = { dispatch, shouldSend, message, suggestion, markExecuted, setNotifier, notify: _notify };
   root.TLMAlerts = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -662,6 +662,57 @@ const db = (() => {
     return data || [];
   }
 
+  /** Latest broker snapshot row { data, taken_at } for 'holdings' | 'positions' | 'funds', or null. */
+  async function getBrokerSnapshot(kind) {
+    const uid = _uid();
+    if (!uid) return null;
+    const { data, error } = await _sb().from('broker_snapshots').select('*').eq('user_id', uid).eq('kind', kind).maybeSingle();
+    if (error) return null;
+    return data;
+  }
+
+  /** GTTs currently in the broker's list (as of the last gateway sync). */
+  async function getBrokerGtts() {
+    const uid = _uid();
+    if (!uid) return [];
+    const { data, error } = await _sb().from('broker_gtts').select('*').eq('user_id', uid).eq('present', true);
+    if (error) return [];
+    return data || [];
+  }
+
+  /** Order intents (Phase 2: shadow only — what WOULD be sent; nothing is). Newest first. */
+  async function getOrderIntents(opts = {}) {
+    const uid = _uid();
+    if (!uid) return [];
+    let q = _sb().from('order_intents').select('*').eq('user_id', uid);
+    if (opts.since) q = q.gte('created_at', opts.since);
+    const { data, error } = await q.order('created_at', { ascending: false }).limit(opts.limit || 50);
+    if (error) return [];
+    return data || [];
+  }
+
+  /** Store one intent. Returns the row, or null when the same intent_key already exists (idempotent). */
+  async function insertOrderIntent(intent) {
+    const uid = _uid();
+    if (!uid) throw new Error('Not authenticated');
+    const existing = await _sb().from('order_intents').select('id').eq('user_id', uid).eq('intent_key', intent.intent_key).maybeSingle();
+    if (existing.data) return null;
+    const row = { id: _generateId('oi'), user_id: uid, created_at: new Date().toISOString(), ...intent };
+    const { error } = await _sb().from('order_intents').insert(row);
+    if (error) {
+      if (error.code === '23505') return null;            // unique (user_id, intent_key): another runner got there first
+      throw new Error(error.message);
+    }
+    return row;
+  }
+
+  /** Approve or reject a proposed intent (migration 011). Returns the new status, e.g. 'approved' | 'rejected' | 'expired'. */
+  async function decideIntent(id, approve) {
+    const { data, error } = await _sb().rpc('exec_decide_intent', { p_id: id, p_approve: !!approve });
+    if (error) throw new Error(/Could not find the function|PGRST202/.test(error.message + error.code) ? 'Run migration 011 first.' : error.message);
+    return data;
+  }
+
   // ── Utility ───────────────────────────────────────────────────────────────
   function generateId(prefix = 'id') { return _generateId(prefix); }
 
@@ -687,7 +738,7 @@ const db = (() => {
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
     // Auto Trade Engine (read only)
-    getExecState, getOpenDrift,
+    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility

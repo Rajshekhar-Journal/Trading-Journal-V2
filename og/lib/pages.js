@@ -44,7 +44,7 @@ function dashboardPage({ csrf, cfg, view, m }) {
   const c = `<input type="hidden" name="csrf" value="${esc(csrf)}">`;
   const ipText = { match: 'Matches', mismatch: 'Does not match', not_configured: 'Not set yet', lookup_failed: 'Could not check', expected_ip_invalid: 'Invalid value', not_checked: 'Not checked yet' }[view.ipStatus] || view.ipStatus;
   return shell('Status', `<div class="row" style="justify-content:space-between"><div><h1>Order Gateway</h1>
-<p class="sub">${esc(view.version)} · Phase 1 · read only — this gateway cannot place orders yet.</p></div>
+<p class="sub">${esc(view.version)} · Reads the broker. Places stop GTTs and exit sells only when switched on below, and only for intents you approve. Cannot place buy orders.</p></div>
 <form class="inline" method="post" action="/logout">${c}<button>Sign out</button></form></div>${msgBox(m)}
 
 <h2>Status</h2><div class="grid">
@@ -54,7 +54,9 @@ ${tile('Static IP', ipText, view.ipStatus === 'match' ? 'ok' : (view.ipStatus ==
 ${tile('Journal account', view.journalLinked ? 'Linked' : 'Not linked', view.journalLinked ? 'ok' : 'warn')}
 ${tile('Last broker sync', view.lastSync || 'Never', view.lastSyncError ? 'bad' : '')}
 ${tile('Open differences', view.lastSync ? String(view.driftCount) : '—', view.driftHigh ? 'bad' : '')}
-${tile('Order sending', 'Off (Phase 1)', 'warn')}
+${tile('Stop-GTT placement', view.orderSending ? 'ON — approved intents only' : (view.gttWritesEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.orderSending ? 'ok' : 'warn')}
+${tile('Exits (market sell)', view.sellSending ? 'ON — approved intents only' : (view.sellOrdersEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.sellSending ? 'ok' : 'warn')}
+${tile('Emergency Exit', view.sellSending ? ({ off: 'Off', confirm: 'On — asks you first', auto: 'On — automatic' }[view.emergencyExit] || 'Off') : 'Off', view.sellSending && view.emergencyExit !== 'off' ? 'ok' : 'warn')}
 </div>${view.lastSyncError ? `<div class="msg bad">Last sync error: ${esc(view.lastSyncError)}</div>` : ''}
 
 <h2>Daily Kite login</h2>
@@ -62,6 +64,19 @@ ${tile('Order sending', 'Off (Phase 1)', 'warn')}
 <form class="inline" method="post" action="/sync-now">${c}<button ${view.brokerConnected && view.journalLinked ? '' : 'disabled'}>Sync now</button></form></div>
 <form method="post" action="/kite/token">${c}<label>If the redirect does not come back here, paste the address Kite sent you to (or just the request_token)</label>
 <input name="pasted" autocomplete="off" placeholder="https://…?request_token=…"><button>Complete login</button></form>
+
+<h2>Sending to Zerodha</h2><form method="post" action="/execution">${c}
+<p class="sub" style="margin:0">Both need the static IP to match and today's Kite login, and act only on intents you approve in the journal (Settings → Auto Trade – Broker Link). The gateway never places buy orders.</p>
+<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="gttWritesEnabled" style="width:auto" ${view.gttWritesEnabled ? 'checked' : ''}> Allow stop-GTT placement (place / modify the stop-loss GTT)</label>
+<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="sellOrdersEnabled" style="width:auto" ${view.sellOrdersEnabled ? 'checked' : ''}> Allow exits (market sell of shares you hold, for approved partial and full exits)</label>
+<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="bookGttFills" style="width:auto" ${view.bookGttFills ? 'checked' : ''}> Book stop-GTT fills into the journal automatically (needs no static IP; nothing is sent to Zerodha)</label>
+<label>Emergency Exit — when a stop GTT triggers but its order does not fill (or is rejected), cancel it, confirm, and sell at market: automatic protection, then 5%, then 10%</label>
+<select name="emergencyExit" style="width:100%;padding:7px 9px;border:1px solid var(--b);border-radius:6px;font:inherit">
+<option value="off" ${view.emergencyExit === 'off' ? 'selected' : ''}>Off — only report it</option>
+<option value="confirm" ${view.emergencyExit === 'confirm' ? 'selected' : ''}>Confirm — propose it in the journal and wait for my approval</option>
+<option value="auto" ${view.emergencyExit === 'auto' ? 'selected' : ''}>Auto — run it at once (a GTT that has not triggered always waits for approval)</option>
+</select>
+<button>Save</button></form>
 
 <h2>Kite Connect API details</h2><form method="post" action="/secrets/kite" autocomplete="off">${c}
 <label>API key ${view.kiteApiKeyMasked ? `<small>(saved: ${esc(view.kiteApiKeyMasked)})</small>` : ''}</label><input name="apiKey" autocomplete="off">

@@ -1,9 +1,12 @@
 /**
- * og/server.js — Order Gateway, PHASE 1 (broker link, read only).
+ * og/server.js — Order Gateway.
  *
  * Runs on the always-on home machine. Holds the Kite API details, does the daily Kite login,
- * reads orders / holdings / positions / funds / GTTs, writes a heartbeat and a reconcile report
- * to the journal database. It cannot place, modify or cancel anything in this phase.
+ * reads orders / holdings / positions / funds / GTTs, writes a heartbeat, a reconcile report and a
+ * protection report to the journal database.
+ * Phase 3: when "stop-GTT placement" is switched on here AND the static IP matches, it also places
+ * or modifies a stop-loss GTT for intents you approved in the journal. It cannot place, modify or
+ * cancel any regular order.
  *
  *   node og/server.js            (data folder: og/data, or set OG_DATA_DIR)
  */
@@ -16,6 +19,11 @@ const { createKiteAdapter, tokenValidUntil } = require('./lib/kite-adapter.js');
 const { createSupabase } = require('./lib/supabase-rest.js');
 const { checkPublicIp } = require('./lib/ip-check.js');
 const { createSync, VERSION } = require('./lib/sync.js');
+const { createExecutor } = require('./lib/executor.js');
+const { createExitExecutor } = require('./lib/exit-executor.js');
+const { createEmergencyExit } = require('./lib/emergency-exit.js');
+const { createBooking } = require('./lib/booking.js');
+const { recordGttFills } = require('./lib/gtt-fills.js');
 const { hashPassword, verifyPassword, createSessions } = require('./lib/admin-auth.js');
 const pages = require('./lib/pages.js');
 
@@ -31,11 +39,20 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
   const servers = [];
 
   // ── Collaborators (rebuilt from saved settings each time, so nothing is hardcoded) ──
-  function kite() {
+  function kite({ allowGttWrites = false, allowSellOrders = false } = {}) {
     const cfg = config.load();
-    return createKiteAdapter({ baseUrl: cfg.kiteBaseUrl, loginUrl: cfg.kiteLoginUrl, fetchImpl,
+    return createKiteAdapter({ baseUrl: cfg.kiteBaseUrl, loginUrl: cfg.kiteLoginUrl, fetchImpl, allowGttWrites, allowSellOrders,
       apiKey: secrets.get('kiteApiKey') || '', apiSecret: secrets.get('kiteApiSecret') || '', accessToken: _liveToken() });
   }
+  /** Stop-GTT placement is possible only when all three hold: switched on, static IP matches, logged in today. */
+  function orderSending() {
+    const ok = !!(state.ip && state.ip.ok && _liveToken());
+    state.sellSending = ok && !!config.load().sellOrdersEnabled;
+    state.orderSending = (ok && !!config.load().gttWritesEnabled) || state.sellSending;
+    return state.orderSending;
+  }
+  const gttSending = () => orderSending() && !!config.load().gttWritesEnabled;
+  const sellSending = () => { orderSending(); return state.sellSending; };
   function store() {
     const cfg = config.load();
     return createSupabase({ url: cfg.supabaseUrl, anonKey: secrets.get('supabaseAnonKey') || '', fetchImpl,
@@ -65,8 +82,42 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
     state.ip = await checkPublicIp({ expected: cfg.expectedStaticIp, url: cfg.ipCheckUrl, fetchImpl });
     return state.ip;
   }
+  const emergencySeen = new Map();          // condition → first time seen (grace periods)
+  let executing = false;
+  async function tickExecute() {
+    if (executing || !journalLinked()) return null;
+    executing = true;
+    try {
+      const out = { done: 0, failed: 0, unknown: 0, expired: 0, skipped: 0 };
+      const add = r => { for (const k of Object.keys(out)) out[k] += r[k] || 0; };
+      const logger = (k, v) => log(`[og] ${k}`, JSON.stringify(v));
+      const cfg = config.load();
+      const sellBroker = () => kite({ allowGttWrites: true, allowSellOrders: true });
+      // Emergency Exit first: detect, propose, and carry out what is approved.
+      if (sellSending() && cfg.emergencyExit !== 'off') {
+        const em = createEmergencyExit({ broker: sellBroker(), store: store(), log: logger, exitWindow: cfg.exitWindow, fillWaitSec: cfg.fillWaitSec, cancelWaitSec: cfg.cancelWaitSec, pollMs: cfg.orderPollMs });
+        const b = sellBroker(), st = store(), uid = await st.userId();
+        const [orders, gtts, holdings, positions, trades] = await Promise.all([b.orders(), b.gtts(), b.holdings(), b.positions(),
+          st.select('trades', `select=id,symbol,direction,entries,pyramids,partial_exits,final_exit,current_stop,initial_stop,closed_at&user_id=eq.${uid}&closed_at=is.null`)]);
+        await em.propose({ orders, gtts, holdings, positions, trades }, { mode: cfg.emergencyExit, seen: emergencySeen, gttFillGraceSec: cfg.gttFillGraceSec, notTriggeredGraceSec: cfg.notTriggeredGraceSec });
+        add(await em.runOnce({ enabled: true }));
+      }
+      // Then ordinary exits (they remove risk), then stop GTTs.
+      if (sellSending()) add(await createExitExecutor({ broker: kite({ allowGttWrites: true, allowSellOrders: true }), store: store(), log: logger,
+        exitWindow: cfg.exitWindow, fillWaitSec: cfg.fillWaitSec, cancelWaitSec: cfg.cancelWaitSec, pollMs: cfg.orderPollMs }).runOnce({ enabled: true }));
+      if (gttSending()) add(await createExecutor({ broker: kite({ allowGttWrites: true }), store: store(), log: logger }).runOnce({ enabled: true }));
+      // Write completed sells into the journal (also retries any booking that could not be written earlier).
+      if (cfg.bookFills) { try { out.booked = (await createBooking({ store: store(), log: logger }).bookPending()).booked; } catch (e) { log('[og] booking pass failed:', e.message); } }
+      if (out.done || out.failed || out.unknown || out.booked) await tickSync();     // refresh the protection and reconcile reports straight away
+      return out;
+    } catch (e) {
+      if (e.tokenInvalid) _dropToken();
+      log('[og] execute failed:', e.message);
+      return null;
+    } finally { executing = false; }
+  }
   async function tickHeartbeat() {
-    _liveToken();
+    orderSending();
     if (!journalLinked()) return null;
     try { return await sync().heartbeat(); } catch (e) { log('[og] heartbeat failed:', e.message); return null; }
   }
@@ -75,6 +126,14 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
     try {
       const out = await sync().syncOnce();
       state.lastSync = out.result; state.lastSyncError = null; state.drift = out.drift;
+      // Stop-GTT fills → journal (optional; reads the broker, writes only the journal).
+      if (config.load().bookGttFills) {
+        try {
+          const lg = (k, v) => log(`[og] ${k}`, JSON.stringify(v));
+          const made = await recordGttFills({ store: store(), snapshot: out.raw, log: lg });
+          if (made && (await createBooking({ store: store(), log: lg }).bookPending()).booked) setTimeout(() => tickSync(), 0);   // books agree again on the next read
+        } catch (e) { log('[og] GTT fill booking failed:', e.message); }
+      }
       return out;
     } catch (e) {
       state.lastSyncError = e.message;
@@ -112,13 +171,14 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
       lastSync: state.lastSync ? new Date(state.lastSync.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST' : null,
       lastSyncError: state.lastSyncError, driftCount: state.lastSync ? state.lastSync.drift : 0, driftHigh: state.lastSync ? state.lastSync.driftHigh : 0,
       callbackUrl: `http://${req.headers.host}/kite/callback`,
+      gttWritesEnabled: !!cfg.gttWritesEnabled, sellOrdersEnabled: !!cfg.sellOrdersEnabled, orderSending: gttSending(), sellSending: sellSending(), emergencyExit: cfg.emergencyExit, bookGttFills: !!cfg.bookGttFills,
     };
   }
   /** What /status.json may show. No secret, no token, no IP address. */
   function publicStatus(req) {
     const v = view(req);
     return { version: v.version, kiteConfigured: v.kiteConfigured, brokerConnected: v.brokerConnected, tokenValidUntil: state.tokenValidUntil,
-      ipStatus: v.ipStatus, journalLinked: v.journalLinked, lastSync: state.lastSync, lastSyncError: state.lastSyncError, orderSendingEnabled: false };
+      ipStatus: v.ipStatus, journalLinked: v.journalLinked, lastSync: state.lastSync, lastSyncError: state.lastSyncError, orderSendingEnabled: orderSending() };
   }
 
   const send = (res, code, body, headers = {}) => {
@@ -217,8 +277,19 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
         const hosts = list(f.allowedHosts);
         if (!hosts.every(h => /^[a-z0-9.-]{1,253}$/i.test(h))) return flash(res, '/', 'bad', 'Host names may contain only letters, digits, dots and hyphens.');
         config.save({ expectedStaticIp: ip, port, bindHosts: bind, allowedHosts: hosts });
-        await tickIp(); await tickHeartbeat();
+        await tickIp();
+        if (!state.ip.ok) config.save({ gttWritesEnabled: false, sellOrdersEnabled: false, emergencyExit: 'off' });   // a changed or blank IP switches all sending off
+        await tickHeartbeat();
         return flash(res, '/', 'ok', 'Network settings saved.');
+      }
+      if (p === '/execution') {
+        const gttOn = f.gttWritesEnabled === 'on', sellOn = f.sellOrdersEnabled === 'on';
+        if ((gttOn || sellOn) && !(state.ip && state.ip.ok)) return flash(res, '/', 'bad', 'Sending can be switched on only after the static IP is entered and matches.');
+        const em = ['confirm', 'auto'].includes(f.emergencyExit) ? f.emergencyExit : 'off';
+        if (em !== 'off' && !sellOn) return flash(res, '/', 'bad', 'The Emergency Exit needs "Allow exits" switched on.');
+        config.save({ gttWritesEnabled: gttOn, sellOrdersEnabled: sellOn, emergencyExit: em, bookGttFills: f.bookGttFills === 'on' });
+        await tickHeartbeat();
+        return flash(res, '/', 'ok', `Stop-GTT placement is ${gttOn ? 'ON' : 'off'}; exits (market sell) are ${sellOn ? 'ON' : 'off'}; Emergency Exit is ${em}.`);
       }
       if (p === '/secrets/kite') {
         const key = (f.apiKey || '').trim(), sec = (f.apiSecret || '').trim(), cid = (f.zerodhaClientId || '').trim().toUpperCase();
@@ -273,7 +344,8 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
     if (!servers.length) throw new Error('Gateway could not listen on any address');
     if (background) {
       tickIp().then(tickHeartbeat).then(tickSync);
-      timers.push(setInterval(tickHeartbeat, cfg.heartbeatSec * 1000), setInterval(tickSync, cfg.brokerSyncSec * 1000), setInterval(tickIp, cfg.ipCheckSec * 1000));
+      timers.push(setInterval(tickHeartbeat, cfg.heartbeatSec * 1000), setInterval(tickSync, cfg.brokerSyncSec * 1000), setInterval(tickIp, cfg.ipCheckSec * 1000),
+        setInterval(tickExecute, cfg.executeSec * 1000));
       timers.forEach(t => t.unref && t.unref());
     }
     return servers[0].address().port;
@@ -283,7 +355,7 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
     await Promise.all(servers.splice(0).map(s => new Promise(r => s.close(r))));
   }
 
-  return { start, stop, state, config, secrets, tickIp, tickHeartbeat, tickSync, completeKiteLogin, publicStatus };
+  return { start, stop, state, config, secrets, tickIp, tickHeartbeat, tickSync, tickExecute, completeKiteLogin, publicStatus };
 }
 
 if (require.main === module) {

@@ -146,9 +146,20 @@
     }
     for (const action of actions) {
       if (mode === 'paper' && action.kind === 'BRIEF' && !(action.stop > (trade.currentStop || 0))) continue; // quiet paper briefs
-      await A.dispatch({ action, symbol: trade.symbol, mode, tradeId: trade.id, stage: state.stage, cmp: mk?.ltp,
+      const row = await A.dispatch({ action, symbol: trade.symbol, mode, tradeId: trade.id, stage: state.stage, cmp: mk?.ltp,
         settings, params: p, alertsToday: ctx.alertsToday, now });
+      if (mode === 'real') await _shadowIntent(row, action, { symbol: trade.symbol, exchange: trade.exchange, tradeId: trade.id, openQty: m.openQty, market: mk }, ctx);
     }
+  }
+
+  /**
+   * Auto Trade Engine, Phase 2 (SHADOW): record what WOULD be sent to the broker for a real alert.
+   * Additive only — nothing is sent, and a failure here never disturbs the alert that was just raised.
+   */
+  async function _shadowIntent(row, action, ref, ctx) {
+    if (!row || !ctx.exec || !root.TLMOrders) return;
+    try { await root.TLMOrders.record({ alert: row, action, ...ref, exec: ctx.exec, now: ctx.now }); }
+    catch (e) { _errors.push({ symbol: ref.symbol, error: 'shadow intent: ' + String(e?.message || e) }); }
   }
 
   async function _handleWatch(item, ctx) {
@@ -161,8 +172,10 @@
     const mode = item.mode || 'both';
 
     if (mode === 'real' || mode === 'both') {
-      await A.dispatch({ action: { ...action, qty: plan.firstQty }, symbol: item.symbol, mode: 'real', watchlistId: item.id,
+      const entry = { ...action, qty: plan.firstQty };
+      const row = await A.dispatch({ action: entry, symbol: item.symbol, mode: 'real', watchlistId: item.id,
         stage: 0, cmp: mk.ltp, settings, params: p, alertsToday: ctx.alertsToday, now });
+      await _shadowIntent(row, entry, { symbol: item.symbol, exchange: item.exchange, watchlistId: item.id, openQty: 0, market: mk, trigger: Number(item.trigger_price) }, ctx);
     }
     if (mode === 'paper' || mode === 'both') {
       const state = E.createState({ entryPrice: action.price, firstQty: plan.firstQty, initialStop: action.stop, params: p, now });
@@ -243,6 +256,11 @@
         rpt: await _defaultRpt(settings),
         alertsToday: await db.getAlerts({ since: new Date(Date.parse(today + 'T00:00:00+05:30')).toISOString() }),
       };
+
+      // Shadow mode: load what the guards need once per cycle. Off (the default) → no extra reads, no intents.
+      if (root.TLMOrders && root.TLMOrders.execParams(settings).mode === 'shadow') {
+        ctx.exec = await root.TLMOrders.loadContext({ settings, now }).catch(e => { _errors.push({ symbol: '*', error: 'shadow context: ' + String(e?.message || e) }); return null; });
+      }
 
       const tradingMinute = minute >= p.marketOpenMinute && minute <= p.marketCloseMinute;
       for (const item of watch) if (tradingMinute || force) await _safe(() => _handleWatch(item, ctx), item.symbol);

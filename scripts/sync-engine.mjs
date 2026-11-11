@@ -11,7 +11,8 @@ import path from 'path';
 const SHARED = [
   'js/calculations.js', 'js/db-cloud.js',
   'js/engine/indicators.js', 'js/engine/tlm-rules.js', 'js/engine/tlm-engine.js', 'js/engine/chartbook.js',
-  'js/engine/market-data.js', 'js/engine/alert-service.js', 'js/engine/executors.js', 'js/engine/runner.js',
+  'js/engine/market-data.js', 'js/engine/alert-service.js', 'js/engine/executors.js',
+  'js/engine/guards.js', 'js/engine/order-planner.js', 'js/engine/exec-watch.js', 'js/engine/runner.js',
 ];
 const DEST = 'supabase/functions/_shared/engine';
 

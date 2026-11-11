@@ -50,6 +50,8 @@ function createSupabase({ url, anonKey, getRefreshToken, setRefreshToken, fetchI
       ? _rest('POST', `${table}?on_conflict=${encodeURIComponent(onConflict)}`, { body: rows, prefer: 'resolution=merge-duplicates,return=minimal' })
       : Promise.resolve(null),
     update: (table, filter, patch) => _rest('PATCH', `${table}?${filter}`, { body: patch, prefer: 'return=minimal' }),
+    insert: (table, rows) => _rest('POST', table, { body: rows, prefer: 'return=minimal' }),
+    rpc: (fn, args) => _rest('POST', `rpc/${fn}`, { body: args }),
   };
 }
 

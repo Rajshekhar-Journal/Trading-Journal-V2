@@ -11,6 +11,18 @@ const DEFAULTS = Object.freeze({
   bindHosts: ['127.0.0.1'],          // add the LAN or VPN address on the setup page for remote login
   allowedHosts: [],                  // extra host names this page may be opened under (e.g. the VPN name)
   expectedStaticIp: '',              // blank = order sending stays off
+  gttWritesEnabled: false,           // stop-GTT placement; also needs the static IP to match
+  executeSec: 10,
+  sellOrdersEnabled: false,          // exits (market sell) for intents you approve; also needs the static IP to match
+  exitWindow: [556, 925],            // IST minutes 09:16–15:25
+  fillWaitSec: 20,                   // wait this long for a sell to fill before cancelling it
+  cancelWaitSec: 10,
+  orderPollMs: 2000,
+  emergencyExit: 'off',              // off | confirm (you approve) | auto. Needs exits switched on.
+  gttFillGraceSec: 10,               // a triggered GTT's order may stay unfilled this long before it counts
+  notTriggeredGraceSec: 60,          // price below the stop with the GTT still asleep for this long
+  bookFills: true,                   // write completed sells into the journal trade
+  bookGttFills: false,               // also book fills of the stop GTT itself (read only towards the broker)
   zerodhaClientId: '',
   kiteBaseUrl: 'https://api.kite.trade',
   kiteLoginUrl: 'https://kite.zerodha.com/connect/login',

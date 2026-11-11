@@ -87,4 +87,41 @@ function reconcile({ trades, holdings, positions, gtts, tick = 0.05 }) {
   return drift;
 }
 
-module.exports = { reconcile, journalPositions, brokerPositions, activeSellGtts, normSymbol, remainingQty };
+/**
+ * Protection state of every open journal position, from the broker's GTT list (SRS §7).
+ *   PROTECTED    an active sell GTT covers exactly the held quantity at the journal stop
+ *   PARTIAL      a GTT exists but its quantity or level differs from the position
+ *   UNPROTECTED  no active sell GTT
+ * (PROTECTING and UNVERIFIED are not decided here: the first needs an order in flight, the second
+ *  is what the journal shows when this report is stale.)
+ * @returns [{ symbol, state, reason, journalQty, brokerQty, gttQty, gttTrigger, journalStop, gttIds }]
+ */
+function protection({ trades, holdings, positions, gtts, tick = 0.05 }) {
+  const j = journalPositions(trades), b = brokerPositions(holdings, positions), g = activeSellGtts(gtts);
+  const lp = lastPrices(holdings, positions);
+  return Object.keys(j).sort().map(sym => {
+    const list = g[sym] || [], pos = j[sym];
+    const row = { symbol: sym, state: 'PROTECTED', reason: 'Stop GTT covers the position.', journalQty: pos.qty, brokerQty: b[sym] || 0,
+      gttQty: 0, gttTrigger: null, journalStop: pos.stop, gttIds: list.map(x => x.id), lastPrice: lp[sym] ?? null };
+    if (!list.length) return { ...row, state: 'UNPROTECTED', reason: 'No active stop GTT at the broker.' };
+    const best = list.reduce((a, x) => (x.qty > a.qty ? x : a));
+    row.gttQty = best.qty;
+    row.gttTrigger = best.triggers.length ? Math.min(...best.triggers) : null;
+    if (list.length > 1) return { ...row, state: 'PARTIAL', reason: `${list.length} sell GTTs on this stock; expected one.` };
+    if (best.qty < pos.qty) return { ...row, state: 'PARTIAL', reason: `GTT covers ${best.qty} of ${pos.qty} shares.` };
+    if (best.qty > pos.qty) return { ...row, state: 'PARTIAL', reason: `GTT quantity ${best.qty} is above the position ${pos.qty}.` };
+    if (pos.stop && !best.triggers.some(t => Math.abs(t - pos.stop) <= tick + 1e-9))
+      return { ...row, state: 'PARTIAL', reason: `GTT trigger ${row.gttTrigger} differs from the journal stop ${pos.stop}.` };
+    return row;
+  });
+}
+
+/** Last traded price per symbol as the broker reports it with holdings / positions. */
+function lastPrices(holdings, positions) {
+  const out = {};
+  for (const h of holdings || []) if (Number(h.last_price) > 0) out[normSymbol(h.tradingsymbol)] = Number(h.last_price);
+  for (const p of (positions && positions.net) || []) if (Number(p.last_price) > 0) out[normSymbol(p.tradingsymbol)] = Number(p.last_price);
+  return out;
+}
+
+module.exports = { reconcile, protection, lastPrices, journalPositions, brokerPositions, activeSellGtts, normSymbol, remainingQty };

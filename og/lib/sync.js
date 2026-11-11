@@ -3,9 +3,9 @@
  * `broker` is a BrokerPort (kite-adapter or the test fake); `store` is a supabase-rest client.
  */
 'use strict';
-const { reconcile } = require('./reconcile.js');
+const { reconcile, protection } = require('./reconcile.js');
 
-const VERSION = 'og-0.1.0-p1';
+const VERSION = 'og-0.4.0-p4';
 
 function createSync({ broker, store, getState, log = () => {} }) {
   /** Gateway health row the journal reads. Contains status only — no secret, no IP address. */
@@ -21,7 +21,7 @@ function createSync({ broker, store, getState, log = () => {} }) {
       ip_ok: !!(st.ip && st.ip.ok),
       ip_status: st.ip ? st.ip.reason : 'not_checked',
       ip_checked_at: st.ip ? st.ip.at : null,
-      order_sending_enabled: false,                    // P1 is read only, always
+      order_sending_enabled: !!st.orderSending,        // true only when stop-GTT placement is on AND the static IP matches AND logged in
       updated_at: new Date().toISOString(),
       ...extra,
     };
@@ -66,11 +66,19 @@ function createSync({ broker, store, getState, log = () => {} }) {
     })), 'id');
     await store.update('drift_log', `user_id=eq.${uid}&status=eq.open&last_seen_at=lt.${encodeURIComponent(now)}`, { status: 'resolved', resolved_at: now });
 
+    // Protection state per open position. Stored separately so an older database (before migration 010)
+    // cannot break the rest of the sync.
+    const prot = protection({ trades, holdings, positions, gtts });
+    let protectionStored = true;
+    try { await store.upsert('broker_snapshots', [{ user_id: uid, kind: 'protection', data: prot, taken_at: now }], 'user_id,kind'); }
+    catch (e) { protectionStored = false; log('protection report not stored (run migration 010)', { error: e.message.slice(0, 120) }); }
+
     const result = { at: now, orders: (orders || []).length, holdings: (holdings || []).length, gtts: (gtts || []).length,
-      drift: drift.length, driftHigh: drift.filter(d => d.severity === 'high').length };
+      drift: drift.length, driftHigh: drift.filter(d => d.severity === 'high').length,
+      positions: prot.length, notProtected: prot.filter(p => p.state !== 'PROTECTED').length, protectionStored };
     await heartbeat({ last_sync_at: now, last_sync_result: result, open_drift_count: drift.length });
     log('sync', result);
-    return { result, drift };
+    return { result, drift, protection: prot, raw: { orders, holdings, positions, gtts, trades } };
   }
 
   return { heartbeat, syncOnce, VERSION };

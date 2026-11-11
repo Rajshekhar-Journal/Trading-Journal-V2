@@ -23,6 +23,9 @@ import '../_shared/engine/chartbook.js';
 import '../_shared/engine/market-data.js';
 import '../_shared/engine/alert-service.js';
 import '../_shared/engine/executors.js';
+import '../_shared/engine/guards.js';
+import '../_shared/engine/order-planner.js';
+import '../_shared/engine/exec-watch.js';
 import '../_shared/engine/runner.js';
 
 // deno-lint-ignore no-explicit-any
@@ -99,7 +102,10 @@ async function runUser(uid: string, force: boolean) {
     const errors = G.TLMRunner.lastErrors().length;
     // Chartbook: entry/add charts during the day, final + exit charts after the close (cheap when nothing is due).
     const charts = await G.TLMRunner.captureCharts({ limit: 10 }).catch((e: Error) => ({ saved: 0, failed: 1, remaining: 0, error: e.message }));
-    return { ran, errors, charts };
+    // Auto Trade Engine: gateway-offline / login / protection alerts, and Telegram for alerts the gateway queued. Read-only checks.
+    const watch = await G.db.getSettings().then((settings: unknown) => G.TLMExecWatch.run({ settings }))
+      .catch((e: Error) => { console.error('exec-watch failed', e.message); return { outbox: 0, raised: [] }; });
+    return { ran, errors, charts, watch };
   });
 }
 

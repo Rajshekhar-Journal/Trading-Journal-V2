@@ -11,7 +11,7 @@ const { createFakeWorld } = require('./helpers/fake-kite.js');
 const { createSecretStore, mask } = require('../og/lib/secret-store.js');
 const { createKiteAdapter, tokenValidUntil } = require('../og/lib/kite-adapter.js');
 const { checkPublicIp } = require('../og/lib/ip-check.js');
-const { reconcile } = require('../og/lib/reconcile.js');
+const { reconcile, protection } = require('../og/lib/reconcile.js');
 const { createGateway } = require('../og/server.js');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'og-'));
@@ -94,6 +94,19 @@ test('reconcile: symbol spellings and partial exits are normalised', () => {
   assert.deepEqual(reconcile({ trades: [t], holdings: [{ tradingsymbol: 'INFY', quantity: 60 }], positions: { net: [] }, gtts: [gtt(1, 'INFY', 60, 95)] }), []);
 });
 
+test('protection: PROTECTED only when one GTT covers exactly the position at the journal stop', () => {
+  const p = protection({
+    trades: [trade('OK', 100, 95), trade('NONE', 50, 200), trade('LESS', 10, 40), trade('MORE', 10, 40), trade('LEVEL', 20, 500), trade('TWO', 30, 60), trade('DONE', 5, 9, { closed_at: '2026-11-01' })],
+    holdings: [{ tradingsymbol: 'OK', quantity: 100 }], positions: { net: [] },
+    gtts: [gtt(1, 'OK', 100, 95), gtt(2, 'LESS', 4, 40), gtt(3, 'MORE', 15, 40), gtt(4, 'LEVEL', 20, 480), gtt(5, 'TWO', 30, 60), gtt(6, 'TWO', 30, 58), gtt(7, 'NONE', 50, 200, 'triggered')],
+  });
+  assert.deepEqual(Object.fromEntries(p.map(x => [x.symbol, x.state])), { LESS: 'PARTIAL', LEVEL: 'PARTIAL', MORE: 'PARTIAL', NONE: 'UNPROTECTED', OK: 'PROTECTED', TWO: 'PARTIAL' });
+  const ok = p.find(x => x.symbol === 'OK');
+  assert.deepEqual([ok.journalQty, ok.brokerQty, ok.gttQty, ok.gttTrigger], [100, 100, 100, 95]);
+  assert.match(p.find(x => x.symbol === 'LESS').reason, /covers 4 of 10/);
+  assert.match(p.find(x => x.symbol === 'LEVEL').reason, /480 differs from the journal stop 500/);
+});
+
 // ── Gateway, end to end over HTTP ──
 async function boot(world, { configure = true } = {}) {
   const dataDir = tmp();
@@ -172,7 +185,16 @@ test('full flow: login → heartbeat → sync → drift report; no secret ever l
   assert.deepEqual(w.db.drift_log.map(d => `${d.kind}:${d.symbol}:${d.status}`).sort(), ['JOURNAL_ONLY:TCS:open', 'NO_STOP_GTT:TCS:open']);
   assert.equal(w.db.broker_orders[0].order_timestamp, '2026-11-11T04:01:02.000Z');
   assert.equal(w.db.broker_gtts[0].present, true);
-  assert.equal(w.db.broker_snapshots.length, 3);
+  assert.equal(w.db.broker_snapshots.length, 4);
+  const prot = w.db.broker_snapshots.find(x => x.kind === 'protection').data;
+  assert.deepEqual(prot.map(x => `${x.symbol}:${x.state}`), ['INFY:PROTECTED', 'TCS:UNPROTECTED']);
+  assert.deepEqual([st.last_sync_result.positions, st.last_sync_result.notProtected], [2, 1]);
+
+  // A database without migration 010 rejects the protection row; the rest of the sync still works.
+  w.rejectKinds = ['protection'];
+  const out = await g.gw.tickSync();
+  assert.ok(out && out.result.protectionStored === false && g.gw.state.lastSyncError === null);
+  w.rejectKinds = [];
 
   // The difference goes away at the broker → drift resolves, vanished GTT is marked not present.
   w.holdings.push({ tradingsymbol: 'TCS', quantity: 10, t1_quantity: 0 }); w.gtts = [gtt(78, 'TCS', 10, 3000)];

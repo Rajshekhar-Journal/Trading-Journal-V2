@@ -1290,7 +1290,8 @@ const settingsModule = (() => {
   async function _pageExecution() {
     const settings = await db.getSettings();
     const ex = settings.execution || {};
-    const [st, drift] = await Promise.all([db.getExecState(), db.getOpenDrift()]);
+    const [st, drift, intents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 50 }), db.getBrokerSnapshot('protection')]);
+    const xp = { ...(globalThis.TLMOrders ? TLMOrders.EXEC_DEFAULTS : {}), ...ex };
     const fmt = t => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     const ageSec = st?.heartbeat_at ? (Date.now() - new Date(st.heartbeat_at).getTime()) / 1000 : Infinity;
     const online = ageSec < 180;
@@ -1323,10 +1324,36 @@ const settingsModule = (() => {
       <div class="settings-section-header">Auto Trade – Broker Link</div>
       <p style="color:var(--text-muted);margin:0 0 14px">Phase 1 links the journal to Zerodha in read-only form. The journal cannot place orders yet. API key, API secret, static IP and the daily Kite login are entered on the Order Gateway page on your home machine — never here.</p>
       ${tiles}
+      ${_approvalTable(intents, fmt)}
+      <div class="form-section-title">Position protection</div>
+      ${_protectionTable(prot, online && tokenOk, fmt, col, xp.mode === 'confirm')}
       <div class="form-section-title">Journal vs broker (reconcile report)</div>
       ${drift.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Difference</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th>Level</th><th>First seen</th></tr></thead><tbody>${rows}</tbody></table></div>
         <p style="color:var(--text-muted);font-size:12px">Differences are reported only. Nothing in the journal or at the broker is changed automatically.</p>`
         : `<div class="no-data">${st?.last_sync_at ? 'No differences. Journal and broker agree.' : 'No reconcile report yet.'}</div>`}
+      <div class="form-section-title" style="margin-top:20px">Automation mode</div>
+      <p style="color:var(--text-muted);margin:0 0 10px;font-size:13px">Shadow mode writes down the order the engine <em>would</em> send for each real alert, with the result of every safety check. Nothing is sent to Zerodha. Alerts and trades work exactly as before.</p>
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Mode</label>
+          <select class="form-select" id="ex-mode">
+            <option value="alert" ${!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : ''}>Alert only (today's behaviour)</option>
+            <option value="shadow" ${xp.mode === 'shadow' ? 'selected' : ''}>Shadow — log intended orders, send nothing</option>
+            <option value="confirm" ${xp.mode === 'confirm' ? 'selected' : ''}>Confirm — you approve each stop GTT (and exits, if ticked below); entries stay shadow</option>
+            <option disabled>Auto — not built yet</option>
+          </select></div>
+        <div class="form-group"><label class="form-label">Kill switch</label>
+          <label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-kill" ${xp.killSwitch ? 'checked' : ''}> Block all new entries and adds</label></div>
+        <div class="form-group"><label class="form-label">Exits in Confirm mode</label>
+          <label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-confirm-exits" ${xp.confirmExits ? 'checked' : ''}> Also ask me to approve partial and full exits</label></div>
+        <div class="form-group"><label class="form-label">Max value per order (₹, 0 = not set)</label>
+          <input class="form-input" type="number" id="ex-maxval" min="0" step="1000" value="${_escX(xp.maxOrderValue ?? 0)}"></div>
+        <div class="form-group"><label class="form-label">Max orders per day</label>
+          <input class="form-input" type="number" id="ex-maxord" min="1" max="200" value="${_escX(xp.maxOrdersPerDay ?? 30)}"></div>
+      </div>
+
+      <div class="form-section-title" style="margin-top:20px">Intended orders (latest 50)</div>
+      ${_intentTable(intents, fmt, col)}
+
       <div class="form-section-title" style="margin-top:20px">Order Gateway address</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Address of the gateway page (home network or VPN)</label>
@@ -1340,6 +1367,83 @@ const settingsModule = (() => {
     </div>`;
   }
 
+  /** Stop-GTT cover of every open position. A stale report (gateway offline, no login, > 5 min old) shows UNVERIFIED. */
+  let _protCache = null;
+  /** Stop GTTs waiting for you. Approving lets the gateway send exactly this GTT, once, within 5 minutes. */
+  function _approvalTable(intents, fmt) {
+    const wait = intents.filter(i => i.mode === 'confirm' && i.status === 'proposed' && /^[A-Za-z0-9_]+$/.test(i.id) && (!i.expires_at || new Date(i.expires_at) > new Date()));
+    if (!wait.length) return '';
+    const rows = wait.map(i => `<tr><td><strong>${_escX(i.symbol)}</strong></td><td>${i.action === 'STOP_ENSURE' ? `Stop GTT · sell ${_escX(i.qty)}` : `<strong style="color:var(--danger, #ef4444)">${{ EXIT_ALL: 'EXIT ALL', EMERGENCY_EXIT: 'EMERGENCY EXIT' }[i.action] || 'Partial exit'} · market sell ${_escX(i.qty)}</strong>${i.action === 'EMERGENCY_EXIT' && i.detail?.reason ? `<br><span style="font-size:12px">${_escX(i.detail.reason)} Cancels the open sell order first, then sells what is held.</span>` : ''} <span style="color:var(--text-muted)">${_escX(i.rule_id)}</span>`}</td><td style="text-align:right">${_escX(i.trigger_price ?? '—')}</td><td style="text-align:right">${_escX(i.gtt_limit_price ?? (i.ref_price ? 'at market, ~' + i.ref_price : 'at market'))}</td>
+      <td>${fmt(i.expires_at)}</td><td style="white-space:nowrap"><button class="btn btn-primary btn-sm" onclick="settingsModule._decideIntent('${_escX(i.id)}', true)">Approve</button>
+      <button class="btn btn-secondary btn-sm" onclick="settingsModule._decideIntent('${_escX(i.id)}', false)">Reject</button></td></tr>`).join('');
+    return `<div class="form-section-title">Waiting for your approval</div>
+      <div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Order</th><th style="text-align:right">Trigger</th><th style="text-align:right">Limit</th><th>Approve before</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p style="color:var(--text-muted);font-size:12px">Approve = the gateway carries out this one instruction at Zerodha, once, after re-checking the position, quantity and price: a stop GTT is placed or modified; an exit is sent as a market sell. Each needs its switch on at the gateway and the static IP to match. An exit is not booked in the journal automatically yet — record the fill as you do today.</p>`;
+  }
+
+  async function _decideIntent(id, approve) {
+    try {
+      const status = await db.decideIntent(id, approve);
+      app.toast({ approved: 'Approved — the gateway will send it within a few seconds', rejected: 'Rejected', expired: 'This proposal had expired' }[status] || `Status: ${status}`, status === 'approved' ? 'success' : 'info');
+    } catch (e) { app.toast(e.message, 'error'); }
+    await _showPage('execution');
+  }
+
+  async function _proposeStop(symbol) {
+    const p = _protCache?.data?.find(x => x.symbol === symbol);
+    if (!p) return;
+    try {
+      const row = await TLMOrders.proposeStop({ p, takenAt: _protCache.taken_at, settings: await db.getSettings(), now: Date.now() });
+      if (!row) app.toast('Could not record the proposal', 'error');
+      else if (row.status === 'proposed') app.toast(`Stop GTT proposed for ${symbol} — approve it above`, 'success');
+      else app.toast(`Blocked: ${(row.block_reasons || []).join(' · ')}`, 'error', 9000);
+    } catch (e) { app.toast(e.message, 'error'); }
+    await _showPage('execution');
+  }
+
+  function _protectionTable(prot, live, fmt, col, canPropose) {
+    _protCache = prot;
+    if (!prot || !Array.isArray(prot.data)) return `<div class="no-data">No protection report yet. It appears after the gateway's next sync (needs migration 010).</div>`;
+    if (!prot.data.length) return `<div class="no-data">No open positions in the journal.</div>`;
+    const fresh = live && (Date.now() - new Date(prot.taken_at).getTime()) < 300000;
+    const rows = prot.data.map(p => {
+      const state = fresh ? p.state : 'UNVERIFIED';
+      const ok = state === 'PROTECTED' ? true : state === 'UNVERIFIED' ? null : false;
+      const reason = fresh ? p.reason : `Last known: ${p.state}. The gateway has not confirmed this since ${fmt(prot.taken_at)}.`;
+      return `<tr><td><strong>${_escX(p.symbol)}</strong></td><td style="color:${col(ok)};font-weight:600">${_escX(state)}</td>
+        <td style="text-align:right">${_escX(p.journalQty)}</td><td style="text-align:right">${_escX(p.brokerQty)}</td><td style="text-align:right">${_escX(p.gttQty || '—')}</td>
+        <td style="text-align:right">${_escX(p.journalStop ?? '—')}</td><td style="text-align:right">${_escX(p.gttTrigger ?? '—')}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${_escX(reason)}</td>
+        <td>${canPropose && fresh && state !== 'PROTECTED' && /^[A-Za-z0-9&_-]+$/.test(p.symbol) ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._proposeStop('${_escX(p.symbol)}')">Propose stop GTT</button>` : ''}</td></tr>`;
+    }).join('');
+    return `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>State</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th style="text-align:right">GTT qty</th><th style="text-align:right">Journal stop</th><th style="text-align:right">GTT trigger</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <p style="color:var(--text-muted);font-size:12px">${canPropose ? 'In Confirm mode you can propose a stop GTT for a position that is not PROTECTED. Nothing is sent until you approve it.' : 'This shows what the GTTs at Zerodha currently cover. Switch the mode to Confirm to propose a stop GTT from here.'}</p>`;
+  }
+
+  const _INTENT_ACTION = { ENTRY: 'Entry buy', ADD: 'Add buy', STOP_ENSURE: 'Stop GTT', TRAIL_TRACK: 'Trail (tracked)', EXIT_PARTIAL: 'Partial exit', EXIT_ALL: 'Exit all', EMERGENCY_EXIT: 'Emergency exit', GTT_STOP_FILL: 'Stop GTT filled' };
+  const _INTENT_ROUTE = { LIMIT_IOC: 'Limit IOC', GTT: 'GTT', MARKET: 'Market', NONE: '—' };
+  function _intentTable(intents, fmt, col) {
+    if (!intents.length) return `<div class="no-data">No intended orders yet. In Shadow or Confirm mode one is recorded each time a real alert is raised.</div>`;
+    const price = i => i.route === 'GTT' ? `trigger ${i.trigger_price} / limit ${i.gtt_limit_price}` : i.route === 'LIMIT_IOC' ? `limit ${i.limit_price}` : i.route === 'MARKET' ? 'market, auto protection' : (i.stop_price ? `trail ${i.stop_price}` : '—');
+    const verdict = i => ({
+      shadow_ok: ['Would be sent', true], shadow_blocked: ['Blocked', false], blocked: ['Blocked', false],
+      proposed: ['Waiting for approval', null], approved: ['Approved — sending', null], sending: ['Sending', null], unknown: ['Checking at broker', null],
+      done: ['Done at broker', true], failed: ['Failed', false], rejected: ['Rejected by you', null], expired: ['Expired', null],
+      shadow_noop: ['Already in place', null], shadow_tracked: ['No broker order', null] }[i.status] || [i.status, null]);
+    const rows = intents.map(i => {
+      const [text, ok] = verdict(i);
+      const booked = { booked_final: 'Booked in journal (final exit)', booked_partial: 'Booked in journal (partial exit)', trade_closed: 'Not booked: trade already closed in the journal',
+        qty_exceeds_open: 'Not booked: more than the journal shows open — record it manually', no_trade: 'Not booked: no journal trade linked — record it manually' }[i.booking] || '';
+      const sold = i.result && Number(i.result.filled) > 0 ? `Sold ${i.result.filled} @ ${i.result.averagePrice}. ` : '';
+      const why0 = (i.block_reasons || []).map(r => _escX(r)).join('<br>') || _escX((i.result && (i.result.reason || i.result.note)) || (i.broker_ref && `GTT ${i.broker_ref}`) || (i.detail && (i.detail.note || i.detail.before || i.detail.after || i.detail.afterFill)) || '');
+      const why = [_escX(sold), why0, booked ? `<strong>${_escX(booked)}</strong>` : ''].filter(Boolean).join(' ');
+      return `<tr><td>${fmt(i.created_at)}</td><td><strong>${_escX(i.symbol)}</strong></td><td>${_escX(_INTENT_ACTION[i.action] || i.action)} <span style="color:var(--text-muted)">${_escX(i.rule_id)}</span></td>
+        <td style="text-align:right">${_escX(i.qty ?? '—')}</td><td>${_escX(_INTENT_ROUTE[i.route] || i.route)}</td><td>${_escX(price(i))}</td>
+        <td style="color:${col(ok)};white-space:nowrap">${text}</td><td style="font-size:12px;color:var(--text-muted)">${why}</td></tr>`;
+    }).join('');
+    return `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Time</th><th>Symbol</th><th>Order</th><th style="text-align:right">Qty</th><th>Route</th><th>Price</th><th>Result</th><th>Reason / note</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+
   function _gatewayUrlFromInput() {
     const v = (document.getElementById('ex-gw-url')?.value || '').trim().replace(/\/+$/, '');
     if (v && !/^https?:\/\/[a-z0-9.\-]+(:\d{2,5})?$/i.test(v)) { app.toast('Enter the address like http://192.168.1.20:8787', 'error'); return null; }
@@ -1350,10 +1454,15 @@ const settingsModule = (() => {
     const url = _gatewayUrlFromInput();
     if (url === null) return;
     const settings = await db.getSettings();
-    settings.execution = { ...(settings.execution || {}), gatewayUrl: url };
+    const picked = document.getElementById('ex-mode')?.value;
+    const mode = ['shadow', 'confirm'].includes(picked) ? picked : 'alert';
+    const maxVal = Math.max(0, Number(document.getElementById('ex-maxval')?.value) || 0);
+    const maxOrd = Math.min(200, Math.max(1, Math.round(Number(document.getElementById('ex-maxord')?.value) || 30)));
+    settings.execution = { ...(settings.execution || {}), gatewayUrl: url, mode, killSwitch: !!document.getElementById('ex-kill')?.checked, confirmExits: !!document.getElementById('ex-confirm-exits')?.checked, maxOrderValue: maxVal, maxOrdersPerDay: maxOrd };
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Gateway address saved', 'success');
+    app.toast({ shadow: 'Saved — shadow mode is on (nothing is sent to the broker)', confirm: 'Saved — confirm mode: stop GTTs wait for your approval' }[mode] || 'Saved — alert only', 'success');
+    await _showPage('execution');
   }
 
   function _openGateway() {
@@ -1373,5 +1482,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveExecution, _openGateway, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _openGateway, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();
