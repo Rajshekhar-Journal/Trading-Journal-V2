@@ -1318,66 +1318,64 @@ const settingsModule = (() => {
     const ipText = { match: 'Matches', mismatch: 'Does not match', not_configured: 'Not set yet', lookup_failed: 'Could not check', not_checked: 'Not checked yet', expected_ip_invalid: 'Invalid' }[st?.ip_status] || '—';
     const col = ok => ok === true ? 'var(--success, #22c55e)' : ok === false ? 'var(--danger, #ef4444)' : 'var(--warning, #f59e0b)';
     const tile = (label, value, ok) => `<div class="app-info-item"><div class="app-info-label">${label}</div><div class="app-info-value" style="color:${col(ok)}">${_escX(value)}</div></div>`;
-    const high = drift.filter(d => d.severity === 'high').length;
+    const others = drift.filter(d => d.kind !== 'NO_STOP_GTT');   // "no stop GTT" is already shown, per position, in the table above it
+    const high = others.filter(d => d.severity === 'high').length;
+    const modeText = xp.mode === 'confirm' ? 'Confirm — only orders you approve' : xp.mode === 'shadow' ? 'Shadow — logged, not sent' : 'Alert only';
+    const unprotected = Array.isArray(prot?.data) ? prot.data.filter(x => x.state !== 'PROTECTED').length : 0;
+    const section = (title, inner) => '<div class="form-section-title" style="margin-top:22px">' + title + '</div>' + inner;
+    const fold = (title, inner, open) => '<details style="margin-top:22px"' + (open ? ' open' : '') + '><summary style="cursor:pointer;font-weight:600;padding:6px 0">' + title + '</summary><div style="margin-top:10px">' + inner + '</div></details>';
 
     const tiles = !st
-      ? `<div class="no-data" style="margin-bottom:16px">The Order Gateway has not reported yet. Start it on your home machine and link the journal account on its page (Getting Started → Part F).</div>`
-      : `<div class="app-info-grid">
-          ${tile('Gateway', online ? 'Online' : `Offline since ${fmt(st.heartbeat_at)}`, online)}
-          ${tile('Kite login today', tokenOk ? `Valid until ${fmt(st.token_valid_until)}` : 'Login required', tokenOk ? true : null)}
-          ${tile('Static IP', online ? ipText : '—', st.ip_status === 'match' ? true : st.ip_status === 'mismatch' ? false : null)}
-          ${tile('Last broker sync', fmt(st.last_sync_at), online && st.last_sync_at ? true : null)}
-          ${tile('Open differences', st.last_sync_at ? `${drift.length}${high ? ` (${high} need attention)` : ''}` : '—', st.last_sync_at ? high === 0 : null)}
-          ${tile('Order sending', xp.mode === 'confirm' ? 'Confirm — only orders you approve' : xp.mode === 'shadow' ? 'Off — Shadow (logged, not sent)' : 'Off — Alert only', xp.mode === 'confirm' ? true : null)}
-        </div>`;
+      ? '<div class="no-data" style="margin-bottom:16px">The Order Gateway has not reported yet. Start it on your home machine and link the journal account on its page (Getting Started → Part F).</div>'
+      : '<div class="app-info-grid">'
+        + tile('Gateway', online ? 'Online' : 'Offline since ' + fmt(st.heartbeat_at), online)
+        + tile('Kite login', tokenOk ? 'Valid until ' + fmt(st.token_valid_until) : 'Login required', tokenOk ? true : null)
+        + tile('Last broker sync', fmt(st.last_sync_at), online && st.last_sync_at ? true : null)
+        + tile('Orders', modeText, xp.mode === 'confirm' ? true : null)
+        + '</div>'
+        + (st.ip_status !== 'match' && online
+          ? '<p style="margin:10px 0 0;font-size:13px;color:var(--text-muted)">Static IP: <strong style="color:' + col(st.ip_status === 'mismatch' ? false : null) + '">' + _escX(ipText) + '</strong> — the gateway sends no order until it matches the IP registered with Zerodha.</p>'
+          : '');
 
-    const rows = drift.map(d => `<tr>
-        <td><strong>${_escX(d.symbol)}</strong></td>
-        <td>${_escX(_DRIFT_TEXT[d.kind] || d.kind)}</td>
-        <td style="text-align:right">${_escX(d.journal_qty ?? '—')}</td>
-        <td style="text-align:right">${_escX(d.broker_qty ?? '—')}</td>
-        <td><span style="color:${d.severity === 'high' ? col(false) : 'var(--text-muted)'}">${d.severity === 'high' ? 'Needs attention' : 'For information'}</span></td>
-        <td>${fmt(d.first_seen_at)}</td></tr>`).join('');
+    const alertLine = !st ? '' : (unprotected
+      ? '<div style="margin-top:14px;padding:10px 14px;border-radius:8px;border:1px solid var(--danger, #ef4444);color:var(--danger, #ef4444);font-size:13px"><strong>' + unprotected + ' open position' + (unprotected > 1 ? 's are' : ' is') + ' not fully covered by a stop GTT at Zerodha.</strong> See the table below.</div>'
+      : '');
 
-    return `<div class="settings-page">
-      <div class="settings-section-header">Auto Trade – Broker Link</div>
-      <p style="color:var(--text-muted);margin:0 0 14px">Shows what the Order Gateway on your home machine reads from Zerodha, and lets you choose how far the journal may act on its alerts. An order reaches Zerodha only in Confirm mode, only after you approve it here, and only when the matching switch is on at the gateway. API key, API secret, static IP and the daily Kite login are entered on the gateway's own page — never here. Setup steps: <a href="#" onclick="settingsModule._goPage('start');return false;">Getting Started → Part F</a>.</p>
-      ${tiles}
-      ${_approvalTable(intents, fmt)}
-      <div class="form-section-title">Position protection</div>
-      ${_protectionTable(prot, online && tokenOk, fmt, col, xp.mode === 'confirm')}
-      <div class="form-section-title">Journal vs broker (reconcile report)</div>
-      ${drift.length ? `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Difference</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th>Level</th><th>First seen</th></tr></thead><tbody>${rows}</tbody></table></div>
-        <p style="color:var(--text-muted);font-size:12px">Differences are reported only. Nothing in the journal or at the broker is changed automatically.</p>`
-        : `<div class="no-data">${st?.last_sync_at ? 'No differences. Journal and broker agree.' : 'No reconcile report yet.'}</div>`}
-      <div class="form-section-title" style="margin-top:20px">Automation mode</div>
-      <p style="color:var(--text-muted);margin:0 0 10px;font-size:13px"><strong>Alert only</strong>: alerts as before; you place every order. <strong>Shadow</strong>: also writes down the order the engine <em>would</em> send for each real alert, with every safety check; nothing is sent. <strong>Confirm</strong>: stop GTTs (and exits, if ticked) wait here for your approval, then the gateway sends them; buy orders are not sent in any mode yet.</p>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Mode</label>
-          <select class="form-select" id="ex-mode">
-            <option value="alert" ${!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : ''}>Alert only — you place every order yourself</option>
-            <option value="shadow" ${xp.mode === 'shadow' ? 'selected' : ''}>Shadow — log intended orders, send nothing</option>
-            <option value="confirm" ${xp.mode === 'confirm' ? 'selected' : ''}>Confirm — you approve each stop GTT (and exits, if ticked below); entries stay shadow</option>
-            <option disabled>Auto — not built yet</option>
-          </select></div>
-        <div class="form-group"><label class="form-label">Kill switch</label>
-          <label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-kill" ${xp.killSwitch ? 'checked' : ''}> Block all new entries and adds</label></div>
-        <div class="form-group"><label class="form-label">Exits in Confirm mode</label>
-          <label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-confirm-exits" ${xp.confirmExits ? 'checked' : ''}> Also ask me to approve partial and full exits</label></div>
-        <div class="form-group"><label class="form-label">Max value per order (₹, 0 = not set)</label>
-          <input class="form-input" type="number" id="ex-maxval" min="0" step="1000" value="${_escX(xp.maxOrderValue ?? 0)}"></div>
-        <div class="form-group"><label class="form-label">Max orders per day</label>
-          <input class="form-input" type="number" id="ex-maxord" min="1" max="200" value="${_escX(xp.maxOrdersPerDay ?? 30)}"></div>
-      </div>
+    const rows = others.map(d => '<tr>'
+        + '<td><strong>' + _escX(d.symbol) + '</strong></td><td>' + _escX(_DRIFT_TEXT[d.kind] || d.kind) + '</td>'
+        + '<td style="text-align:right">' + _escX(d.journal_qty ?? '—') + '</td><td style="text-align:right">' + _escX(d.broker_qty ?? '—') + '</td>'
+        + '<td><span style="color:' + (d.severity === 'high' ? col(false) : 'var(--text-muted)') + '">' + (d.severity === 'high' ? 'Needs attention' : 'For information') + '</span></td></tr>').join('');
+    const diffBlock = others.length
+      ? '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Difference</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th>Level</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+        + '<p style="color:var(--text-muted);font-size:12px">Reported only. Nothing in the journal or at the broker is changed automatically.</p>'
+      : '<p style="color:var(--text-muted);font-size:13px;margin:0">' + (st?.last_sync_at ? 'Journal and broker agree on every position.' : 'No report yet.') + '</p>';
 
-      <div class="form-section-title" style="margin-top:20px">Intended orders (latest 50)</div>
-      ${_intentTable(intents, fmt, col)}
+    const modeHelp = '<p style="color:var(--text-muted);margin:0 0 12px;font-size:13px"><strong>Alert only</strong> — alerts as before; you place every order.<br><strong>Shadow</strong> — also logs the order the engine would send, with every safety check; nothing is sent.<br><strong>Confirm</strong> — stop GTTs (and exits, if ticked) wait here for your approval, then the gateway sends them. Buy orders are not sent in any mode yet.</p>';
+    const settingsForm = modeHelp + '<div class="form-grid">'
+      + '<div class="form-group"><label class="form-label">Mode</label><select class="form-select" id="ex-mode">'
+      + '<option value="alert" ' + (!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : '') + '>Alert only — you place every order yourself</option>'
+      + '<option value="shadow" ' + (xp.mode === 'shadow' ? 'selected' : '') + '>Shadow — log intended orders, send nothing</option>'
+      + '<option value="confirm" ' + (xp.mode === 'confirm' ? 'selected' : '') + '>Confirm — you approve each stop GTT (and exits, if ticked below)</option>'
+      + '<option disabled>Auto — not built yet</option></select></div>'
+      + '<div class="form-group"><label class="form-label">Kill switch</label><label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-kill" ' + (xp.killSwitch ? 'checked' : '') + '> Block all new entries and adds</label></div>'
+      + '<div class="form-group"><label class="form-label">Exits in Confirm mode</label><label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-confirm-exits" ' + (xp.confirmExits ? 'checked' : '') + '> Also ask me to approve partial and full exits</label></div>'
+      + '<div class="form-group"><label class="form-label">Max value per order (₹, 0 = not set)</label><input class="form-input" type="number" id="ex-maxval" min="0" step="1000" value="' + _escX(xp.maxOrderValue ?? 0) + '"></div>'
+      + '<div class="form-group"><label class="form-label">Max orders per day</label><input class="form-input" type="number" id="ex-maxord" min="1" max="200" value="' + _escX(xp.maxOrdersPerDay ?? 30) + '"></div>'
+      + '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="settingsModule._saveExecution()">Save</button></div>';
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary btn-sm" onclick="settingsModule._saveExecution()">Save</button>
-        <button class="btn btn-secondary btn-sm" onclick="settingsModule._goPage('execution')">Refresh</button>
-      </div>
-    </div>`;
+    const waiting = intents.filter(i => i.mode === 'confirm' && i.status === 'proposed').length;
+    const logTitle = 'Intended orders — latest ' + intents.length + (waiting ? ' (' + waiting + ' waiting for approval)' : '');
+
+    return '<div class="settings-page">'
+      + '<div class="settings-section-header">Auto Trade – Broker Link</div>'
+      + '<p style="color:var(--text-muted);margin:0 0 14px;font-size:13px">What the Order Gateway on your home machine reads from Zerodha, and how far the journal may act on its alerts. Keys, secret, static IP and the daily Kite login are entered on the gateway\'s own page, never here. Setup: <a href="#" onclick="settingsModule._goPage(\'start\');return false;">Getting Started → Part F</a>.</p>'
+      + tiles + alertLine
+      + _approvalTable(intents, fmt)
+      + section('Positions and stop protection', _protectionTable(prot, online && tokenOk, fmt, col, xp.mode === 'confirm'))
+      + (others.length ? section('Journal vs broker — differences' + (high ? ' (' + high + ' need attention)' : ''), diffBlock) : '<p style="margin:14px 0 0">' + diffBlock.replace('margin:0', 'margin:0') + '</p>')
+      + fold('Automation settings — mode: ' + _escX(modeText.split(' — ')[0]), settingsForm, false)
+      + fold(logTitle, _intentTable(intents, fmt, col), !!waiting)
+      + '</div>';
   }
 
   /** Stop-GTT cover of every open position. A stale report (gateway offline, no login, > 5 min old) shows UNVERIFIED. */
@@ -1416,21 +1414,22 @@ const settingsModule = (() => {
 
   function _protectionTable(prot, live, fmt, col, canPropose) {
     _protCache = prot;
-    if (!prot || !Array.isArray(prot.data)) return `<div class="no-data">No protection report yet. It appears after the gateway's next sync (needs migration 010).</div>`;
-    if (!prot.data.length) return `<div class="no-data">No open positions in the journal.</div>`;
+    if (!prot || !Array.isArray(prot.data)) return '<div class="no-data">No protection report yet. It appears after the gateway\'s next sync.</div>';
+    if (!prot.data.length) return '<div class="no-data">No open positions in the journal.</div>';
     const fresh = live && (Date.now() - new Date(prot.taken_at).getTime()) < 300000;
     const rows = prot.data.map(p => {
       const state = fresh ? p.state : 'UNVERIFIED';
       const ok = state === 'PROTECTED' ? true : state === 'UNVERIFIED' ? null : false;
-      const reason = fresh ? p.reason : `Last known: ${p.state}. The gateway has not confirmed this since ${fmt(prot.taken_at)}.`;
-      return `<tr><td><strong>${_escX(p.symbol)}</strong></td><td style="color:${col(ok)};font-weight:600">${_escX(state)}</td>
-        <td style="text-align:right">${_escX(p.journalQty)}</td><td style="text-align:right">${_escX(p.brokerQty)}</td><td style="text-align:right">${_escX(p.gttQty || '—')}</td>
-        <td style="text-align:right">${_escX(p.journalStop ?? '—')}</td><td style="text-align:right">${_escX(p.gttTrigger ?? '—')}</td>
-        <td style="font-size:12px;color:var(--text-muted)">${_escX(reason)}</td>
-        <td>${canPropose && fresh && state !== 'PROTECTED' && /^[A-Za-z0-9&_-]+$/.test(p.symbol) ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._proposeStop('${_escX(p.symbol)}')">Propose stop GTT</button>` : ''}</td></tr>`;
+      const qtyText = p.journalQty === p.brokerQty ? String(p.journalQty) : p.journalQty + ' / ' + p.brokerQty + ' broker';
+      const stopText = p.gttTrigger != null ? String(p.gttTrigger) + (p.journalStop != null && Math.abs(p.gttTrigger - p.journalStop) > 0.05 ? ' (journal ' + p.journalStop + ')' : '') : (p.journalStop != null ? 'none (journal ' + p.journalStop + ')' : '—');
+      const note = !fresh ? 'Last known: ' + p.state + ', not confirmed since ' + fmt(prot.taken_at) + '.' : (state === 'PROTECTED' ? '' : p.reason);
+      return '<tr><td><strong>' + _escX(p.symbol) + '</strong></td><td style="color:' + col(ok) + ';font-weight:600">' + _escX(state) + '</td>'
+        + '<td style="text-align:right">' + _escX(qtyText) + '</td><td style="text-align:right">' + _escX(p.gttQty || '—') + '</td><td style="text-align:right">' + _escX(stopText) + '</td>'
+        + '<td style="font-size:12px;color:var(--text-muted)">' + _escX(note) + '</td>'
+        + '<td>' + (canPropose && fresh && state !== 'PROTECTED' && /^[A-Za-z0-9&_-]+$/.test(p.symbol) ? '<button class="btn btn-secondary btn-sm" onclick="settingsModule._proposeStop(\'' + _escX(p.symbol) + '\')">Propose stop GTT</button>' : '') + '</td></tr>';
     }).join('');
-    return `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>State</th><th style="text-align:right">Journal qty</th><th style="text-align:right">Broker qty</th><th style="text-align:right">GTT qty</th><th style="text-align:right">Journal stop</th><th style="text-align:right">GTT trigger</th><th>Note</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
-      <p style="color:var(--text-muted);font-size:12px">${canPropose ? 'In Confirm mode you can propose a stop GTT for a position that is not PROTECTED. Nothing is sent until you approve it.' : 'This shows what the GTTs at Zerodha currently cover. Switch the mode to Confirm to propose a stop GTT from here.'}</p>`;
+    return '<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Symbol</th><th>Stop protection</th><th style="text-align:right">Qty</th><th style="text-align:right">GTT qty</th><th style="text-align:right">GTT trigger</th><th>Note</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<p style="color:var(--text-muted);font-size:12px">' + (canPropose ? 'In Confirm mode you can propose a stop GTT for a position that is not PROTECTED. Nothing is sent until you approve it.' : 'Shows what the GTTs at Zerodha cover. In Confirm mode you can propose a stop GTT from here.') + '</p>';
   }
 
   const _INTENT_ACTION = { ENTRY: 'Entry buy', ADD: 'Add buy', STOP_ENSURE: 'Stop GTT', TRAIL_TRACK: 'Trail (tracked)', EXIT_PARTIAL: 'Partial exit', EXIT_ALL: 'Exit all', EMERGENCY_EXIT: 'Emergency exit', GTT_STOP_FILL: 'Stop GTT filled' };
