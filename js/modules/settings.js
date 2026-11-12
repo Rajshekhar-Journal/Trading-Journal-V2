@@ -766,7 +766,7 @@ const settingsModule = (() => {
     const part = (title, sub) => `<div class="settings-section-header" style="margin-top:26px">${title}</div>${sub ? `<p class="gs-sub">${sub}</p>` : ''}`;
     return `<div class="settings-page gs">
       <div class="settings-section-header">🚀 Getting Started — account setup guide</div>
-      <div class="alert-banner info" style="margin-bottom:6px">ℹ Follow parts A → C once, in order (about 20 minutes). Part D is the daily routine; Part E the weekly one. Every number in the journal — equity, RPT, position size, heat — flows from the capital and risk settings in Part B, so do those first.</div>
+      <div class="alert-banner info" style="margin-bottom:6px">ℹ Follow parts A → C once, in order (about 20 minutes). Part D is the daily routine; Part E the weekly one; Part F (optional) links your Zerodha account. Every number in the journal — equity, RPT, position size, heat — flows from the capital and risk settings in Part B, so do those first.</div>
 
       ${part('A · Get access', 'Accounts are created by the administrator; there is no self sign-up page in this version.')}
       ${step(1, 'Create the account (administrator)', `<p>Supabase dashboard → <strong>Authentication → Users → Add user</strong>. Enter the trader's email and a temporary password and tick <em>Auto Confirm User</em>. Send the site link and the password to the trader.</p>`)}
@@ -809,6 +809,25 @@ const settingsModule = (() => {
       ${step(18, 'Review closed trades', `<p>${nav('trades', 'Trades')}: open each closed trade, add notes, rating and <em>rule followed</em>, and set review status to <em>Reviewed</em>.</p>`)}
       ${step(19, 'Compare real with paper', `<p>${nav('paper', 'Paper Trades')} shows what the rules alone would have done. In ${nav('analytics', 'Analytics')} switch between <strong>Real</strong> and <strong>Paper</strong>: if paper consistently beats real, the gap is execution or discipline; if real beats paper, your discretion adds value.</p>`)}
       ${step(20, 'Capital and backup', `<p>Record deposits and withdrawals in Capital as they happen. Once a month: ${go('data', 'Settings → Data Management')} → <strong>Export</strong> a backup file.</p>`)}
+
+      ${part('F · Auto Trade — link your Zerodha account (optional)', 'Only if you want the journal to read your Zerodha account and, later, send orders you approve. A small program called the Order Gateway runs on one always-on computer at home; it is the only thing that talks to Zerodha. Your API secret and Kite login stay on that computer and are never stored in the journal.')}
+      ${step(21, 'Start the Order Gateway', `<p>On the home computer, in the project folder: first time only <code>cd og</code> → <code>npm ci --ignore-scripts</code>; then <code>npm run og</code>. Open the page it prints <strong>on that same computer</strong> and set an admin password (asked once).</p>`)}
+      ${step(22, 'Link the journal account', `<p>On the gateway page → <strong>Journal account</strong>: the Supabase project URL, the anon key (both are in <code>js/config.js</code>), and your journal email and password. Within a minute ${go('execution', 'Settings → Auto Trade – Broker Link')} shows <strong>Gateway: Online</strong>.</p>`)}
+      ${step(23, 'Create your Kite Connect app', `<p>Sign up at <strong>developers.kite.trade</strong> and create an app: type <em>Personal</em> (free: holdings, positions, orders, GTTs; no live prices) or <em>Connect</em> (paid: adds live prices and history). Enter your own Zerodha client ID, and as <strong>Redirect URL</strong> the one shown on the gateway page. Leave Postback URL empty. Copy the API key and API secret into the gateway page → <strong>Kite API details</strong> — nowhere else.</p>`)}
+      ${step(24, 'Daily Kite login', `<p>Gateway page → <strong>Log in to Kite</strong> → Zerodha password and 2FA code, without delay (the login page expires in a few minutes). The login lasts until 06:00 next morning, so repeat it each trading day before 09:00. From 08:45 the journal sends a <em>Kite login required</em> alert if it is missing.</p>`)}
+      ${step(25, 'Check what it read', `<p>${go('execution', 'Auto Trade – Broker Link')}: <strong>Journal vs broker</strong> lists every open position that differs between the journal and Zerodha (symbol or quantity) — correct the journal until it says they agree. <strong>Position protection</strong> shows, per position, whether a stop GTT at Zerodha covers the full quantity: PROTECTED, PARTIAL, UNPROTECTED or UNVERIFIED.</p>`)}
+      ${step(26, 'Static IP — needed before any order is sent', `<p>Reading the account works from any connection. Sending orders needs a static IP from your internet provider: register it in the Kite developer console (Zerodha allows one change a week) and enter the same address on the gateway page. If the gateway's address ever differs, it switches all sending off by itself.</p>`)}
+      ${step(27, 'Choose the mode', `<p>${go('execution', 'Auto Trade – Broker Link')} → <strong>Automation mode</strong>. Move up one step at a time, and only after the step before has behaved correctly for some days.</p>
+        <table class="data-table" style="font-size:12px;margin:6px 0">
+          <thead><tr><th>Mode</th><th>What the journal does</th><th>What you do</th><th>Use it when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Alert only</strong> (default)</td><td>Sends alerts. Reads Zerodha for the two reports. Sends nothing.</td><td>Place every order yourself and record it in Positions.</td><td>Always safe; the starting point.</td></tr>
+            <tr><td><strong>Shadow</strong></td><td>For each real alert, also writes down the exact order it <em>would</em> send and the result of every safety check (table <em>Intended orders</em>). Sends nothing.</td><td>Same as Alert only. Compare the intended orders with what you actually did.</td><td>To check the engine's orders against your own for a week or two.</td></tr>
+            <tr><td><strong>Confirm</strong></td><td>Proposes stop-loss GTTs — and partial / full exits if you tick that box. Each waits under <em>Waiting for your approval</em>; an approval is valid for 5 minutes and is sent once. Completed sells are booked into the trade automatically.</td><td>Approve or reject each proposal. Still place buy orders yourself.</td><td>After Shadow looks right, the static IP is set, and the matching switch is on at the gateway.</td></tr>
+            <tr><td><strong>Auto</strong></td><td>Not built yet.</td><td>—</td><td>—</td></tr>
+          </tbody></table>
+        <p>Switches on the <strong>gateway page</strong> (all off at the start) decide what may actually leave for Zerodha: <em>Stop-GTT placement</em>, <em>Exits (market sell)</em>, and <em>Emergency Exit</em> — off / ask me / automatic — which sells at market when a triggered stop GTT is left unfilled or rejected. The <strong>Kill switch</strong> on the journal page blocks all new entries and adds at once.</p>`)}
+      ${step(28, 'Rules that always apply', `<ul><li>The journal's rule engine decides; Zerodha only holds one hard-stop GTT per position and receives the orders.</li><li>A stop is never lowered automatically, and a sell is never larger than the quantity Zerodha shows.</li><li>If any position is not PROTECTED, new entries and adds are blocked for every symbol.</li><li>Gateway offline or Kite login missing → nothing is sent, and you get an alert.</li></ul>`)}
 
       ${part('Tips for getting the most out of the journal')}
       <ul class="gs-tips">
@@ -1273,7 +1292,7 @@ const settingsModule = (() => {
     });
   }
 
-  // ── PAGE: Auto Trade – Broker Link (Phase 1, read only) ───────────────────
+  // ── PAGE: Auto Trade – Broker Link ───────────────────
   // Shows what the Order Gateway reports. No broker secret is ever entered or shown here:
   // API key, API secret, static IP and the daily Kite login live on the gateway's own page.
   const _DRIFT_TEXT = {
@@ -1302,14 +1321,14 @@ const settingsModule = (() => {
     const high = drift.filter(d => d.severity === 'high').length;
 
     const tiles = !st
-      ? `<div class="no-data" style="margin-bottom:16px">The Order Gateway has not reported yet. Run migration 009, start the gateway on your home machine and link the journal account there.</div>`
+      ? `<div class="no-data" style="margin-bottom:16px">The Order Gateway has not reported yet. Start it on your home machine and link the journal account on its page (Getting Started → Part F).</div>`
       : `<div class="app-info-grid">
           ${tile('Gateway', online ? 'Online' : `Offline since ${fmt(st.heartbeat_at)}`, online)}
           ${tile('Kite login today', tokenOk ? `Valid until ${fmt(st.token_valid_until)}` : 'Login required', tokenOk ? true : null)}
           ${tile('Static IP', online ? ipText : '—', st.ip_status === 'match' ? true : st.ip_status === 'mismatch' ? false : null)}
           ${tile('Last broker sync', fmt(st.last_sync_at), online && st.last_sync_at ? true : null)}
           ${tile('Open differences', st.last_sync_at ? `${drift.length}${high ? ` (${high} need attention)` : ''}` : '—', st.last_sync_at ? high === 0 : null)}
-          ${tile('Order sending', 'Off — Phase 1 is read only', null)}
+          ${tile('Order sending', xp.mode === 'confirm' ? 'Confirm — only orders you approve' : xp.mode === 'shadow' ? 'Off — Shadow (logged, not sent)' : 'Off — Alert only', xp.mode === 'confirm' ? true : null)}
         </div>`;
 
     const rows = drift.map(d => `<tr>
@@ -1322,7 +1341,7 @@ const settingsModule = (() => {
 
     return `<div class="settings-page">
       <div class="settings-section-header">Auto Trade – Broker Link</div>
-      <p style="color:var(--text-muted);margin:0 0 14px">Phase 1 links the journal to Zerodha in read-only form. The journal cannot place orders yet. API key, API secret, static IP and the daily Kite login are entered on the Order Gateway page on your home machine — never here.</p>
+      <p style="color:var(--text-muted);margin:0 0 14px">Shows what the Order Gateway on your home machine reads from Zerodha, and lets you choose how far the journal may act on its alerts. An order reaches Zerodha only in Confirm mode, only after you approve it here, and only when the matching switch is on at the gateway. API key, API secret, static IP and the daily Kite login are entered on the gateway's own page — never here. Setup steps: <a href="#" onclick="settingsModule._goPage('start');return false;">Getting Started → Part F</a>.</p>
       ${tiles}
       ${_approvalTable(intents, fmt)}
       <div class="form-section-title">Position protection</div>
@@ -1332,11 +1351,11 @@ const settingsModule = (() => {
         <p style="color:var(--text-muted);font-size:12px">Differences are reported only. Nothing in the journal or at the broker is changed automatically.</p>`
         : `<div class="no-data">${st?.last_sync_at ? 'No differences. Journal and broker agree.' : 'No reconcile report yet.'}</div>`}
       <div class="form-section-title" style="margin-top:20px">Automation mode</div>
-      <p style="color:var(--text-muted);margin:0 0 10px;font-size:13px">Shadow mode writes down the order the engine <em>would</em> send for each real alert, with the result of every safety check. Nothing is sent to Zerodha. Alerts and trades work exactly as before.</p>
+      <p style="color:var(--text-muted);margin:0 0 10px;font-size:13px"><strong>Alert only</strong>: alerts as before; you place every order. <strong>Shadow</strong>: also writes down the order the engine <em>would</em> send for each real alert, with every safety check; nothing is sent. <strong>Confirm</strong>: stop GTTs (and exits, if ticked) wait here for your approval, then the gateway sends them; buy orders are not sent in any mode yet.</p>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Mode</label>
           <select class="form-select" id="ex-mode">
-            <option value="alert" ${!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : ''}>Alert only (today's behaviour)</option>
+            <option value="alert" ${!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : ''}>Alert only — you place every order yourself</option>
             <option value="shadow" ${xp.mode === 'shadow' ? 'selected' : ''}>Shadow — log intended orders, send nothing</option>
             <option value="confirm" ${xp.mode === 'confirm' ? 'selected' : ''}>Confirm — you approve each stop GTT (and exits, if ticked below); entries stay shadow</option>
             <option disabled>Auto — not built yet</option>
@@ -1354,14 +1373,8 @@ const settingsModule = (() => {
       <div class="form-section-title" style="margin-top:20px">Intended orders (latest 50)</div>
       ${_intentTable(intents, fmt, col)}
 
-      <div class="form-section-title" style="margin-top:20px">Order Gateway address</div>
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Address of the gateway page (home network or VPN)</label>
-          <input class="form-input" id="ex-gw-url" placeholder="http://192.168.1.20:8787" value="${_escX(ex.gatewayUrl || '')}"></div>
-      </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary btn-sm" onclick="settingsModule._saveExecution()">Save</button>
-        <button class="btn btn-secondary btn-sm" onclick="settingsModule._openGateway()">Open gateway page</button>
         <button class="btn btn-secondary btn-sm" onclick="settingsModule._goPage('execution')">Refresh</button>
       </div>
     </div>`;
@@ -1444,32 +1457,18 @@ const settingsModule = (() => {
     return `<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Time</th><th>Symbol</th><th>Order</th><th style="text-align:right">Qty</th><th>Route</th><th>Price</th><th>Result</th><th>Reason / note</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }
 
-  function _gatewayUrlFromInput() {
-    const v = (document.getElementById('ex-gw-url')?.value || '').trim().replace(/\/+$/, '');
-    if (v && !/^https?:\/\/[a-z0-9.\-]+(:\d{2,5})?$/i.test(v)) { app.toast('Enter the address like http://192.168.1.20:8787', 'error'); return null; }
-    return v;
-  }
-
   async function _saveExecution() {
-    const url = _gatewayUrlFromInput();
-    if (url === null) return;
     const settings = await db.getSettings();
     const picked = document.getElementById('ex-mode')?.value;
     const mode = ['shadow', 'confirm'].includes(picked) ? picked : 'alert';
     const maxVal = Math.max(0, Number(document.getElementById('ex-maxval')?.value) || 0);
     const maxOrd = Math.min(200, Math.max(1, Math.round(Number(document.getElementById('ex-maxord')?.value) || 30)));
-    settings.execution = { ...(settings.execution || {}), gatewayUrl: url, mode, killSwitch: !!document.getElementById('ex-kill')?.checked, confirmExits: !!document.getElementById('ex-confirm-exits')?.checked, maxOrderValue: maxVal, maxOrdersPerDay: maxOrd };
+    settings.execution = { ...(settings.execution || {}), mode, killSwitch: !!document.getElementById('ex-kill')?.checked, confirmExits: !!document.getElementById('ex-confirm-exits')?.checked, maxOrderValue: maxVal, maxOrdersPerDay: maxOrd };
+    delete settings.execution.gatewayUrl;   // the gateway's address is not kept in the journal
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast({ shadow: 'Saved — shadow mode is on (nothing is sent to the broker)', confirm: 'Saved — confirm mode: stop GTTs wait for your approval' }[mode] || 'Saved — alert only', 'success');
     await _showPage('execution');
-  }
-
-  function _openGateway() {
-    const url = _gatewayUrlFromInput();
-    if (url === null) return;
-    if (!url) { app.toast('Enter the gateway address first', 'info'); return; }
-    window.open(url, '_blank', 'noopener');
   }
 
   async function _resetPage() {
@@ -1482,5 +1481,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveExecution, _openGateway, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();
