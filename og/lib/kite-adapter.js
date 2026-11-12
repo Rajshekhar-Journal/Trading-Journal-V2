@@ -1,107 +1,129 @@
 /**
- * og/lib/kite-adapter.js — Zerodha Kite Connect adapter.
+ * og/lib/kite-adapter.js — the ONLY door between the gateway and Zerodha.
  *
- * By default it can only log in and read. With `allowGttWrites: true` (set by the gateway only when
- * stop-GTT placement is switched on and the static IP matches) it can also place and modify a
- * stop-loss GTT. With `allowSellOrders: true` (exits switched on, static IP matching) it can also send
- * one market SELL of delivery shares, cancel an order and delete a stop GTT. It has NO method that
- * places a BUY or any priced order.
+ * Underneath it uses Zerodha's official JavaScript client (the `kiteconnect` package, installed in
+ * og/node_modules and pinned to an exact version). The rest of the gateway never touches that client;
+ * it sees only the small set of functions below, so what the gateway can do at the broker is decided here:
+ *
+ *   always            log in, read profile / funds / orders / trades / holdings / positions / GTTs
+ *   allowGttWrites    place and modify a single-leg stop-loss SELL GTT (LIMIT, CNC)
+ *   allowSellOrders   one market SELL of delivery shares (protection -1, 5 or 10), cancel an order, delete a GTT
+ *
+ * There is no function here that can express a BUY, a priced order or any other product.
  */
 'use strict';
-const crypto = require('crypto');
+const { KiteConnect } = require('kiteconnect');
 
 class KiteError extends Error {
   constructor(message, { status, errorType } = {}) {
     super(message);
     this.name = 'KiteError';
     this.status = status;
-    this.errorType = errorType;                       // e.g. TokenException, InputException
+    this.errorType = errorType;                       // TokenException, InputException, NetworkException, …
     this.tokenInvalid = errorType === 'TokenException' || status === 403;
   }
 }
 
+/** The client rejects with a plain object { message, error_type }. Turn it into one error type for the gateway. */
+function toKiteError(e) {
+  if (e instanceof KiteError) return e;
+  const type = (e && e.error_type) || (e && e.code ? 'NetworkException' : 'GeneralException');
+  return new KiteError((e && e.message) || 'Kite request failed', { status: e && e.status_code, errorType: type });
+}
+
+/**
+ * The client turns Kite's "YYYY-MM-DD HH:MM:SS" (which is IST) into a Date using THIS machine's time zone.
+ * Read the wall-clock parts back and state the zone explicitly, so the time is right on any machine.
+ */
+const pad = n => String(n).padStart(2, '0');
+function istIso(v) {
+  if (!(v instanceof Date) || isNaN(v)) return v;
+  return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}T${pad(v.getHours())}:${pad(v.getMinutes())}:${pad(v.getSeconds())}+05:30`;
+}
+const TIME_FIELDS = ['order_timestamp', 'exchange_timestamp', 'fill_timestamp'];
+const fixTimes = rows => (rows || []).map(r => { const o = { ...r }; for (const f of TIME_FIELDS) if (o[f] instanceof Date) o[f] = istIso(o[f]); return o; });
+
+/**
+ * Test seam only: when a `fetchImpl` is given (the in-process fake broker), the client's HTTP transport is
+ * replaced by it. Everything else — parameters, encoding, checksum, error handling — is the real client.
+ */
+function fetchTransport(fetchImpl) {
+  return async config => {
+    const url = new URL((config.baseURL || '').replace(/\/$/, '') + config.url);
+    for (const [k, v] of Object.entries(config.params || {})) if (v !== undefined && v !== null) url.searchParams.append(k, String(v));
+    const headers = typeof config.headers?.toJSON === 'function' ? config.headers.toJSON() : { ...(config.headers || {}) };
+    let res;
+    try { res = await fetchImpl(url.toString(), { method: String(config.method || 'get').toUpperCase(), headers, body: config.data ?? undefined }); }
+    catch (e) { const err = new Error(e.message); err.code = 'ECONNRESET'; err.request = {}; err.config = config; throw err; }
+    const response = { data: await res.text(), status: res.status, statusText: res.statusText || '', headers: Object.fromEntries(res.headers.entries()), config, request: {} };
+    if (res.status >= 200 && res.status < 300) return response;
+    const err = new Error('Request failed with status code ' + res.status); err.response = response; err.config = config; err.request = {};
+    throw err;
+  };
+}
+
 function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, fetchImpl, timeoutMs = 10000, allowGttWrites = false, allowSellOrders = false }) {
-  const _fetch = fetchImpl || globalThis.fetch;
+  const kc = new KiteConnect({ api_key: apiKey, root: baseUrl || undefined, timeout: timeoutMs, access_token: accessToken || undefined });
+  if (fetchImpl) kc.requestInstance.defaults.adapter = fetchTransport(fetchImpl);
   let _token = accessToken || '';
 
-  async function _call(method, path, { form, auth = true } = {}) {
-    const headers = { 'X-Kite-Version': '3' };
-    if (auth) {
-      if (!_token) throw new KiteError('Not logged in to Kite', { status: 403, errorType: 'TokenException' });
-      headers.Authorization = `token ${apiKey}:${_token}`;
-    }
-    let body;
-    if (form) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; body = new URLSearchParams(form).toString(); }
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), timeoutMs);
-    let res, json;
-    try {
-      res = await _fetch(baseUrl.replace(/\/$/, '') + path, { method, headers, body, signal: ctl.signal });
-      json = await res.json().catch(() => null);
-    } catch (e) {
-      throw new KiteError(e.name === 'AbortError' ? 'Kite request timed out' : 'Kite request failed: ' + e.message, { status: 0, errorType: 'NetworkException' });
-    } finally { clearTimeout(timer); }
-    if (!res.ok || !json || json.status !== 'success') {
-      throw new KiteError((json && json.message) || `Kite HTTP ${res.status}`, { status: res.status, errorType: json && json.error_type });
-    }
-    return json.data;
-  }
-  const _get = path => _call('GET', path);
+  const call = async (fn, { auth = true } = {}) => {
+    if (auth && !_token) throw new KiteError('Not logged in to Kite', { status: 403, errorType: 'TokenException' });
+    let out;
+    try { out = await fn(); } catch (e) { throw toKiteError(e); }
+    // The client hands back an error-shaped object (instead of throwing) when the reply is not JSON.
+    if (out && typeof out === 'object' && !Array.isArray(out) && out.error_type && out.message) throw toKiteError(out);
+    return out;
+  };
 
-  /** Form body of a single-leg stop-loss sell GTT (LIMIT, CNC). */
-  function _gttForm({ symbol, exchange = 'NSE', trigger, limit, qty, lastPrice }) {
-    return {
-      type: 'single',
-      condition: JSON.stringify({ exchange, tradingsymbol: symbol, trigger_values: [trigger], last_price: lastPrice }),
-      orders: JSON.stringify([{ exchange, tradingsymbol: symbol, transaction_type: 'SELL', quantity: qty, order_type: 'LIMIT', product: 'CNC', price: limit }]),
-    };
-  }
+  /** One single-leg stop-loss sell GTT (LIMIT, CNC) — the only GTT shape this gateway can create. */
+  const gttParams = ({ symbol, exchange = 'NSE', trigger, limit, qty, lastPrice }) => ({
+    trigger_type: 'single', tradingsymbol: symbol, exchange, trigger_values: [trigger], last_price: lastPrice,
+    orders: [{ transaction_type: 'SELL', quantity: qty, order_type: 'LIMIT', product: 'CNC', price: limit }],
+  });
   const gttWrites = allowGttWrites ? {
     /** @returns { triggerId } */
-    async placeStopGtt(spec) { const d = await _call('POST', '/gtt/triggers', { form: _gttForm(spec) }); return { triggerId: String(d.trigger_id) }; },
-    async modifyStopGtt(id, spec) { const d = await _call('PUT', `/gtt/triggers/${encodeURIComponent(id)}`, { form: _gttForm(spec) }); return { triggerId: String(d.trigger_id ?? id) }; },
+    async placeStopGtt(spec) { const d = await call(() => kc.placeGTT(gttParams(spec))); return { triggerId: String(d.trigger_id) }; },
+    async modifyStopGtt(id, spec) { const d = await call(() => kc.modifyGTT(id, gttParams(spec))); return { triggerId: String((d && d.trigger_id) ?? id) }; },
   } : {};
 
-  // Exits (Phase 4): one market SELL for delivery shares, cancelling that order, and deleting a stop GTT.
-  // There is deliberately no way to pass a BUY, a price, or any other order type through this adapter.
   const sellWrites = allowSellOrders ? {
     /** @returns { orderId } */
     async placeMarketSell({ symbol, exchange = 'NSE', qty, tag, protection = -1 }) {
       // -1 = Zerodha's automatic protection; 5 and 10 are used only by the Emergency Exit ladder. Nothing else is accepted.
       if (![-1, 5, 10].includes(protection)) throw new KiteError('market protection must be -1, 5 or 10', { status: 0, errorType: 'InputException' });
-      const d = await _call('POST', '/orders/regular', { form: { tradingsymbol: symbol, exchange, transaction_type: 'SELL', order_type: 'MARKET',
-        quantity: String(qty), product: 'CNC', validity: 'DAY', market_protection: String(protection), tag } });
+      const d = await call(() => kc.placeOrder('regular', { tradingsymbol: symbol, exchange, transaction_type: 'SELL', order_type: 'MARKET',
+        quantity: qty, product: 'CNC', validity: 'DAY', market_protection: protection, tag }));
       return { orderId: String(d.order_id) };
     },
-    async cancelOrder(orderId) { await _call('DELETE', `/orders/regular/${encodeURIComponent(orderId)}`); return { orderId: String(orderId) }; },
-    async deleteGtt(id) { await _call('DELETE', `/gtt/triggers/${encodeURIComponent(id)}`); return { triggerId: String(id) }; },
+    async cancelOrder(orderId) { await call(() => kc.cancelOrder('regular', orderId)); return { orderId: String(orderId) }; },
+    async deleteGtt(id) { await call(() => kc.deleteGTT(id)); return { triggerId: String(id) }; },
   } : {};
 
   return {
     readOnly: !allowGttWrites && !allowSellOrders,
     ...gttWrites,
     ...sellWrites,
-    setAccessToken(t) { _token = t || ''; },
+    setAccessToken(t) { _token = t || ''; kc.setAccessToken(_token); },
     hasToken() { return !!_token; },
 
     /** URL the user opens to log in. Kite redirects back with ?request_token=… */
-    loginUrl() { return `${loginUrl}?v=3&api_key=${encodeURIComponent(apiKey)}`; },
+    loginUrl() { return loginUrl ? `${loginUrl}?api_key=${encodeURIComponent(apiKey)}&v=3` : kc.getLoginURL(); },
 
     /** Exchange the one-time request_token for the day's access token. */
     async createSession(requestToken) {
-      const checksum = crypto.createHash('sha256').update(apiKey + requestToken + apiSecret).digest('hex');
-      const data = await _call('POST', '/session/token', { auth: false, form: { api_key: apiKey, request_token: requestToken, checksum } });
+      const data = await call(() => kc.generateSession(requestToken, apiSecret), { auth: false });
       _token = data.access_token;
       return { accessToken: data.access_token, userId: data.user_id, userName: data.user_name, loginTime: data.login_time };
     },
 
-    profile:   () => _get('/user/profile'),
-    margins:   () => _get('/user/margins'),
-    orders:    () => _get('/orders'),
-    trades:    () => _get('/trades'),
-    holdings:  () => _get('/portfolio/holdings'),
-    positions: () => _get('/portfolio/positions'),
-    gtts:      () => _get('/gtt/triggers'),
+    profile:   () => call(() => kc.getProfile()),
+    margins:   () => call(() => kc.getMargins()),
+    orders:    () => call(() => kc.getOrders()).then(fixTimes),
+    trades:    () => call(() => kc.getTrades()).then(fixTimes),
+    holdings:  () => call(() => kc.getHoldings()),
+    positions: () => call(() => kc.getPositions()),
+    gtts:      () => call(() => kc.getGTTs()),
   };
 }
 
@@ -113,4 +135,4 @@ function tokenValidUntil(loginAt = new Date()) {
   return new Date(loginAt.getTime() < sixAm ? sixAm : sixAm + 86400000);
 }
 
-module.exports = { createKiteAdapter, KiteError, tokenValidUntil };
+module.exports = { createKiteAdapter, KiteError, tokenValidUntil, istIso };

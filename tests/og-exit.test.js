@@ -40,12 +40,12 @@ const events = (w, id) => w.db.order_audit.filter(a => a.intent_id === id).map(a
 test('adapter: sell methods exist only when allowed; a BUY or a priced order cannot be expressed at all', async () => {
   const sent = [];
   const base = { baseUrl: 'https://kite.test', loginUrl: 'x', apiKey: 'k', apiSecret: 's', accessToken: 't',
-    fetchImpl: async (u, init) => { sent.push(Object.fromEntries(new URLSearchParams(init.body))); return new Response(JSON.stringify({ status: 'success', data: { order_id: 1 } })); } };
+    fetchImpl: async (u, init) => { sent.push(Object.fromEntries(new URLSearchParams(init.body))); return new Response(JSON.stringify({ status: 'success', data: { order_id: 1 } }), { headers: { 'Content-Type': 'application/json' } }); } };
   const ro = createKiteAdapter(base), g = createKiteAdapter({ ...base, allowGttWrites: true }), s = createKiteAdapter({ ...base, allowSellOrders: true });
   assert.deepEqual([typeof ro.placeMarketSell, typeof g.placeMarketSell, typeof g.cancelOrder, typeof g.deleteGtt, typeof s.placeMarketSell, s.readOnly], ['undefined', 'undefined', 'undefined', 'undefined', 'function', false]);
   assert.ok(!Object.keys(s).some(k => /buy|limit|modifyOrder/i.test(k)));
   await s.placeMarketSell({ symbol: 'INFY', qty: 10, tag: 'T1', transaction_type: 'BUY', price: 1, order_type: 'LIMIT' });   // extra fields are ignored
-  assert.deepEqual(sent[0], { tradingsymbol: 'INFY', exchange: 'NSE', transaction_type: 'SELL', order_type: 'MARKET', quantity: '10', product: 'CNC', validity: 'DAY', market_protection: '-1', tag: 'T1' });
+  assert.deepEqual(sent[0], { tradingsymbol: 'INFY', exchange: 'NSE', transaction_type: 'SELL', order_type: 'MARKET', quantity: '10', product: 'CNC', validity: 'DAY', market_protection: '-1', tag: 'T1', variety: 'regular' });
   assert.match(tagOf('oi_1762850000000_abc123'), /^TJ[0-9A-F]{16}$/);
 });
 

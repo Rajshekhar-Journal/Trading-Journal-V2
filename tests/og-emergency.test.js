@@ -55,6 +55,12 @@ test('detect: unfilled only after the grace period; rejected; not triggered; not
   assert.equal(seen.size, 0, 'forgotten');
   assert.deepEqual(run({ ...unfilled, orders: [gttOrder('900', 100, 40)], holdings: [{ tradingsymbol: 'INFY', quantity: 60, last_price: 88 }] }, t0, { gttFillGraceSec: 0 }), ['GTT_ORDER_UNFILLED:60:900'], 'partly filled → only what is still held');
   assert.deepEqual(run({ ...unfilled, orders: [{ ...gttOrder('900', 100, 0, 'REJECTED'), status_message: 'price out of range' }] }, t0), ['GTT_ORDER_REJECTED:100:900']);
+  // As in Zerodha's GTT documentation: the trigger fired but no order could be placed (failed, no order_id, a rejection_reason).
+  const failedGtt = firedGtt(700, 'INFY', 100, 95, null);
+  failedGtt.orders[0].result = { order_result: { status: 'failed', order_id: '', rejection_reason: 'Your order price is lower than the current lower circuit limit of 70.65.' } };
+  const failedCase = detect({ ...base, gtts: [failedGtt], orders: [] }, { now: t0, seen, gttFillGraceSec: 10, notTriggeredGraceSec: 60 });
+  assert.deepEqual([failedCase.length, failedCase[0].kind, failedCase[0].orderId, failedCase[0].gttId], [1, 'GTT_ORDER_REJECTED', null, '700']);
+  assert.match(failedCase[0].detail.reason, /could not place its sell order: Your order price is lower than the current lower circuit limit/);
   const asleep = { ...base, gtts: [activeGtt(701, 'INFY', 100, 95)], orders: [] };
   assert.deepEqual(run(asleep, t0), []);
   assert.deepEqual(run(asleep, t0 + 60000), ['GTT_NOT_TRIGGERED:100:701']);

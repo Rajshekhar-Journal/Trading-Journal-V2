@@ -1,0 +1,16 @@
+{
+  "name": "tj-order-gateway",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Order Gateway for Trading Journal V2. Kept separate from the journal's packages so that only the broker client is installed beside the API secret.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "kiteconnect": "5.3.0"
+  }
+}

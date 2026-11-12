@@ -144,3 +144,15 @@ re-enter the API details).
 - First-time password setup works only from the gateway machine itself.
 - Forms carry a CSRF token; requests with an unknown Host header are refused.
 - No secret appears in any page, in `/status.json`, in the database or in `config.json`.
+
+
+## Broker client
+
+The gateway talks to Zerodha through Zerodha's official JavaScript client (`kiteconnect`, pinned to an exact version in `og/package.json`). After a fresh download of the project, install it once:
+
+    cd og
+    npm ci --ignore-scripts
+
+Do not run `npm audit fix --force` — it replaces the client with an old version. The audit findings are in a test tool (`mocha`) that the client lists but never loads when it runs.
+
+Only `og/lib/kite-adapter.js` uses the client. To move to a newer client version: change the version in `og/package.json`, run `npm install --ignore-scripts` in `og`, then `npm test` in the project folder.

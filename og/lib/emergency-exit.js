@@ -57,6 +57,12 @@ function detect({ trades, orders, gtts, holdings, positions }, { now, seen, gttF
       if (dead && !(active[sym] || []).length)
         out.push({ ...base, kind: 'GTT_ORDER_REJECTED', gttId: String(g.id), orderId: String(dead.order_id),
           detail: { reason: `Stop GTT triggered but its sell order ${dead.order_id} was ${dead.status.toLowerCase()}: ${dead.status_message || 'no reason given'}.`, lastPrice: last[sym] ?? null } });
+      // Kite's own example of a failed trigger: order_result.status = 'failed', no order_id, and a rejection_reason
+      // (e.g. the limit price is outside the circuit band). No order exists at all, so nothing is in the order book.
+      const failed = !dead && (g.orders || []).map(o => o.transaction_type === 'SELL' && o.result && o.result.order_result).find(r => r && !r.order_id && (r.status === 'failed' || r.rejection_reason));
+      if (failed && !(active[sym] || []).length && !symOrders.some(o => !FINAL.has(o.status)))
+        out.push({ ...base, kind: 'GTT_ORDER_REJECTED', gttId: String(g.id), orderId: null,
+          detail: { reason: `Stop GTT triggered but Zerodha could not place its sell order: ${failed.rejection_reason || 'no reason given'}.`, lastPrice: last[sym] ?? null } });
     }
 
     const list = active[sym] || [];

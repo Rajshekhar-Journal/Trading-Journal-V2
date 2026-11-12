@@ -173,7 +173,7 @@ test('full flow: login → heartbeat → sync → drift report; no secret ever l
   assert.equal(g.gw.state.brokerConnected, false);
 
   // Proper login through the redirect.
-  assert.match((await g.req('GET', '/kite/login')).location, /^https:\/\/kite\.test\/connect\/login\?v=3&api_key=key123$/);
+  assert.match((await g.req('GET', '/kite/login')).location, /^https:\/\/kite\.test\/connect\/login\?api_key=key123&v=3$/);
   assert.match(decodeURIComponent((await g.req('GET', '/kite/callback?status=success&request_token=req1')).location), /Kite login complete/);
   assert.ok(await g.gw.tickSync(), 'sync failed: ' + g.gw.state.lastSyncError);
 

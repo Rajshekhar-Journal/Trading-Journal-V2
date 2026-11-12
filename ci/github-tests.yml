@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install the gateway's broker client (exact pinned version, no install scripts)
+        run: npm ci --prefix og --ignore-scripts
       - name: Engine copies in sync
         run: node scripts/sync-engine.mjs && git diff --exit-code -- supabase/functions/_shared/engine
       - name: Unit tests
