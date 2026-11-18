@@ -257,8 +257,8 @@
         alertsToday: await db.getAlerts({ since: new Date(Date.parse(today + 'T00:00:00+05:30')).toISOString() }),
       };
 
-      // Shadow mode: load what the guards need once per cycle. Off (the default) → no extra reads, no intents.
-      if (root.TLMOrders && root.TLMOrders.execParams(settings).mode === 'shadow') {
+      // Shadow and Confirm mode: load what the guards need once per cycle. Alert only (the default) → no extra reads, no intents.
+      if (root.TLMOrders && ['shadow', 'confirm'].includes(root.TLMOrders.execParams(settings).mode)) {
         ctx.exec = await root.TLMOrders.loadContext({ settings, now }).catch(e => { _errors.push({ symbol: '*', error: 'shadow context: ' + String(e?.message || e) }); return null; });
       }
 
