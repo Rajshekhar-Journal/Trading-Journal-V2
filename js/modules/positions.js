@@ -1240,7 +1240,7 @@ const positionsModule = (() => {
           id: db.generateId('tr'), symbol, sector, tradeType, direction, exchange,
           playbookId, playbookVersion: playbookId ? pb?.currentVersion || '1.0' : '',
           initialStop: stop, currentStop: stop, rpt,
-          tlmState: TLMEngine.createState({ entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(await db.getSettings()), now: Date.now() }),
+          tlmState: await (async () => { const st = await db.getSettings(); return TLMStrategies.createState({ strategyId: TLMStrategies.defaultId(st), entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(st), settings: st, now: Date.now() }); })(),
           entries: [{ id: db.generateId('en'), date, price, qty, charges, notes:'' }],
           pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource:'Manual', notes:'Initial stop' }],
           partialExits: [], finalExit: null, notes: [], alerts: [],
@@ -1382,7 +1382,11 @@ const positionsModule = (() => {
 
           const updated = { ...trade, initialStop: initStop };
           const old = trade.tlmState;
-          if (old) {
+          if (old && old.spec) {              // a Strategy B / custom trade: only 1R and the hard stop depend on the initial stop
+            const r = Math.round((old.entryPrice - initStop) * 100) / 100;
+            if (!(r > 0)) { app.toast('Initial stop must be below the entry price', 'error'); return; }
+            updated.tlmState = { ...old, initialStop: initStop, r, hardStop: old.stage <= TLMRules.STAGES.ENTERED ? initStop : old.hardStop };
+          } else if (old) {
             const plan = TLMRules.planOf(old);   // keep this trade's own target levels and on/off
             const fresh = TLMEngine.createState({ entryPrice: old.entryPrice, firstQty: old.firstQty, initialStop: initStop,
               params: { target1R: plan.T1.r, target2R: plan.T2.r, target5R: plan.T5.r, target10R: plan.T10.r,

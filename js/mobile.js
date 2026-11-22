@@ -250,7 +250,7 @@ const MobileModule = (() => {
     // Gather all active alerts
     const since = new Date(Date.parse(TLMIndicators.istDate(Date.now()) + 'T00:00:00+05:30')).toISOString();
     const allAlerts = (await db.getAlerts({ since, limit: 200 }))
-      .map(a => ({ symbol: a.symbol, type: a.alert_type, msg: a.suggestion?.text || '', mode: a.mode }));
+      .map(a => ({ symbol: a.symbol, type: a.alert_type, msg: (a.suggestion?.text || '') + (a.suggestion?.reason ? ' — ' + a.suggestion.reason : ''), mode: a.mode }));
 
     container.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px">

@@ -45,7 +45,7 @@ const AlertDashboard = (() => {
       <td><strong>${esc(a.symbol)}</strong> <span class="ad-mode ad-${a.mode}">${a.mode.toUpperCase()}</span></td>
       <td><span class="${_typeClass(a)}">${esc(a.alert_type)}</span></td>
       <td class="font-mono">${inr(a.cmp)}</td>
-      <td>${esc(a.suggestion?.text || '')}</td>
+      <td>${esc(a.suggestion?.text || '')}${a.suggestion?.reason ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px">${esc(a.suggestion.reason)}</div>` : ''}</td>
       <td style="white-space:nowrap">${_statusCell(a)}</td>
       ${withDate ? `<td>${esc(a.telegram_status || '—')}</td>` : ''}
     </tr>`;
@@ -168,9 +168,9 @@ const AlertDashboard = (() => {
 
   async function _exportCsv() {
     const rows = await _filtered();
-    const head = ['date', 'time', 'symbol', 'mode', 'rule', 'alert_type', 'cmp', 'suggestion', 'status', 'telegram'];
+    const head = ['date', 'time', 'symbol', 'mode', 'rule', 'alert_type', 'cmp', 'suggestion', 'reason', 'status', 'telegram'];
     const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const csv = [head.join(','), ...rows.map(a => [dateStr(a.created_at), time(a.created_at), a.symbol, a.mode, a.rule_id, a.alert_type, a.cmp, a.suggestion?.text, a.status, a.telegram_status].map(q).join(','))].join('\n');
+    const csv = [head.join(','), ...rows.map(a => [dateStr(a.created_at), time(a.created_at), a.symbol, a.mode, a.rule_id, a.alert_type, a.cmp, a.suggestion?.text, a.suggestion?.reason, a.status, a.telegram_status].map(q).join(','))].join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     link.download = `alert-log-${TLMIndicators.istDate(Date.now())}.csv`;

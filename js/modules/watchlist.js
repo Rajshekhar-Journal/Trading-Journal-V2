@@ -40,7 +40,9 @@ const WatchlistModule = (() => {
 
     const watchlist    = await db.getWatchlist();
     const rpt          = await TLMRunner.defaultRpt();
-    const params       = TLMRunner.paramsFrom(await db.getSettings());
+    const wlSettings   = await db.getSettings();
+    const params       = TLMRunner.paramsFrom(wlSettings);
+    const stratName    = id => { const sp = TLMStrategies.find(id || TLMStrategies.defaultId(wlSettings), wlSettings); return sp ? sp.name.split(' — ')[0] : 'Strategy A'; };
 
     if (!watchlist || !watchlist.length) {
       tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px 0;color:var(--text-muted)">
@@ -56,7 +58,8 @@ const WatchlistModule = (() => {
       const trigger      = Number(item.trigger_price) || 0;
       const sl           = Number(item.stop_loss)     || 0;
       const riskPerShare = Math.abs(trigger - sl);
-      const plan         = TLMEngine.planPosition({ trigger, stop: sl, rpt: Number(item.rpt) || rpt, params });
+      const itemParams   = TLMStrategies.paramsFor(item.strategy || TLMStrategies.defaultId(wlSettings), params, wlSettings);
+      const plan         = TLMEngine.planPosition({ trigger, stop: sl, rpt: Number(item.rpt) || rpt, params: itemParams });
       const totalQty     = plan?.fullQty || 0;
       const initialQty   = plan?.firstQty || 0;
       const mode         = item.mode || 'both';
@@ -77,12 +80,12 @@ const WatchlistModule = (() => {
       }
 
       return `<tr>
-        <td><strong>${item.symbol}</strong>${item.sector ? ` <span class="badge badge-muted" style="font-size:10px">${item.sector}</span>` : ''}</td>
+        <td><strong>${item.symbol}</strong>${item.sector ? ` <span class="badge badge-muted" style="font-size:10px">${item.sector}</span>` : ''} <span class="badge badge-muted" style="font-size:10px" title="Trade management strategy">${stratName(item.strategy)}</span></td>
         <td class="font-mono">&#8377;${calc.formatNumber(trigger)}</td>
         <td id="wl-cmp-${item.id}" class="font-mono" style="color:var(--text-muted);font-size:12px">&#8230;</td>
         <td class="font-mono">&#8377;${calc.formatNumber(sl)}</td>
         <td class="font-mono">&#8377;${calc.formatNumber(riskPerShare)}</td>
-        <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(${params.firstEntryPct}% of ${totalQty})</span></td>
+        <td class="font-mono">${initialQty} <span style="font-size:11px;color:var(--text-muted)">(${itemParams.firstEntryPct}% of ${totalQty})</span></td>
         <td><span class="badge badge-muted">${mode === 'both' ? 'Real + Paper' : mode === 'paper' ? 'Paper' : 'Real'}</span></td>
         <td>${statusCell}</td>
         <td style="text-align:right;white-space:nowrap">${actionsCell}</td>
@@ -108,6 +111,9 @@ const WatchlistModule = (() => {
   // ── Add to Watchlist Modal ────────────────────────────────────────────────
   async function _showAddModal() {
     const defRPT = Math.round(await TLMRunner.defaultRpt());
+    const addSettings = await db.getSettings();
+    const defStrat = TLMStrategies.defaultId(addSettings);
+    const stratOptions = TLMStrategies.list(addSettings).map(x => `<option value="${x.id}"${x.id === defStrat ? ' selected' : ''}>${x.name}</option>`).join('');
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Symbol *</label>
         <input class="form-input" id="wl-symbol" placeholder="E.G. RELIANCE" style="text-transform:uppercase"
@@ -124,6 +130,8 @@ const WatchlistModule = (() => {
         <select class="form-select" id="wl-mode">
           <option value="both" selected>Real + Paper</option><option value="real">Real only</option><option value="paper">Paper only</option>
         </select></div>
+      <div class="form-group"><label class="form-label">Trade management strategy</label>
+        <select class="form-select" id="wl-strategy" onchange="WatchlistModule._calcQty()">${stratOptions}</select></div>
       <div class="form-group"><label class="form-label">Trigger Buy Price (&#8377;) *</label>
         <input class="form-input" type="number" id="wl-trigger" step="0.05" placeholder="e.g. 1500"
           oninput="WatchlistModule._calcQty()"></div>
@@ -150,11 +158,12 @@ const WatchlistModule = (() => {
           const notes   = document.getElementById('wl-notes')?.value;
           const rpt     = parseFloat(document.getElementById('wl-rpt')?.value) || null;
           const mode    = document.getElementById('wl-mode')?.value || 'both';
+          const strategy = document.getElementById('wl-strategy')?.value || defStrat;
           if (!symbol)                  { app.toast('Symbol is required', 'error'); return; }
           if (!trigger || trigger <= 0) { app.toast('Trigger Buy Price is required', 'error'); return; }
           if (!stop    || stop    <= 0) { app.toast('Stop Loss is required', 'error'); return; }
           if (stop >= trigger)          { app.toast('Stop Loss must be below Trigger price', 'error'); return; }
-          await db.saveWatchlistItem({ symbol, sector, trigger_price: trigger, stop_loss: stop, notes, rpt, mode, status: 'monitoring' });
+          await db.saveWatchlistItem({ symbol, sector, trigger_price: trigger, stop_loss: stop, notes, rpt, mode, status: 'monitoring', ...(strategy !== 'A' ? { strategy } : {}) });
           app.closeModal();
           app.toast(`${symbol} added to Watchlist`, 'success');
           await _renderTable();
@@ -223,7 +232,11 @@ const WatchlistModule = (() => {
     const sl           = Number(item.stop_loss)     || 0;
     const riskPerShare = Math.abs(trigger - sl);
     const totalQty     = riskPerShare > 0 ? Math.floor(defRPT / riskPerShare) : 0;
-    const initialQty   = Math.floor(totalQty / 2);
+    const execStrat    = TLMStrategies.find(item.strategy, settings) ? item.strategy : TLMStrategies.defaultId(settings);
+    const entryPctOf   = id => TLMStrategies.paramsFor(id, TLMRunner.paramsFrom(settings), settings).firstEntryPct;
+    const initialQty   = Math.floor(totalQty * entryPctOf(execStrat) / 100);
+    const execStratOptions = TLMStrategies.list(settings).map(x => `<option value="${x.id}"${x.id === execStrat ? ' selected' : ''}>${x.name}</option>`).join('');
+    WatchlistModule._execFull = totalQty; WatchlistModule._execPct = entryPctOf;
 
     // Mirror _showNewTradeModal but with pre-filled values from watchlist item
     const sectorOptions = ['Banking','IT','Energy','Pharma','FMCG','Auto','Telecom','Chemicals','NBFC','Consumer','Cement','Other']
@@ -236,6 +249,8 @@ const WatchlistModule = (() => {
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Symbol *</label>
           <input class="form-input" id="nt-symbol" value="${item.symbol}" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
+        <div class="form-group"><label class="form-label">Trade management strategy</label>
+          <select class="form-select" id="nt-strategy" onchange="WatchlistModule._execStrategyChanged()">${execStratOptions}</select></div>
         <div class="form-group"><label class="form-label">Sector</label>
           <select class="form-select" id="nt-sector">${sectorOptions}</select></div>
         <div class="form-group"><label class="form-label">Trade Type</label>
@@ -286,6 +301,7 @@ const WatchlistModule = (() => {
           const rpt     = parseFloat(document.getElementById('nt-rpt').value) || Math.abs((price - stop) * qty) || defRPT;
           const charges = parseFloat(document.getElementById('nt-charges').value) || 0;
           const cmp     = parseFloat(document.getElementById('nt-cmp').value) || price;
+          const chosen  = document.getElementById('nt-strategy')?.value || execStrat;
 
           if (!sym || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
 
@@ -294,7 +310,7 @@ const WatchlistModule = (() => {
             id: db.generateId('tr'), symbol: sym, sector, tradeType: ttType, direction: dir, exchange: exch,
             playbookId: pbId, playbookVersion: pbId ? pb?.currentVersion || '1.0' : '',
             initialStop: stop, currentStop: stop, rpt,
-            tlmState: TLMEngine.createState({ entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(settings), now: Date.now() }),
+            tlmState: TLMStrategies.createState({ strategyId: chosen, entryPrice: price, firstQty: qty, initialStop: stop, params: TLMRunner.paramsFrom(settings), settings, now: Date.now() }),
             entries:      [{ id: db.generateId('en'), date, price, qty, charges, notes: `From Watchlist: ${item.symbol}` }],
             pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource: 'Manual', notes: 'Initial stop from Watchlist trigger' }],
             partialExits: [], finalExit: null, notes: [], alerts: [],
@@ -304,7 +320,7 @@ const WatchlistModule = (() => {
           };
           await db.saveTrade(trade);
           // Mark watchlist item as executed
-          await db.saveWatchlistItem({ ...item, status: 'executed' });
+          await db.saveWatchlistItem({ ...item, status: 'executed', ...(chosen !== 'A' ? { strategy: chosen } : {}) });
           app.closeModal();
           app.toast(`Trade executed: ${sym}`, 'success');
           await _renderTable();
@@ -313,6 +329,13 @@ const WatchlistModule = (() => {
   }
 
   // ── Live Qty Calculator ───────────────────────────────────────────────────
+  /** Execute modal: the strategy decides how much of the full size is bought first. */
+  function _execStrategyChanged() {
+    const id = document.getElementById('nt-strategy')?.value;
+    const q = document.getElementById('nt-qty');
+    if (q && WatchlistModule._execFull != null) { q.value = Math.floor(WatchlistModule._execFull * WatchlistModule._execPct(id) / 100); q.dispatchEvent(new Event('input')); }
+  }
+
   async function _calcQty() {
     const trigger = parseFloat(document.getElementById('wl-trigger')?.value) || 0;
     const stop    = parseFloat(document.getElementById('wl-stop')?.value)    || 0;
@@ -320,7 +343,8 @@ const WatchlistModule = (() => {
 
     const rps      = trigger - stop;
     const rpt      = parseFloat(document.getElementById('wl-rpt')?.value) || await TLMRunner.defaultRpt();
-    const plan     = TLMEngine.planPosition({ trigger, stop, rpt, params: TLMRunner.cachedParams() });
+    const sel      = document.getElementById('wl-strategy')?.value;
+    const plan     = TLMEngine.planPosition({ trigger, stop, rpt, params: TLMStrategies.paramsFor(sel, TLMRunner.cachedParams(), await db.getSettings()) });
     const totalQty = plan?.fullQty || 0;
     const initQty  = plan?.firstQty || 0;
 
@@ -340,7 +364,7 @@ const WatchlistModule = (() => {
     await _renderTable();
   }
 
-  return { init, _renderTable, _showAddModal, _showExecuteModal, _calcQty, _deleteItem };
+  return { init, _renderTable, _showAddModal, _showExecuteModal, _execStrategyChanged, _calcQty, _deleteItem };
 })();
 
 window.WatchlistModule = WatchlistModule;

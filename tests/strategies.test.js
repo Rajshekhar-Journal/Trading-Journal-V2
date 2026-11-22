@@ -133,3 +133,17 @@ test('every alert says why in one line: strategy actions and the lifecycle rules
   assert.equal(pm.alertType, 'Partial profit');
   assert.match(pm.text, /Suggestion : Sell Qty 50 at market price \(partial profit\)\nReason     : Price held above 3R/);
 });
+
+test('paper trade on Strategy B: partial profit books a partial exit, stop to cost, then the trend exit closes the rest', () => {
+  G.db = { generateId: pre => pre + '_t' + Math.random().toString(36).slice(2, 6) };
+  require(path.join(__dirname, '../js/engine/executors.js'));
+  const X = G.TLMExecutors;
+  let t = { id: 'pt1', exchange: 'NSE', tradeType: 'Equity', entries: [{ date: '2026-11-02', price: 100, qty: 100 }], pyramids: [], partialExits: [], finalExit: null, stopRevisions: [], initialStop: 95, currentStop: 95 };
+  const r = S.evaluate({ state: stateB(), position: { openQty: 100, avgEntry: 100 }, market: { ltp: 116, intraday: minutes(116, 6, NOW), daily: [] }, now: NOW, params: p });
+  t = X.applyPaper(t, r.actions, { settings: {}, date: '2026-11-18', openQty: 100 });
+  assert.deepEqual([t.partialExits.length, t.partialExits[0].qty, t.partialExits[0].actionSource, t.currentStop], [1, 50, 'ST-01 Partial profit (Paper)', 100]);
+  const down = [...mkDaily(40, 100, 1, '2026-11-17').slice(0, -1), day('2026-11-17', 120, 121, 100, 101)];
+  const x = S.dayStart({ state: r.state, position: { openQty: 50, avgEntry: 100 }, market: { ltp: 101, daily: down }, now: NOW + 86400000 });
+  t = X.applyPaper(t, x.actions, { settings: {}, date: '2026-11-19', openQty: 50 });
+  assert.deepEqual([t.finalExit.qty, t.finalExit.actionSource, t.closedAt], [50, 'ST-02 Trend exit (Paper)', '2026-11-19']);
+});

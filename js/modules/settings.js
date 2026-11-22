@@ -13,6 +13,7 @@ const settingsModule = (() => {
     { id: 'risk', label: '🛡 Risk Management', icon: '🛡️' },
     { id: 'charges', label: '💳 Charges & Brokerage', icon: '💳' },
     { id: 'alerts', label: '🔁 Trade Lifecycle & Alerts', icon: '🔁' },
+    { id: 'strategies', label: '🧭 Trade Management Strategies', icon: '🧭' },
     { id: 'execution', label: '🔌 Auto Trade – Broker Link', icon: '🔌' },
     { id: 'data', label: '🗄 Data Management', icon: '🗄️' },
     { id: 'app', label: '📱 Application', icon: '📱' },
@@ -54,7 +55,7 @@ const settingsModule = (() => {
   async function _showPage(id) {
     const el = document.getElementById('settings-content');
     if (!el) return;
-    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, execution: _pageExecution, data: _pageData, app: _pageApp, formulas: _pageFormulas };
+    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, strategies: _pageStrategies, execution: _pageExecution, data: _pageData, app: _pageApp, formulas: _pageFormulas };
     if (asyncPages[id]) {
       el.innerHTML = await asyncPages[id]();
       if (id === 'alerts') _showTelegramStatus();
@@ -346,6 +347,14 @@ const settingsModule = (() => {
             <p>Toggle in Settings &rarr; General or press <code>Ctrl+Shift+P</code>. Blurs all &#8377; amounts across the entire app. R-multiples and percentages remain visible. Safe for screen-sharing or screenshots.</p>`)}
 
           ${S('um8','&#128257;','Trade Lifecycle Rule Engine v3.0 &mdash; Guide',`
+            <h4>Trade management strategies</h4>
+            <p>Each position follows one strategy, chosen on the Watchlist item before entry or changed later on the position (<em>Change strategy</em>). Build and edit them in <strong>Settings &rarr; Trade Management Strategies</strong>.</p>
+            <ul>
+              <li><strong>Strategy A</strong> &mdash; the lifecycle described below (adds, stop locks, tranche trails).</li>
+              <li><strong>Strategy B</strong> &mdash; buy the full planned size, sell 50% at 3R and move the stop to cost, trail the rest: exit on a daily close below the 21 EMA less 1%. Time exit: if +1R is not reached within 10 trading days, exit all. All numbers are editable.</li>
+              <li><strong>Custom</strong> &mdash; combine entry size, add, partial profit, an EMA or percent trail and a time exit. The hard stop always applies.</li>
+            </ul>
+            <p>Every alert ends with a one-line <em>Reason</em> saying why it was raised. A strategy is copied into the trade when it opens, so editing it later never changes a trade already open.</p>
             <p>One rule engine manages every trade, real and paper, from trigger to exit. It runs on the server every minute from 09:00 to 15:31 IST on trading days, whether or not the app is open (<strong>&#10227; Sync now</strong> runs it any time). If the server runner is offline, an open app tab takes over until it is back. Real trades get an alert; paper trades are executed automatically with virtual money.</p>
             <h4>Lifecycle (default settings — your own levels are shown in Settings &rarr; Trade Lifecycle &amp; Alerts)</h4>
             <table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--bg);"><th style="padding:6px 10px;text-align:left;">Stage</th><th style="padding:6px 10px;text-align:left;">When</th><th style="padding:6px 10px;text-align:left;">What happens</th></tr></thead><tbody>
@@ -988,6 +997,102 @@ const settingsModule = (() => {
   }
 
   /** Dialog: target levels (on/off, R, trail %) and engine timings. Saves settings.tlmParams. */
+  // ── PAGE: Trade Management Strategies ──────────────────────────────────────
+  async function _pageStrategies() {
+    const settings = await db.getSettings();
+    const all = TLMStrategies.list(settings);
+    const def = TLMStrategies.defaultId(settings);
+    const savedB = (settings.strategies || []).some(x => x && x.id === 'B');
+    const card = sp => `<div class="card" style="padding:12px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+          <div><strong>${sp.name}</strong>${sp.id === def ? ' <span class="badge badge-muted" style="font-size:10px">default</span>' : ''}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('${sp.id}')">Edit</button>` : ''}
+            ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('', '${sp.id}')">Duplicate</button>` : ''}
+            ${sp.id === 'B' && savedB ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('B')">Reset to default</button>` : ''}
+            ${sp.kind === 'rules' && !sp.builtin ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('${sp.id}')">Delete</button>` : ''}
+          </div></div>
+        <ul style="margin:8px 0 0 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+    return `<div class="settings-page">
+      <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Trade Management Strategies</span>
+        <button class="btn btn-primary btn-sm" onclick="settingsModule._openStrategyEditor('')">+ New strategy</button>
+      </div>
+      <div class="alert-banner info" style="margin-bottom:14px">ℹ Each position follows one strategy. Pick it on the Watchlist item (before entry), or change it later on the position (Change strategy). The strategy is copied into the trade when it opens, so editing one here never changes a trade that is already open. Every strategy keeps the hard stop. Every alert says in one line why it was raised.</div>
+      <div class="form-group" style="max-width:420px;margin-bottom:16px"><label class="form-label">Default strategy (used when none is chosen)</label>
+        <select class="form-select" id="st-default" onchange="settingsModule._saveDefaultStrategy()">${all.map(x => `<option value="${x.id}"${x.id === def ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>
+      ${all.map(card).join('')}
+    </div>`;
+  }
+
+  async function _saveDefaultStrategy() {
+    const settings = await db.getSettings();
+    settings.defaultStrategy = document.getElementById('st-default').value;
+    await db.saveSettings(settings);
+    app.toast('Default strategy saved', 'success');
+    await _showPage('strategies');
+  }
+
+  /** Editor for a rules strategy. id = edit this one; baseId = start a new one from a copy of that strategy. */
+  async function _openStrategyEditor(id, baseId) {
+    const settings = await db.getSettings();
+    const src = TLMStrategies.find(id || baseId || 'B', settings);
+    const sp = TLMStrategies.normalise(src);
+    const isNew = !id;
+    const name = isNew ? (baseId ? sp.name + ' (copy)' : 'My strategy') : sp.name;
+    const num = (key, v, step, w) => `<input class="form-input" type="number" step="${step}" id="st-${key}" value="${v}" style="width:${w || 80}px;display:inline-block">`;
+    const chk = (key, on) => `<label class="toggle-switch"><input type="checkbox" id="st-${key}" ${on ? 'checked' : ''}><span class="toggle-slider"></span></label>`;
+    const content = `<div class="form-group"><label class="form-label">Name</label><input class="form-input" id="st-name" value="${name.replace(/"/g, '&quot;')}"></div>
+      <table class="data-table" style="font-size:13px"><tbody>
+        <tr><td style="width:60px"></td><td><strong>Entry size</strong><div style="font-size:11px;color:var(--text-muted)">Share of the planned full size bought at entry</div></td><td>${num('entryPct', sp.entryPct, 5)} %</td></tr>
+        <tr><td>${chk('add-on', sp.add.on)}</td><td><strong>Add</strong><div style="font-size:11px;color:var(--text-muted)">Buy more when price holds above R</div></td>
+          <td>at ${num('add-r', sp.add.atR, 0.25, 64)} R · ${num('add-pct', sp.add.pct, 10, 64)} % of first qty · stop to initial + ${num('add-stop', sp.add.stopToR, 0.25, 64)} R</td></tr>
+        <tr><td>${chk('par-on', sp.partial.on)}</td><td><strong>Partial profit</strong><div style="font-size:11px;color:var(--text-muted)">Sell part of the open quantity</div></td>
+          <td>at ${num('par-r', sp.partial.atR, 0.25, 64)} R · sell ${num('par-pct', sp.partial.pct, 5, 64)} % · then stop
+            <select class="form-select" id="st-par-stop" style="width:auto;display:inline-block"><option value="cost"${sp.partial.stopAfter === 'cost' ? ' selected' : ''}>to cost</option><option value="none"${sp.partial.stopAfter === 'none' ? ' selected' : ''}>unchanged</option></select></td></tr>
+        <tr><td></td><td><strong>Trail (exit on a daily close)</strong><div style="font-size:11px;color:var(--text-muted)">Checked once a day at the start, on the last closed day</div></td>
+          <td><select class="form-select" id="st-trail-type" style="width:auto;display:inline-block"><option value="ema"${sp.trail.type === 'ema' ? ' selected' : ''}>Below EMA</option><option value="pct"${sp.trail.type === 'pct' ? ' selected' : ''}>% below highest close</option><option value="none"${sp.trail.type === 'none' ? ' selected' : ''}>No trail</option></select>
+            EMA ${num('trail-period', sp.trail.period, 1, 60)} · buffer ${num('trail-buf', sp.trail.bufferPct, 0.5, 60)} % · or ${num('trail-pct', sp.trail.pct, 1, 60)} %
+            <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-trail-after" ${sp.trail.afterPartial ? 'checked' : ''}> only after the partial profit is booked</label></td></tr>
+        <tr><td>${chk('time-on', sp.timeExit.on)}</td><td><strong>Time exit</strong><div style="font-size:11px;color:var(--text-muted)">Exit all if the trade is going nowhere</div></td>
+          <td>if +${num('time-r', sp.timeExit.minR, 0.25, 64)} R is not reached within ${num('time-days', sp.timeExit.days, 1, 64)} trading days</td></tr>
+      </tbody></table>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-top:8px">The hard stop always applies. Add and partial levels use R = entry − initial stop. Changes apply to trades opened or switched after saving.</div>
+      <div id="st-error" style="color:#dc2626;font-size:12px;min-height:16px;margin:6px 0"></div>`;
+    app.openModal(isNew ? '+ New strategy' : `Edit — ${sp.name}`, content, [
+      { id: 'st-cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'st-save', label: 'Save', class: 'btn-primary', onClick: async () => {
+        const g = k => document.getElementById('st-' + k), n = k => parseFloat(g(k).value);
+        const spec = TLMStrategies.normalise({
+          id: id || ('c_' + Date.now().toString(36)), name: g('name').value, entryPct: n('entryPct'),
+          add: { on: g('add-on').checked, atR: n('add-r'), pct: n('add-pct'), stopToR: n('add-stop') },
+          partial: { on: g('par-on').checked, atR: n('par-r'), pct: n('par-pct'), stopAfter: g('par-stop').value },
+          trail: { type: g('trail-type').value, period: n('trail-period'), bufferPct: n('trail-buf'), pct: n('trail-pct'), afterPartial: g('trail-after').checked },
+          timeExit: { on: g('time-on').checked, days: n('time-days'), minR: n('time-r') },
+        });
+        const err = TLMStrategies.validate(spec);
+        if (err) { g('error').textContent = err; return; }
+        const st = await db.getSettings();
+        const keep = (st.strategies || []).filter(x => x && x.id !== spec.id);
+        st.strategies = [...keep, { ...spec, builtin: undefined }];
+        await db.saveSettings(st);
+        app.closeModal();
+        app.toast('Strategy saved', 'success');
+        await _showPage('strategies');
+      } }
+    ]);
+  }
+
+  async function _deleteStrategy(id) {
+    const st = await db.getSettings();
+    const sp = TLMStrategies.find(id, st);
+    if (!sp || !confirm(id === 'B' ? 'Reset Strategy B to its default rules?' : `Delete "${sp.name}"? Open trades keep following the rules they were opened with.`)) return;
+    st.strategies = (st.strategies || []).filter(x => x && x.id !== id);
+    if (st.defaultStrategy === id && id !== 'B') delete st.defaultStrategy;
+    await db.saveSettings(st);
+    await _showPage('strategies');
+  }
+
   async function _openLifecycleSettings(useDefaults = false) {
     const settings = await db.getSettings();
     const p = useDefaults ? { ...TLMRules.DEFAULT_PARAMS } : TLMRunner.paramsFrom(settings);
@@ -1501,5 +1606,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _openStrategyEditor, _deleteStrategy, _saveDefaultStrategy, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();
