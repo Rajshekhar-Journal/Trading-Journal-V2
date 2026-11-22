@@ -2,8 +2,10 @@
 
 The Order Gateway is the only part of the Auto Trade Engine that talks to Zerodha. It runs on the
 always-on machine at home. It can **log in and read**, and — only when you switch it on — **place or
-modify a stop-loss GTT** that you approved in the journal. It has no code that places a buy or sell
-order, cancels an order or deletes a GTT.
+modify a stop-loss GTT**, **sell shares you hold** (market, with protection) and **buy shares with a limit order
+validity IOC** (fills now or is cancelled) — each only for intents that were approved: by you in the journal, or
+automatically in Auto-Sell / Full Auto mode if the database allows it (migration 013). Each kind has its own switch,
+all off by default. It has no code for any other order type, product or short sale.
 
 What it does now:
 
@@ -115,8 +117,8 @@ For each case it raises an alert on the Alert Dashboard and an **EMERGENCY EXIT*
 *Waiting for your approval*. In **Auto** the first two run at once; "GTT not triggered" always waits for you.
 
 When it runs: (not-triggered case: delete the GTT and confirm) → cancel every open sell on the stock and
-wait for Zerodha to confirm → read the quantity actually held → market sell with automatic protection →
-if not filled in 20 s: cancel, confirm, sell again with 5%, then 10%. It never has two sells open, never
+wait for Zerodha to confirm → read the quantity actually held → ONE limit sell at the current price less 1% (setting emergencyLimitPct) →
+if not filled in 20 s: cancel, confirm, alert you (no ladder, no second price). It never has two sells open, never
 sells more than is held, and after the last step it reports how many shares are still held.
 If a cancel is not confirmed it stops and sends nothing more.
 

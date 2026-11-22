@@ -16,6 +16,11 @@
     HARD_TRAIL:   'LC-08',
     HARD_EXIT:    'LC-09',
     DAY_BRIEF:    'LC-10',
+    // Trade-management strategies other than A (js/engine/strategies.js)
+    PARTIAL_PROFIT: 'ST-01',
+    TREND_EXIT:     'ST-02',
+    TIME_EXIT:      'ST-03',
+    STOP_TO_COST:   'ST-04',
   });
 
   /** Stages only move forward. */
@@ -38,6 +43,7 @@
   /** Stage label using the trade's own target levels, e.g. "S2 1.5R". */
   function stageLabel(state) {
     if (!state) return '—';
+    if (state.stageLabels) return state.stageLabels[state.stage] || '—';      // strategies other than A carry their own labels
     const t = planOf(state);
     const names = ['Watching', 'S1 Entered', `S2 ${t.T1.r}R`, `S3 ${t.T2.r}R`, `S4 ${t.T5.r}R`, `S5 ${t.T10.r}R`];
     return names[state.stage] || '—';
@@ -52,6 +58,10 @@
     [RULES.TRAIL_EXIT]:   'Partial exit',
     [RULES.HARD_EXIT]:    'Stop loss breached',
     [RULES.DAY_BRIEF]:    'Set stop loss (day start)',
+    [RULES.PARTIAL_PROFIT]: 'Partial profit',
+    [RULES.TREND_EXIT]:   'Trend exit — trail broken',
+    [RULES.TIME_EXIT]:    'Time exit — trade is stale',
+    [RULES.STOP_TO_COST]: 'Raise stop loss (after partial profit)',
   });
 
   const DEFAULT_PARAMS = Object.freeze({

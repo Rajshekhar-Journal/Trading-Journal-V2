@@ -24,7 +24,7 @@
     const softIfExit = adds ? 'block' : 'warn';
 
     // ── Switches ──
-    add('MODE', ['shadow', 'confirm', 'auto'].includes(x.mode), `mode is ${x.mode}`);
+    add('MODE', ['shadow', 'confirm', 'auto_sell', 'auto_full'].includes(x.mode), `mode is ${x.mode}`);
     if (adds) add('KILL_SWITCH', !x.killSwitch, x.killSwitch ? 'kill switch is on' : 'off');
 
     const st = g.execState;

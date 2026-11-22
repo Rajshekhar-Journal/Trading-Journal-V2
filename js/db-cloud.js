@@ -477,7 +477,9 @@ const db = (() => {
       mode:          item.mode          || 'both',
       rpt:           item.rpt           || null,
       triggered_at:  item.triggered_at  || null,
-      created_at:    item.created_at    || new Date().toISOString()
+      created_at:    item.created_at    || new Date().toISOString(),
+      // sent only when set, so the page keeps working until migration 014 (watchlist.strategy) has been run
+      ...(item.strategy ? { strategy: item.strategy } : {})
     };
     const { error } = await _sb().from('watchlist').upsert(payload, { onConflict: 'id' });
     if (error) {
@@ -713,6 +715,13 @@ const db = (() => {
     return data;
   }
 
+  /** Mark a buy / stop intent as written into the journal (migration 013). */
+  async function markIntentBooked(id, booking) {
+    const { data, error } = await _sb().rpc('exec_mark_booked', { p_intent_id: id, p_booking: booking });
+    if (error) throw new Error(/Could not find the function|PGRST202/.test(error.message + error.code) ? 'Run migration 013 first.' : error.message);
+    return data;
+  }
+
   // ── Utility ───────────────────────────────────────────────────────────────
   function generateId(prefix = 'id') { return _generateId(prefix); }
 
@@ -738,7 +747,7 @@ const db = (() => {
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
     // Auto Trade Engine (read only)
-    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent,
+    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent, markIntentBooked,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility

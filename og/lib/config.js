@@ -13,11 +13,14 @@ const DEFAULTS = Object.freeze({
   expectedStaticIp: '',              // blank = order sending stays off
   gttWritesEnabled: false,           // stop-GTT placement; also needs the static IP to match
   executeSec: 10,
+  buyOrdersEnabled: false,           // buy orders (entries, adds) for intents that were approved; also needs the static IP to match
   sellOrdersEnabled: false,          // exits (market sell) for intents you approve; also needs the static IP to match
+  entryWindow: [560, 915],           // IST minutes 09:20–15:15
   exitWindow: [556, 925],            // IST minutes 09:16–15:25
   fillWaitSec: 20,                   // wait this long for a sell to fill before cancelling it
   cancelWaitSec: 10,
   orderPollMs: 2000,
+  emergencyLimitPct: 1,              // Emergency Exit sells with a limit this % below the current price (one attempt, no ladder)
   emergencyExit: 'off',              // off | confirm (you approve) | auto. Needs exits switched on.
   gttFillGraceSec: 10,               // a triggered GTT's order may stay unfilled this long before it counts
   notTriggeredGraceSec: 60,          // price below the stop with the GTT still asleep for this long

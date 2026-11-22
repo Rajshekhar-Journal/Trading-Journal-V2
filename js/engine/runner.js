@@ -16,6 +16,7 @@
  */
 (function (root) {
   const I = root.TLMIndicators, E = root.TLMEngine, X = root.TLMExecutors, A = root.TLMAlerts;
+  const S = () => root.TLMStrategies;     // looked up when used, so a host that does not load strategies.js still runs Strategy A
   const { DEFAULT_PARAMS, RULES } = root.TLMRules;
 
   let _timer = null;
@@ -128,11 +129,11 @@
     const actions = [];
 
     if (mk?.daily?.length && (ctx.force || minute >= p.briefMinute)) {
-      const r = E.dayStart({ state, position, market: mk, now, params: p });
+      const r = (S() || E).dayStart({ state, position, market: mk, now, params: p });
       state = r.state; actions.push(...r.actions);
     }
     if (mk?.ltp && (ctx.force || minute >= p.marketOpenMinute)) {
-      const r = E.evaluate({ state, position, market: mk, now, params: p });
+      const r = (S() || E).evaluate({ state, position, market: mk, now, params: p });
       state = r.state; actions.push(...r.actions);
       dirty = true;   // lastEvalAt moved
     }
@@ -167,7 +168,8 @@
     const mk = market[item.symbol];
     const action = E.evaluateWatch({ item, market: mk, now, params: p });
     if (!action) return;
-    const plan = E.planPosition({ trigger: Number(item.trigger_price), stop: Number(item.stop_loss), rpt: Number(item.rpt) || ctx.rpt, params: p });
+    const strat = S() ? (S().find(item.strategy, settings) ? item.strategy : S().defaultId(settings)) : 'A';
+    const plan = E.planPosition({ trigger: Number(item.trigger_price), stop: Number(item.stop_loss), rpt: Number(item.rpt) || ctx.rpt, params: S() ? S().paramsFor(strat, p, settings) : p });
     if (!plan) return;
     const mode = item.mode || 'both';
 
@@ -178,7 +180,8 @@
       await _shadowIntent(row, entry, { symbol: item.symbol, exchange: item.exchange, watchlistId: item.id, openQty: 0, market: mk, trigger: Number(item.trigger_price) }, ctx);
     }
     if (mode === 'paper' || mode === 'both') {
-      const state = E.createState({ entryPrice: action.price, firstQty: plan.firstQty, initialStop: action.stop, params: p, now });
+      const state = S() ? S().createState({ strategyId: strat, entryPrice: action.price, firstQty: plan.firstQty, initialStop: action.stop, params: p, settings, now })
+        : E.createState({ entryPrice: action.price, firstQty: plan.firstQty, initialStop: action.stop, params: p, now });
       if (state) {
         const trade = X.createPaperTrade({ item, action, plan, state, settings, date: today });
         await db.savePaperTrade(trade);
@@ -258,7 +261,7 @@
       };
 
       // Shadow and Confirm mode: load what the guards need once per cycle. Alert only (the default) → no extra reads, no intents.
-      if (root.TLMOrders && ['shadow', 'confirm'].includes(root.TLMOrders.execParams(settings).mode)) {
+      if (root.TLMOrders && ['shadow', 'confirm', 'auto_sell', 'auto_full'].includes(root.TLMOrders.execParams(settings).mode)) {
         ctx.exec = await root.TLMOrders.loadContext({ settings, now }).catch(e => { _errors.push({ symbol: '*', error: 'shadow context: ' + String(e?.message || e) }); return null; });
       }
 

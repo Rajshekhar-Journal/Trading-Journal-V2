@@ -823,10 +823,11 @@ const settingsModule = (() => {
           <tbody>
             <tr><td><strong>Alert only</strong> (default)</td><td>Sends alerts. Reads Zerodha for the two reports. Sends nothing.</td><td>Place every order yourself and record it in Positions.</td><td>Always safe; the starting point.</td></tr>
             <tr><td><strong>Shadow</strong></td><td>For each real alert, also writes down the exact order it <em>would</em> send and the result of every safety check (table <em>Intended orders</em>). Sends nothing.</td><td>Same as Alert only. Compare the intended orders with what you actually did.</td><td>To check the engine's orders against your own for a week or two.</td></tr>
-            <tr><td><strong>Confirm</strong></td><td>Proposes stop-loss GTTs — and partial / full exits if you tick that box. Each waits under <em>Waiting for your approval</em>; an approval is valid for 5 minutes and is sent once. Completed sells are booked into the trade automatically.</td><td>Approve or reject each proposal. Still place buy orders yourself.</td><td>After Shadow looks right, the static IP is set, and the matching switch is on at the gateway.</td></tr>
-            <tr><td><strong>Auto</strong></td><td>Not built yet.</td><td>—</td><td>—</td></tr>
+            <tr><td><strong>Confirm</strong></td><td>Proposes stop-loss GTTs — and partial / full exits if you tick that box. Each waits under <em>Waiting for your approval</em>; an approval is valid for 5 minutes and is sent once. Completed sells are booked into the trade automatically.</td><td>Approve or reject each proposal. Buys: place yourself, or tick <em>Ask me to approve entries and adds</em> to have them proposed too.</td><td>After Shadow looks right, the static IP is set, and the matching switch is on at the gateway.</td></tr>
+            <tr><td><strong>Auto-Sell</strong></td><td>Approves automatically the stop GTT, every stop revision and every exit (partial and full). Buys are still alerts (or proposals, if ticked).</td><td>Place or approve buys. Watch the <em>Intended orders</em> log.</td><td>Only after you have approved and completed at least the required number of stop GTTs / exits yourself in Confirm mode (the database refuses earlier).</td></tr>
+            <tr><td><strong>Full Auto</strong></td><td>Buys (entries and adds, limit IOC), places the stop GTT for the filled quantity, revises it, and exits — all approved automatically. Fills are booked into the journal (new trade, pyramid, stop revision).</td><td>Monitor. Use the Kill switch to stop new buys at once.</td><td>Only after the required number of buy orders <em>and</em> sell-side orders were approved by you and completed in Confirm mode.</td></tr>
           </tbody></table>
-        <p>Switches on the <strong>gateway page</strong> (all off at the start) decide what may actually leave for Zerodha: <em>Stop-GTT placement</em>, <em>Exits (market sell)</em>, and <em>Emergency Exit</em> — off / ask me / automatic — which sells at market when a triggered stop GTT is left unfilled or rejected. The <strong>Kill switch</strong> on the journal page blocks all new entries and adds at once.</p>`)}
+        <p>Switches on the <strong>gateway page</strong> (all off at the start) decide what may actually leave for Zerodha: <em>Stop-GTT placement</em>, <em>Exits (market sell)</em>, <em>Buy orders</em>, and <em>Emergency Exit</em> — off / ask me / automatic — which sells once with a limit order 1% below the current price when a triggered stop GTT is left unfilled or rejected (no ladder; if it does not fill you are alerted). The <strong>Kill switch</strong> on the journal page blocks all new entries and adds at once. Auto modes never bypass a safety check: every order passes the same guards, is re-checked at the moment of sending, and needs its gateway switch on.</p>`)}
       ${step(28, 'Rules that always apply', `<ul><li>The journal's rule engine decides; Zerodha only holds one hard-stop GTT per position and receives the orders.</li><li>A stop is never lowered automatically, and a sell is never larger than the quantity Zerodha shows.</li><li>If any position is not PROTECTED, new entries and adds are blocked for every symbol.</li><li>Gateway offline or Kite login missing → nothing is sent, and you get an alert.</li></ul>`)}
 
       ${part('Tips for getting the most out of the journal')}
@@ -1309,7 +1310,7 @@ const settingsModule = (() => {
   async function _pageExecution() {
     const settings = await db.getSettings();
     const ex = settings.execution || {};
-    const [st, drift, intents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 50 }), db.getBrokerSnapshot('protection')]);
+    const [st, drift, intents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 500 }), db.getBrokerSnapshot('protection')]);
     const xp = { ...(globalThis.TLMOrders ? TLMOrders.EXEC_DEFAULTS : {}), ...ex };
     const fmt = t => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     const ageSec = st?.heartbeat_at ? (Date.now() - new Date(st.heartbeat_at).getTime()) / 1000 : Infinity;
@@ -1320,7 +1321,14 @@ const settingsModule = (() => {
     const tile = (label, value, ok) => `<div class="app-info-item"><div class="app-info-label">${label}</div><div class="app-info-value" style="color:${col(ok)}">${_escX(value)}</div></div>`;
     const others = drift.filter(d => d.kind !== 'NO_STOP_GTT');   // "no stop GTT" is already shown, per position, in the table above it
     const high = others.filter(d => d.severity === 'high').length;
-    const modeText = xp.mode === 'confirm' ? 'Confirm — only orders you approve' : xp.mode === 'shadow' ? 'Shadow — logged, not sent' : 'Alert only';
+    const modeText = { confirm: 'Confirm — only orders you approve', shadow: 'Shadow — logged, not sent', auto_sell: 'Auto-Sell — sells and stops automatic, buys by you', auto_full: 'Full Auto — buys, sells and stops automatic' }[xp.mode] || 'Alert only';
+    // Track record: orders of each kind that YOU approved and that completed. The database enforces the same rule before any automatic approval.
+    const minDone = Math.max(1, Number(xp.autoMinDone) || 3);
+    const proven = cls => intents.filter(i => i.mode === 'confirm' && i.status === 'done' && i.decided_at && i.decided_by !== 'auto'
+      && (cls === 'sell' ? ['STOP_ENSURE', 'EXIT_PARTIAL', 'EXIT_ALL'].includes(i.action) && (i.action === 'STOP_ENSURE' ? !!(i.result && i.result.verb) : Number(i.filled ?? (i.result && i.result.filled)) > 0)
+        : ['ENTRY', 'ADD'].includes(i.action) && Number(i.filled ?? (i.result && i.result.filled)) > 0)).length;
+    const provenSell = proven('sell'), provenBuy = proven('buy');
+    window._exTrack = { sell: provenSell, buy: provenBuy, min: minDone };
     const unprotected = Array.isArray(prot?.data) ? prot.data.filter(x => x.state !== 'PROTECTED').length : 0;
     const section = (title, inner) => '<div class="form-section-title" style="margin-top:22px">' + title + '</div>' + inner;
     const fold = (title, inner, open) => '<details style="margin-top:22px"' + (open ? ' open' : '') + '><summary style="cursor:pointer;font-weight:600;padding:6px 0">' + title + '</summary><div style="margin-top:10px">' + inner + '</div></details>';
@@ -1331,7 +1339,7 @@ const settingsModule = (() => {
         + tile('Gateway', online ? 'Online' : 'Offline since ' + fmt(st.heartbeat_at), online)
         + tile('Kite login', tokenOk ? 'Valid until ' + fmt(st.token_valid_until) : 'Login required', tokenOk ? true : null)
         + tile('Last broker sync', fmt(st.last_sync_at), online && st.last_sync_at ? true : null)
-        + tile('Orders', modeText, xp.mode === 'confirm' ? true : null)
+        + tile('Orders', modeText, ['confirm', 'auto_sell', 'auto_full'].includes(xp.mode) ? true : null)
         + '</div>'
         + (st.ip_status !== 'match' && online
           ? '<p style="margin:10px 0 0;font-size:13px;color:var(--text-muted)">Static IP: <strong style="color:' + col(st.ip_status === 'mismatch' ? false : null) + '">' + _escX(ipText) + '</strong> — the gateway sends no order until it matches the IP registered with Zerodha.</p>'
@@ -1350,15 +1358,24 @@ const settingsModule = (() => {
         + '<p style="color:var(--text-muted);font-size:12px">Reported only. Nothing in the journal or at the broker is changed automatically.</p>'
       : '<p style="color:var(--text-muted);font-size:13px;margin:0">' + (st?.last_sync_at ? 'Journal and broker agree on every position.' : 'No report yet.') + '</p>';
 
-    const modeHelp = '<p style="color:var(--text-muted);margin:0 0 12px;font-size:13px"><strong>Alert only</strong> — alerts as before; you place every order.<br><strong>Shadow</strong> — also logs the order the engine would send, with every safety check; nothing is sent.<br><strong>Confirm</strong> — stop GTTs (and exits, if ticked) wait here for your approval, then the gateway sends them. Buy orders are not sent in any mode yet.</p>';
+    const modeHelp = '<div style="color:var(--text-muted);margin:0 0 12px;font-size:13px;line-height:1.6">'
+      + '<strong>1 Alert only</strong> — alerts as before; you place every order.<br>'
+      + '<strong>2 Shadow</strong> — also logs the order the engine would send, with every safety check; nothing is sent.<br>'
+      + '<strong>3 Confirm</strong> — stop GTTs wait here for your approval (exits and buys too, if ticked below); the gateway sends only what you approve.<br>'
+      + '<strong>4 Auto-Sell</strong> — stop GTTs, stop revisions and exits are approved by the system; buys stay yours (alert, or approve if ticked).<br>'
+      + '<strong>5 Full Auto</strong> — buys, adds, stop GTTs, revisions and exits are all approved by the system.<br>'
+      + 'Auto modes unlock only after ' + minDone + ' orders of that kind that <em>you</em> approved have completed: sell side ' + provenSell + '/' + minDone + ', buy side ' + provenBuy + '/' + minDone + '. The database enforces this. Every order still passes every safety check, the kill switch and the gateway switches.</div>';
     const settingsForm = modeHelp + '<div class="form-grid">'
       + '<div class="form-group"><label class="form-label">Mode</label><select class="form-select" id="ex-mode">'
-      + '<option value="alert" ' + (!['shadow', 'confirm'].includes(xp.mode) ? 'selected' : '') + '>Alert only — you place every order yourself</option>'
+      + '<option value="alert" ' + (!['shadow', 'confirm', 'auto_sell', 'auto_full'].includes(xp.mode) ? 'selected' : '') + '>Alert only — you place every order yourself</option>'
       + '<option value="shadow" ' + (xp.mode === 'shadow' ? 'selected' : '') + '>Shadow — log intended orders, send nothing</option>'
       + '<option value="confirm" ' + (xp.mode === 'confirm' ? 'selected' : '') + '>Confirm — you approve each stop GTT (and exits, if ticked below)</option>'
-      + '<option disabled>Auto — not built yet</option></select></div>'
+      + '<option value="auto_sell" ' + (xp.mode === 'auto_sell' ? 'selected' : '') + '>Auto-Sell — stops, revisions and exits are automatic; buys by you</option>'
+      + '<option value="auto_full" ' + (xp.mode === 'auto_full' ? 'selected' : '') + '>Full Auto — buy, sell and revise automatically</option></select></div>'
       + '<div class="form-group"><label class="form-label">Kill switch</label><label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-kill" ' + (xp.killSwitch ? 'checked' : '') + '> Block all new entries and adds</label></div>'
       + '<div class="form-group"><label class="form-label">Exits in Confirm mode</label><label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-confirm-exits" ' + (xp.confirmExits ? 'checked' : '') + '> Also ask me to approve partial and full exits</label></div>'
+      + '<div class="form-group"><label class="form-label">Buys in Confirm / Auto-Sell mode</label><label style="display:flex;gap:8px;align-items:center;height:36px"><input type="checkbox" id="ex-confirm-entries" ' + (xp.confirmEntries ? 'checked' : '') + '> Ask me to approve entries and adds</label></div>'
+      + '<div class="form-group"><label class="form-label">Auto modes: approved orders needed first</label><input class="form-input" type="number" id="ex-automin" min="1" max="50" value="' + _escX(minDone) + '"></div>'
       + '<div class="form-group"><label class="form-label">Max value per order (₹, 0 = not set)</label><input class="form-input" type="number" id="ex-maxval" min="0" step="1000" value="' + _escX(xp.maxOrderValue ?? 0) + '"></div>'
       + '<div class="form-group"><label class="form-label">Max orders per day</label><input class="form-input" type="number" id="ex-maxord" min="1" max="200" value="' + _escX(xp.maxOrdersPerDay ?? 30) + '"></div>'
       + '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px"><button class="btn btn-primary btn-sm" onclick="settingsModule._saveExecution()">Save</button></div>';
@@ -1436,7 +1453,7 @@ const settingsModule = (() => {
   const _INTENT_ROUTE = { LIMIT_IOC: 'Limit IOC', GTT: 'GTT', MARKET: 'Market', NONE: '—' };
   function _intentTable(intents, fmt, col) {
     if (!intents.length) return `<div class="no-data">No intended orders yet. In Shadow or Confirm mode one is recorded each time a real alert is raised.</div>`;
-    const price = i => i.route === 'GTT' ? `trigger ${i.trigger_price} / limit ${i.gtt_limit_price}` : i.route === 'LIMIT_IOC' ? `limit ${i.limit_price}` : i.route === 'MARKET' ? 'market, auto protection' : (i.stop_price ? `trail ${i.stop_price}` : '—');
+    const price = i => i.route === 'GTT' ? `trigger ${i.trigger_price} / limit ${i.gtt_limit_price}` : i.route === 'LIMIT_IOC' ? `limit ${i.limit_price}` : i.route === 'MARKET' ? 'market, auto protection' : i.route === 'LIMIT' ? 'limit 1% below the price when sent' : (i.stop_price ? `trail ${i.stop_price}` : '—');
     const verdict = i => ({
       shadow_ok: ['Would be sent', true], shadow_blocked: ['Blocked', false], blocked: ['Blocked', false],
       proposed: ['Waiting for approval', null], approved: ['Approved — sending', null], sending: ['Sending', null], unknown: ['Checking at broker', null],
@@ -1459,14 +1476,18 @@ const settingsModule = (() => {
   async function _saveExecution() {
     const settings = await db.getSettings();
     const picked = document.getElementById('ex-mode')?.value;
-    const mode = ['shadow', 'confirm'].includes(picked) ? picked : 'alert';
+    const mode = ['shadow', 'confirm', 'auto_sell', 'auto_full'].includes(picked) ? picked : 'alert';
+    const autoMin = Math.min(50, Math.max(1, Math.round(Number(document.getElementById('ex-automin')?.value) || 3)));
+    const tr = window._exTrack || { sell: 0, buy: 0, min: autoMin };
+    if (mode === 'auto_sell' && tr.sell < autoMin) { app.toast('Auto-Sell needs ' + autoMin + ' sell-side orders (stop GTTs or exits) that you approved and that completed. You have ' + tr.sell + '. Use Confirm mode first.', 'error'); return; }
+    if (mode === 'auto_full' && (tr.sell < autoMin || tr.buy < autoMin)) { app.toast('Full Auto needs ' + autoMin + ' approved sell-side and ' + autoMin + ' approved buy orders completed. You have ' + tr.sell + ' and ' + tr.buy + '. Use Confirm mode (with buys ticked) first.', 'error'); return; }
     const maxVal = Math.max(0, Number(document.getElementById('ex-maxval')?.value) || 0);
     const maxOrd = Math.min(200, Math.max(1, Math.round(Number(document.getElementById('ex-maxord')?.value) || 30)));
-    settings.execution = { ...(settings.execution || {}), mode, killSwitch: !!document.getElementById('ex-kill')?.checked, confirmExits: !!document.getElementById('ex-confirm-exits')?.checked, maxOrderValue: maxVal, maxOrdersPerDay: maxOrd };
+    settings.execution = { ...(settings.execution || {}), mode, killSwitch: !!document.getElementById('ex-kill')?.checked, confirmExits: !!document.getElementById('ex-confirm-exits')?.checked, confirmEntries: !!document.getElementById('ex-confirm-entries')?.checked, autoMinDone: autoMin, maxOrderValue: maxVal, maxOrdersPerDay: maxOrd };
     delete settings.execution.gatewayUrl;   // the gateway's address is not kept in the journal
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast({ shadow: 'Saved — shadow mode is on (nothing is sent to the broker)', confirm: 'Saved — confirm mode: stop GTTs wait for your approval' }[mode] || 'Saved — alert only', 'success');
+    app.toast({ shadow: 'Saved — shadow mode is on (nothing is sent to the broker)', confirm: 'Saved — confirm mode: orders wait for your approval', auto_sell: 'Saved — Auto-Sell: stops and exits are approved automatically', auto_full: 'Saved — Full Auto: every order is approved automatically' }[mode] || 'Saved — alert only', 'success');
     await _showPage('execution');
   }
 

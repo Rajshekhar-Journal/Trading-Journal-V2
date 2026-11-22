@@ -11,7 +11,7 @@
  *   1. (not-triggered case) delete the GTT and confirm it is gone
  *   2. cancel every open sell on the stock and wait until the broker confirms each is final
  *   3. read the quantity the broker actually holds
- *   4. market sell with automatic protection; if not filled: cancel, confirm, then 5%, then 10%
+ *   4. ONE limit sell at the current price less limitPct (default 1%); if it does not fill in time: cancel, confirm, and alert — no ladder, no second price
  * One sell at a time, never more than is held, never a second order while one is unresolved.
  */
 'use strict';
@@ -24,6 +24,7 @@ const istDate = ms => new Date(ms + 330 * 60000).toISOString().slice(0, 10);
 const istMinute = ms => Math.floor(((ms / 60000) + 330) % 1440);
 const round2 = v => Math.round(v * 100) / 100;
 const gttOrderIds = g => (g.orders || []).map(o => o.result && o.result.order_result && o.result.order_result.order_id).filter(Boolean).map(String);
+const gttTrigger = g => { const t = ((g.condition && g.condition.trigger_values) || []).map(Number).filter(Boolean); return t.length ? Math.min(...t) : null; };
 const gttSells = g => (g.orders || []).some(o => o.transaction_type === 'SELL');
 
 /**
@@ -50,19 +51,19 @@ function detect({ trades, orders, gtts, holdings, positions }, { now, seen, gttF
       if (live) {
         if (aged(`unfilled:${live.order_id}`, gttFillGraceSec))
           out.push({ ...base, kind: 'GTT_ORDER_UNFILLED', gttId: String(g.id), orderId: String(live.order_id),
-            detail: { reason: `Stop GTT triggered but its sell order ${live.order_id} is not filled (${live.filled_quantity || 0} of ${live.quantity}).`, limit: live.price, lastPrice: last[sym] ?? null } });
+            detail: { reason: `Stop GTT triggered but its sell order ${live.order_id} is not filled (${live.filled_quantity || 0} of ${live.quantity}).`, limit: live.price, trigger: gttTrigger(g), lastPrice: last[sym] ?? null } });
         continue;
       }
       const dead = linked.find(o => (o.status === 'REJECTED' || o.status === 'CANCELLED') && (Number(o.filled_quantity) || 0) < Number(o.quantity));
       if (dead && !(active[sym] || []).length)
         out.push({ ...base, kind: 'GTT_ORDER_REJECTED', gttId: String(g.id), orderId: String(dead.order_id),
-          detail: { reason: `Stop GTT triggered but its sell order ${dead.order_id} was ${dead.status.toLowerCase()}: ${dead.status_message || 'no reason given'}.`, lastPrice: last[sym] ?? null } });
+          detail: { reason: `Stop GTT triggered but its sell order ${dead.order_id} was ${dead.status.toLowerCase()}: ${dead.status_message || 'no reason given'}.`, trigger: gttTrigger(g), lastPrice: last[sym] ?? null } });
       // Kite's own example of a failed trigger: order_result.status = 'failed', no order_id, and a rejection_reason
       // (e.g. the limit price is outside the circuit band). No order exists at all, so nothing is in the order book.
       const failed = !dead && (g.orders || []).map(o => o.transaction_type === 'SELL' && o.result && o.result.order_result).find(r => r && !r.order_id && (r.status === 'failed' || r.rejection_reason));
       if (failed && !(active[sym] || []).length && !symOrders.some(o => !FINAL.has(o.status)))
         out.push({ ...base, kind: 'GTT_ORDER_REJECTED', gttId: String(g.id), orderId: null,
-          detail: { reason: `Stop GTT triggered but Zerodha could not place its sell order: ${failed.rejection_reason || 'no reason given'}.`, lastPrice: last[sym] ?? null } });
+          detail: { reason: `Stop GTT triggered but Zerodha could not place its sell order: ${failed.rejection_reason || 'no reason given'}.`, trigger: gttTrigger(g), lastPrice: last[sym] ?? null } });
     }
 
     const list = active[sym] || [];
@@ -78,7 +79,7 @@ function detect({ trades, orders, gtts, holdings, positions }, { now, seen, gttF
 }
 
 function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)),
-  ladder = [-1, 5, 10], exitWindow = [556, 925], fillWaitSec = 20, cancelWaitSec = 10, pollMs = 2000 }) {
+  limitPct = 1, exitWindow = [556, 925], fillWaitSec = 20, cancelWaitSec = 10, pollMs = 2000 }) {
 
   async function audit(uid, intent, event, detail = {}) {
     try {
@@ -103,7 +104,7 @@ function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.n
       const auto = mode === 'auto' && c.kind !== 'GTT_NOT_TRIGGERED';
       const t = now(), id = `oi_${t}_${Math.random().toString(36).slice(2, 8)}`;
       const row = { id, user_id: uid, intent_key: `${c.symbol}:EMERGENCY:${istDate(t)}:${c.kind}:${c.orderId || c.gttId}`, mode: 'confirm', status: auto ? 'approved' : 'proposed',
-        action: 'EMERGENCY_EXIT', rule_id: 'LC-09', symbol: c.symbol, exchange: 'NSE', trade_id: c.tradeId, side: 'SELL', qty: c.qty, route: 'MARKET', market_protection: -1,
+        action: 'EMERGENCY_EXIT', rule_id: 'LC-09', symbol: c.symbol, exchange: 'NSE', trade_id: c.tradeId, side: 'SELL', qty: c.qty, route: 'LIMIT', market_protection: null,
         ref_price: c.detail.lastPrice ?? null, would_send: true, guards: [], block_reasons: [], detail: { ...c.detail, kind: c.kind, gttId: c.gttId, orderId: c.orderId, auto },
         expires_at: new Date(t + (auto ? 5 : 15) * 60000).toISOString(), created_at: new Date(t).toISOString() };
       try { await store.insert('order_intents', [row]); }
@@ -173,22 +174,26 @@ function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.n
         await audit(uid, intent, 'cancel_confirmed', { orderIds: liveIds });
       }
 
-      // 3 + 4. Verify the quantity actually held, sell, and widen the protection only if needed.
-      for (let k = 0; k < ladder.length; k++) {
+      // 3 + 4. Verify the quantity actually held and the current price, then ONE limit sell at that price less limitPct.
+      for (let k = 0; k < 1; k++) {
         const [holdings, positions] = await Promise.all([broker.holdings(), broker.positions()]);
         const held = brokerPositions(holdings, positions)[sym] || 0;
         const qty = Math.min(held, intent.qty - res.filled);
         if (qty <= 0) break;
-        const tag = tagOf(`${intent.id}:${k}`), protection = ladder[k];
-        await audit(uid, intent, 'sending_sell', { attempt: k + 1, qty, protection, held, tag });
+        const tag = tagOf(`${intent.id}:${k}`);
+        const cmp = lastPrices(holdings, positions)[sym];
+        if (!(cmp > 0)) { res.attempts.push({ qty, refused: 'no current price from the broker' }); await audit(uid, intent, 'no_price', { held }); break; }
+        const limit = Math.max(0.05, Math.round(Math.floor((cmp * (1 - limitPct / 100)) / 0.05 + 1e-9) * 0.05 * 100) / 100);
+        const trigger = intent.detail && (intent.detail.trigger ?? intent.detail.gttTrigger) || null;
+        await audit(uid, intent, 'sending_sell', { attempt: k + 1, qty, cmp, limit, limitPct, trigger, held, tag });
         let orderId;
-        try { orderId = (await broker.placeMarketSell({ symbol: sym, exchange: intent.exchange || 'NSE', qty, tag, protection })).orderId; }
+        try { orderId = (await broker.placeLimitSell({ symbol: sym, exchange: intent.exchange || 'NSE', qty, limit, tag })).orderId; }
         catch (e) {
           if (e.errorType === 'NetworkException') {
             await move(intent, 'sending', 'unknown', { ...res, reason: 'sell request outcome unclear: ' + e.message }); await audit(uid, intent, 'unknown', { attempt: k + 1, reason: e.message });
             return 'unknown';
           }
-          res.attempts.push({ protection, qty, refused: e.message });
+          res.attempts.push({ cmp, limit, qty, refused: e.message });
           await audit(uid, intent, 'broker_refused', { attempt: k + 1, reason: e.message });
           break;
         }
@@ -199,7 +204,7 @@ function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.n
           w = await waitFinal([orderId], cancelWaitSec);
         }
         const o = w.orders[0], filled = o ? Number(o.filled_quantity) || 0 : 0;
-        res.attempts.push({ protection, qty, orderId, filled, status: o ? o.status : 'not visible' });
+        res.attempts.push({ cmp, limit, trigger, qty, orderId, filled, status: o ? o.status : 'not visible' });
         if (filled > 0) { res.filled += filled; value += filled * (Number(o.average_price) || 0); res.averagePrice = round2(value / res.filled); }
         if (!w.ok) {
           await move(intent, 'sending', 'unknown', { ...res, reason: `sell order ${orderId} is still open and its cancel is not confirmed — no other sell will be sent` }, String(orderId));
@@ -228,7 +233,7 @@ function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.n
 
   /** Unclear outcome: wait for this intent's own orders (and anything it was cancelling) to be final. Never sells. */
   async function finishUnknown(uid, intent) {
-    const sym = normSymbol(intent.symbol), tags = new Set(ladder.map((_, k) => tagOf(`${intent.id}:${k}`)));
+    const sym = normSymbol(intent.symbol), tags = new Set([tagOf(`${intent.id}:0`)]);
     const list = await ordersNow();
     const mine = list.filter(o => tags.has(o.tag));
     const live = list.filter(o => normSymbol(o.tradingsymbol) === sym && o.transaction_type === 'SELL' && !FINAL.has(o.status));
@@ -250,7 +255,7 @@ function createEmergencyExit({ broker, store, log = () => {}, now = () => Date.n
 
   async function runOnce({ enabled }) {
     const out = { done: 0, failed: 0, unknown: 0, expired: 0, skipped: 0 };
-    if (!enabled || typeof broker.placeMarketSell !== 'function') return out;
+    if (!enabled || typeof broker.placeLimitSell !== 'function') return out;
     const uid = await store.userId();
     const q = st => `select=*&user_id=eq.${uid}&mode=eq.confirm&action=eq.EMERGENCY_EXIT&status=eq.${st}&order=created_at.asc`;
     for (const intent of await store.select('order_intents', q('unknown'))) out[await finishUnknown(uid, intent)]++;

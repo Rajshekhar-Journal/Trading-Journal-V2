@@ -44,7 +44,7 @@ function dashboardPage({ csrf, cfg, view, m }) {
   const c = `<input type="hidden" name="csrf" value="${esc(csrf)}">`;
   const ipText = { match: 'Matches', mismatch: 'Does not match', not_configured: 'Not set yet', lookup_failed: 'Could not check', expected_ip_invalid: 'Invalid value', not_checked: 'Not checked yet' }[view.ipStatus] || view.ipStatus;
   return shell('Status', `<div class="row" style="justify-content:space-between"><div><h1>Order Gateway</h1>
-<p class="sub">${esc(view.version)} · Reads the broker. Places stop GTTs and exit sells only when switched on below, and only for intents you approve. Cannot place buy orders.</p></div>
+<p class="sub">${esc(view.version)} · Reads the broker. Places stop GTTs, exit sells and buy orders only when switched on below, and only for intents that were approved.</p></div>
 <form class="inline" method="post" action="/logout">${c}<button>Sign out</button></form></div>${msgBox(m)}
 
 <h2>Status</h2><div class="grid">
@@ -56,6 +56,7 @@ ${tile('Last broker sync', view.lastSync || 'Never', view.lastSyncError ? 'bad' 
 ${tile('Open differences', view.lastSync ? String(view.driftCount) : '—', view.driftHigh ? 'bad' : '')}
 ${tile('Stop-GTT placement', view.orderSending ? 'ON — approved intents only' : (view.gttWritesEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.orderSending ? 'ok' : 'warn')}
 ${tile('Exits (market sell)', view.sellSending ? 'ON — approved intents only' : (view.sellOrdersEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.sellSending ? 'ok' : 'warn')}
+${tile('Buy orders', view.buySending ? 'ON — approved intents only' : (view.buyOrdersEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.buySending ? 'ok' : 'warn')}
 ${tile('Emergency Exit', view.sellSending ? ({ off: 'Off', confirm: 'On — asks you first', auto: 'On — automatic' }[view.emergencyExit] || 'Off') : 'Off', view.sellSending && view.emergencyExit !== 'off' ? 'ok' : 'warn')}
 </div>${view.lastSyncError ? `<div class="msg bad">Last sync error: ${esc(view.lastSyncError)}</div>` : ''}
 
@@ -66,11 +67,12 @@ ${tile('Emergency Exit', view.sellSending ? ({ off: 'Off', confirm: 'On — asks
 <input name="pasted" autocomplete="off" placeholder="https://…?request_token=…"><button>Complete login</button></form>
 
 <h2>Sending to Zerodha</h2><form method="post" action="/execution">${c}
-<p class="sub" style="margin:0">Both need the static IP to match and today's Kite login, and act only on intents you approve in the journal (Settings → Auto Trade – Broker Link). The gateway never places buy orders.</p>
+<p class="sub" style="margin:0">Each needs the static IP to match and today's Kite login. They act only on intents that were approved: by you in the journal (Settings → Auto Trade – Broker Link), or automatically if you chose an Auto mode there and the database allows it. Buys are limit orders with validity IOC: filled now or cancelled.</p>
 <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="gttWritesEnabled" style="width:auto" ${view.gttWritesEnabled ? 'checked' : ''}> Allow stop-GTT placement (place / modify the stop-loss GTT)</label>
 <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="sellOrdersEnabled" style="width:auto" ${view.sellOrdersEnabled ? 'checked' : ''}> Allow exits (market sell of shares you hold, for approved partial and full exits)</label>
+<label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="buyOrdersEnabled" style="width:auto" ${view.buyOrdersEnabled ? 'checked' : ''}> Allow buy orders (entries and adds, limit IOC, for approved intents)</label>
 <label style="display:flex;gap:8px;align-items:center;color:inherit;font-size:15px"><input type="checkbox" name="bookGttFills" style="width:auto" ${view.bookGttFills ? 'checked' : ''}> Book stop-GTT fills into the journal automatically (needs no static IP; nothing is sent to Zerodha)</label>
-<label>Emergency Exit — when a stop GTT triggers but its order does not fill (or is rejected), cancel it, confirm, and sell at market: automatic protection, then 5%, then 10%</label>
+<label>Emergency Exit — when a stop GTT triggers but its order does not fill (or is rejected), cancel it, confirm, and sell once with a limit order 1% below the current price (no ladder; if it does not fill you are alerted)</label>
 <select name="emergencyExit" style="width:100%;padding:7px 9px;border:1px solid var(--b);border-radius:6px;font:inherit">
 <option value="off" ${view.emergencyExit === 'off' ? 'selected' : ''}>Off — only report it</option>
 <option value="confirm" ${view.emergencyExit === 'confirm' ? 'selected' : ''}>Confirm — propose it in the journal and wait for my approval</option>

@@ -57,6 +57,12 @@ function createMemoryClient(tables = {}) {
       if (st.locked_by === args.p_holder) { st.locked_until = null; st.locked_by = null; }
       return Promise.resolve({ data: null, error: null });
     }
+    if (name === 'exec_mark_booked') {                                       // JS mirror of migration 013
+      const it = (T.order_intents || []).find(i => i.id === args.p_intent_id);
+      const ok = !!it && it.mode === 'confirm' && ['ENTRY', 'ADD', 'STOP_ENSURE'].includes(it.action) && ['done', 'failed'].includes(it.status) && it.booking == null;
+      if (ok) { it.booking = args.p_booking; if (/^booked_/.test(args.p_booking)) it.booked_at = new Date().toISOString(); }
+      return Promise.resolve({ data: ok ? 'ok' : 'not_updated', error: null });
+    }
     return Promise.resolve({ data: null, error: { code: 'PGRST202', message: `Could not find the function public.${name}` } });
   }
   return { from: t => new Q(t), rpc, tables: T };

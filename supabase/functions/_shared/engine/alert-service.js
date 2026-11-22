@@ -1,7 +1,7 @@
 /**
  * engine/alert-service.js — turns engine actions into alerts.
  *
- * Message (3 lines):  Alert type · CMP · Suggestion.
+ * Message (4 lines):  Alert type · CMP · Suggestion · Reason (one line: why this alert was raised).
  * Sending rules (spec §6.3):
  *   AL-01 same alert (trade + rule) at most once per day
  *   AL-02 re-sent the same day only if the suggested price/qty moved ≥ 1%
@@ -24,7 +24,7 @@
           : `Buy Qty ${qtyFmt(a.qty)} · Revise stop loss to ${inr(a.stop)}`;
       case 'STOP':     return `Revise stop loss to ${inr(a.stop)}`;
       case 'TRAIL':    return `${a.dropped ? 'Cancel previous trail · ' : ''}Trail Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
-      case 'SELL':     return `Exit Qty ${qtyFmt(a.qty)} at market price`;
+      case 'SELL':     return a.rule === RULES.PARTIAL_PROFIT ? `Sell Qty ${qtyFmt(a.qty)} at market price (partial profit)` : `Exit Qty ${qtyFmt(a.qty)} at market price`;
       case 'EXIT_ALL': return `Exit Qty ${qtyFmt(a.qty)} (all open) at market price`;
       case 'BRIEF':    return `Set stop loss ${inr(a.stop)} for Qty ${qtyFmt(a.qty)}` + (a.trail ? ` · Trail stop ${inr(a.trail)} for Qty ${qtyFmt(a.trailQty)}` : '');
       default:         return '';
@@ -44,13 +44,32 @@
     }
   }
 
-  function message({ action, symbol, mode, cmp }) {
-    const type = action.r ? `Target reached — ${action.r}R` : (ALERT_TYPES[action.rule] || action.rule);
+  /** One line saying WHY this alert was raised (every alert carries one). Strategy actions bring their own (`why`). */
+  function reason(a, p = {}) {
+    if (a.why) return a.why;
+    const hold = p.targetHoldMin ?? 5;
+    switch (a.rule) {
+      case RULES.ENTRY:      return `Price held above the trigger${a.trigger ? ' ' + inr(a.trigger) : ''} for ${p.entryHoldMin ?? 5} min — first entry.`;
+      case RULES.ADD_1R:     return `Price held above ${a.r ?? 1}R for ${hold} min — add the same size and raise the stop.`;
+      case RULES.LOCK_2R:    return `Price held above ${a.r ?? 2}R for ${hold} min — stop moved up to lock the trade.`;
+      case RULES.BOOK_5R:    return `Price held above ${a.r ?? 5}R for ${hold} min — trail part of the position under the prior-day low.`;
+      case RULES.BOOK_10R:   return `Price held above ${a.r ?? 10}R for ${hold} min — trail a larger part under the prior-day low.`;
+      case RULES.TRAIL_EXIT: return `Price stayed below the trail${a.trail ? ' ' + inr(a.trail) : ''} (${p.trailHoldMin ?? 15} min, or a deep break) — exit that part.`;
+      case RULES.HARD_EXIT:  return `Price fell below the hard stop${a.stop ? ' ' + inr(a.stop) : ''} — exit the whole position.`;
+      case RULES.DAY_BRIEF:  return "Day start — stop and trail refreshed from yesterday's close.";
+      default:               return '';
+    }
+  }
+
+  function message({ action, symbol, mode, cmp, params }) {
+    const type = action.label || (action.r && [RULES.ADD_1R, RULES.LOCK_2R, RULES.BOOK_5R, RULES.BOOK_10R].includes(action.rule) ? `Target reached — ${action.r}R` : (ALERT_TYPES[action.rule] || action.rule));
     const sugg = mode === 'paper' ? executedText(action) : suggestion(action);
+    const why = reason(action, params || {});
     return {
       alertType: type,
-      text: `Alert type : ${type} · ${symbol} · ${mode.toUpperCase()}\nCMP        : ${cmp ? inr(cmp) : '—'}\nSuggestion : ${sugg}`,
+      text: `Alert type : ${type} · ${symbol} · ${mode.toUpperCase()}\nCMP        : ${cmp ? inr(cmp) : '—'}\nSuggestion : ${sugg}` + (why ? `\nReason     : ${why}` : ''),
       suggestionText: sugg,
+      reason: why,
     };
   }
 
@@ -90,13 +109,13 @@
   async function dispatch({ action, symbol, mode, tradeId, watchlistId, stage, cmp, settings, params, alertsToday, now }) {
     const refId = tradeId || watchlistId;
     if (!shouldSend({ action, refId, mode, alertsToday, now, params })) return null;
-    const msg = message({ action, symbol, mode, cmp });
+    const msg = message({ action, symbol, mode, cmp, params });
     const telegram = mode === 'real' ? await _notify(settings, msg.text) : 'skipped';
     const row = await db.insertAlert({
       trade_id: tradeId || null, watchlist_id: watchlistId || null, mode, symbol,
       rule_id: action.rule, alert_type: msg.alertType, stage: stage ?? null, cmp: cmp || null,
       suggestion: { kind: action.kind, qty: action.qty ?? null, stop: action.stop ?? null, trail: action.trail ?? null,
-                    price: action.fill ?? action.price ?? null, text: msg.suggestionText, value: keyValue(action) },
+                    price: action.fill ?? action.price ?? null, text: msg.suggestionText, reason: msg.reason, value: keyValue(action) },
       message: msg.text,
       status: mode === 'paper' ? 'Executed' : 'New',
       executed_at: mode === 'paper' ? new Date(now).toISOString() : null,
@@ -112,6 +131,6 @@
     for (const a of open) await db.updateAlert(a.id, { status: 'Executed', executed_at: new Date().toISOString() });
   }
 
-  const api = { dispatch, shouldSend, message, suggestion, markExecuted, setNotifier, notify: _notify };
+  const api = { dispatch, shouldSend, message, suggestion, reason, markExecuted, setNotifier, notify: _notify };
   root.TLMAlerts = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

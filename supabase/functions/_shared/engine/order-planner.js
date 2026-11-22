@@ -12,9 +12,11 @@
 
   /** Execution settings. Stored under settings.execution; every value can be changed without code. */
   const EXEC_DEFAULTS = Object.freeze({
-    mode: 'alert',                 // alert | shadow | confirm (confirm = stop GTTs, and exits if confirmExits; the rest stays shadow)
+    mode: 'alert',                 // alert | shadow | confirm | auto_sell | auto_full  (see MODES below)
     confirmExpiryMin: 15,          // a proposed stop GTT waits this long for your approval
     confirmExits: false,           // in confirm mode, also propose partial and full exits for your approval
+    confirmEntries: false,         // in confirm and auto_sell mode, also propose buy orders (entries, adds) for your approval
+    autoMinDone: 3,                // Auto modes need this many orders of the kind that YOU approved and that completed (the database enforces at least 1)
     killSwitch: false,
     entryBandPct: 0.5,             // entry limit = price + 0.5%
     addBandPct: 1,                 // add limit   = price + 1%
@@ -31,6 +33,18 @@
     exitWindow: [556, 925],        //              09:16–15:25
     intentExpirySec: 90,
   });
+  /**
+   * The five modes.
+   *   alert      alerts only; nothing is recorded as an order
+   *   shadow     records the order the engine would send; sends nothing
+   *   confirm    proposes stop GTTs (+ exits if confirmExits, + buys if confirmEntries); every one waits for your approval
+   *   auto_sell  stop GTTs, stop revisions and exits are approved automatically; buys still wait for you (if confirmEntries)
+   *   auto_full  buys, stop GTTs, revisions and exits are all approved automatically
+   * The gateway's own switches decide what may actually leave for Zerodha; the database decides whether an automatic approval is allowed.
+   */
+  const MODES = Object.freeze(['alert', 'shadow', 'confirm', 'auto_sell', 'auto_full']);
+  const CONFIRM_LIKE = new Set(['confirm', 'auto_sell', 'auto_full']);
+  const isConfirmLike = mode => CONFIRM_LIKE.has(mode);
   const execParams = settings => ({ ...EXEC_DEFAULTS, ...((settings && settings.execution) || {}) });
 
   const norm = s => String(s || '').toUpperCase().trim().replace(/^(NSE|BSE):/, '').replace(/\.(NS|BO)$/, '');
@@ -143,11 +157,20 @@
     }
     // CONFIRM mode covers stop GTTs only: a stop that passes the guards is PROPOSED for your approval.
     const isExit = intent.action === 'EXIT_PARTIAL' || intent.action === 'EXIT_ALL';
-    const confirm = x.mode === 'confirm' && ((intent.action === 'STOP_ENSURE' && status !== 'shadow_noop') || (isExit && x.confirmExits));
+    const isBuy = intent.action === 'ENTRY' || intent.action === 'ADD';
+    const sellAuto = x.mode === 'auto_sell' || x.mode === 'auto_full', buyAuto = x.mode === 'auto_full';
+    let confirm = false;
+    if (isConfirmLike(x.mode)) {
+      if (intent.action === 'STOP_ENSURE') confirm = status !== 'shadow_noop';
+      else if (isExit) confirm = sellAuto || x.confirmExits;
+      else if (isBuy) confirm = buyAuto || x.confirmEntries;
+    }
+    const autoEligible = confirm && (isBuy ? buyAuto : sellAuto);   // the gateway may ask the database to approve these without you
     if (confirm) status = would ? 'proposed' : 'blocked';
     const row = await db.insertOrderIntent({
       ...intent, intent_key: key, mode: confirm ? 'confirm' : 'shadow', status, would_send: would, alert_id: alert ? alert.id : null,
       guards, block_reasons: G.blockReasons(guards),
+      detail: { ...intent.detail, ...(autoEligible ? { autoEligible: true } : {}) },
       order_value: intent.limit_price ? round2(intent.qty * intent.limit_price) : null,
       expires_at: new Date(now + (confirm ? x.confirmExpiryMin * 60 : x.intentExpirySec) * 1000).toISOString(),
     });
@@ -163,9 +186,9 @@
    * Same guards as an engine stop. Returns the stored intent (status 'proposed' or 'blocked').
    * @param p  protection row { symbol, journalQty, journalStop, lastPrice }  @param takenAt  when the gateway read it
    */
-  async function proposeStop({ p, takenAt, settings, now }) {
+  async function proposeStop({ p, takenAt, settings, now, source, key }) {
     const exec = await loadContext({ settings, now });
-    if (exec.x.mode !== 'confirm') throw new Error('Switch the mode to Confirm first.');
+    if (!isConfirmLike(exec.x.mode)) throw new Error('Switch the mode to Confirm (or an Auto mode) first.');
     if (!(Number(p.journalStop) > 0)) throw new Error('This position has no stop in the journal.');
     const open = await db.getOrderIntents({ limit: 200 });
     if (open.some(i => i.mode === 'confirm' && i.action === 'STOP_ENSURE' && PENDING.has(i.status) && norm(i.symbol) === norm(p.symbol)))
@@ -174,10 +197,11 @@
     const guards = G.evaluate(intent, { now, minute: I.istMinutes(now), x: exec.x, execState: exec.execState, drift: exec.drift, brokerQty: exec.brokerQty,
       funds: exec.funds, intentsToday: exec.intentsToday, ltp: p.lastPrice, quoteAt: takenAt ? Date.parse(takenAt) : null, openQty: Number(p.journalQty), stop: p.journalStop });
     const would = G.wouldSend(guards);
-    return db.insertOrderIntent({ ...intent, intent_key: `${norm(p.symbol)}:MANUAL-STOP:${now}`, mode: 'confirm', status: would ? 'proposed' : 'blocked', would_send: would,
-      alert_id: null, guards, block_reasons: G.blockReasons(guards), order_value: null, detail: { source: 'requested from the protection report' },
+    return db.insertOrderIntent({ ...intent, intent_key: key || `${norm(p.symbol)}:MANUAL-STOP:${now}`, mode: 'confirm', status: would ? 'proposed' : 'blocked', would_send: would,
+      alert_id: null, guards, block_reasons: G.blockReasons(guards), order_value: null,
+      detail: { source: source || 'requested from the protection report', ...(exec.x.mode !== 'confirm' ? { autoEligible: true } : {}) },
       expires_at: new Date(now + exec.x.confirmExpiryMin * 60000).toISOString() });
   }
 
-  root.TLMOrders = { EXEC_DEFAULTS, execParams, plan, intentKey, brokerQtyMap, loadContext, record, proposeStop };
+  root.TLMOrders = { EXEC_DEFAULTS, MODES, isConfirmLike, execParams, plan, intentKey, brokerQtyMap, loadContext, record, proposeStop };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

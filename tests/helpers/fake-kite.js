@@ -15,7 +15,8 @@ function createFakeWorld({ apiKey = 'key123', apiSecret = 'sec456', clientId = '
     margins: { equity: { net: 100000 } },
     db: { exec_state: [], broker_snapshots: [], broker_orders: [], broker_gtts: [], drift_log: [], trades: [], order_intents: [], order_audit: [], alert_log: [], settings: [] },
     gttWrites: [], nextGttId: 9001, placeBehaviour: 'ok',   // ok | reject | timeout_applied | timeout_lost
-    orderWrites: [], nextOrderId: 5001, sellBehaviour: 'fill',   // fill | partial | open | stuck | reject | refuse | timeout_applied | timeout_lost
+    orderWrites: [], nextOrderId: 5001, sellBehaviour: 'fill', buyBehaviour: 'fill', // buy: fill | partial | none | reject | refuse | timeout_lost
+       // fill | partial | open | stuck | reject | refuse | timeout_applied | timeout_lost
     uid: '11111111-1111-1111-1111-111111111111',
     journalPassword: 'journal-pass', refreshToken: 'rt_1',
   };
@@ -72,7 +73,21 @@ function createFakeWorld({ apiKey = 'key123', apiSecret = 'sec456', clientId = '
         if (!authed()) return json(403, { status: 'error', message: 'Incorrect `api_key` or `access_token`.', error_type: 'TokenException' });
         const f = Object.fromEntries(new URLSearchParams(init.body));
         w.orderWrites.push({ method, ...f });
-        if (f.transaction_type !== 'SELL' || f.order_type !== 'MARKET' || f.product !== 'CNC' || !['-1', '5', '10'].includes(f.market_protection))
+        if (f.transaction_type === 'BUY') {                                   // only a delivery LIMIT buy with validity IOC
+          if (f.order_type !== 'LIMIT' || f.product !== 'CNC' || f.validity !== 'IOC' || !(Number(f.price) > 0))
+            return json(400, { status: 'error', message: 'fake kite accepts only CNC limit IOC buys', error_type: 'InputException' });
+          if (w.buyBehaviour === 'refuse') return json(400, { status: 'error', message: 'Insufficient funds', error_type: 'InputException' });
+          if (w.buyBehaviour === 'timeout_lost') throw new Error('socket hang up');
+          const q = Number(f.quantity), oid = String(w.nextOrderId++);
+          const got = { fill: q, partial: Math.floor(q / 2), none: 0, reject: 0 }[w.buyBehaviour] ?? q;
+          const st = w.buyBehaviour === 'reject' ? 'REJECTED' : (got ? 'COMPLETE' : 'CANCELLED');
+          w.orders.push({ order_id: oid, status: st, tradingsymbol: f.tradingsymbol, exchange: f.exchange, transaction_type: 'BUY', order_type: 'LIMIT', product: 'CNC', validity: 'IOC',
+            quantity: q, filled_quantity: got, pending_quantity: 0, average_price: got ? (w.buyFillPrice || Number(f.price) - 0.2) : 0, tag: f.tag, status_message: st === 'REJECTED' ? 'RMS: rule violated' : null });
+          if (got) { const h = w.holdings.find(x => x.tradingsymbol === f.tradingsymbol); if (h) h.quantity += got; else w.holdings.push({ tradingsymbol: f.tradingsymbol, quantity: got, t1_quantity: 0, last_price: Number(f.price) }); }
+          return ok({ order_id: oid });
+        }
+        const limitSell = f.transaction_type === 'SELL' && f.order_type === 'LIMIT' && f.product === 'CNC' && Number(f.price) > 0;
+        if (!limitSell && (f.transaction_type !== 'SELL' || f.order_type !== 'MARKET' || f.product !== 'CNC' || !['-1', '5', '10'].includes(f.market_protection)))
           return json(400, { status: 'error', message: 'fake kite accepts only protected CNC market sells', error_type: 'InputException' });
         const beh = w.sellScript && w.sellScript.length ? w.sellScript.shift() : w.sellBehaviour;
         if (beh === 'refuse') return json(400, { status: 'error', message: 'Insufficient holdings', error_type: 'InputException' });
@@ -147,6 +162,31 @@ function createFakeWorld({ apiKey = 'key123', apiSecret = 'sec456', clientId = '
         const okMove = !!it && it.mode === 'confirm' && it.status === a.p_from && (allowed[a.p_from] || []).includes(a.p_to);
         if (okMove) Object.assign(it, { status: a.p_to, result: a.p_result ?? it.result ?? null, broker_ref: a.p_broker_ref ?? it.broker_ref ?? null });
         return json(200, okMove);
+      }
+      if (url.pathname === '/rest/v1/rpc/exec_auto_decide_intent') {            // JS mirror of migration 013
+        const a = JSON.parse(init.body); const it = w.db.order_intents.find(i => i.id === a.p_id && i.user_id === w.uid);
+        if (!it) return json(200, 'not_found');
+        if (it.status !== 'proposed') return json(200, it.status);
+        if (it.mode !== 'confirm') return json(200, 'not_allowed:not a proposal');
+        if (it.expires_at && Date.parse(it.expires_at) < Date.now()) { it.status = 'expired'; return json(200, 'expired'); }
+        const cls = ['ENTRY', 'ADD'].includes(it.action) ? 'buy' : ['STOP_ENSURE', 'EXIT_PARTIAL', 'EXIT_ALL'].includes(it.action) ? 'sell' : null;
+        if (!cls) return json(200, 'not_allowed:this kind of order is never approved automatically');
+        const x = ((w.db.settings.find(r => r.user_id === w.uid) || {}).data || {}).execution || {};
+        if (!((x.mode === 'auto_sell' && cls === 'sell') || x.mode === 'auto_full')) return json(200, 'not_allowed:mode is ' + x.mode);
+        if (cls === 'buy' && x.killSwitch) return json(200, 'not_allowed:kill switch is on');
+        const min = Math.max(1, Number(x.autoMinDone) || 3);
+        const n = w.db.order_intents.filter(i => i.user_id === w.uid && i.mode === 'confirm' && i.status === 'done' && i.decided_at && i.decided_by !== 'auto'
+          && (cls === 'buy' ? ['ENTRY', 'ADD'].includes(i.action) : ['STOP_ENSURE', 'EXIT_PARTIAL', 'EXIT_ALL'].includes(i.action))
+          && (i.action === 'STOP_ENSURE' ? !!(i.result && i.result.verb) : Number(i.result && i.result.filled) > 0)).length;
+        if (n < min) return json(200, 'not_allowed:track record ' + n + ' of ' + min + ' ' + cls + ' orders approved by you');
+        Object.assign(it, { status: 'approved', decided_by: 'auto', decided_at: new Date().toISOString(), expires_at: new Date(Date.now() + 300000).toISOString() });
+        return json(200, 'approved');
+      }
+      if (url.pathname === '/rest/v1/rpc/exec_mark_booked') {
+        const a = JSON.parse(init.body); const it = w.db.order_intents.find(i => i.id === a.p_intent_id && i.user_id === w.uid);
+        const okm = !!it && it.mode === 'confirm' && ['ENTRY', 'ADD', 'STOP_ENSURE'].includes(it.action) && ['done', 'failed'].includes(it.status) && it.booking == null;
+        if (okm) { it.booking = a.p_booking; if (/^booked_/.test(a.p_booking)) it.booked_at = new Date().toISOString(); }
+        return json(200, okm ? 'ok' : 'not_updated');
       }
       const table = url.pathname.replace('/rest/v1/', ''); const rows = w.db[table];
       if (!rows) return json(404, { message: 'no table ' + table });

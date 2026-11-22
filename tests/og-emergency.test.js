@@ -80,7 +80,7 @@ test('confirm mode: proposes once with an alert, touches nothing until approved,
   assert.equal(out.done, 1);
   assert.deepEqual(cancels(w), ['900']);
   assert.equal(w.orders.find(o => o.order_id === '900').status, 'CANCELLED');
-  assert.deepEqual(sells(w).map(s => [s.quantity, s.market_protection, s.transaction_type, s.order_type]), [['100', '-1', 'SELL', 'MARKET']]);
+  assert.deepEqual(sells(w).map(s => [s.quantity, s.transaction_type, s.order_type]), [['100', 'SELL', 'LIMIT']]);
   assert.deepEqual(events(w, i.id), ['claimed', 'cancelling', 'cancel_confirmed', 'sending_sell', 'done', 'booked']);
   assert.deepEqual([i.status, i.result.filled, i.result.averagePrice, i.booking], ['done', 100, 87, 'booked_final']);
   const fe = w.db.trades[0].final_exit;
@@ -89,32 +89,42 @@ test('confirm mode: proposes once with an alert, touches nothing until approved,
   assert.deepEqual([em(w).length, sells(w).length], [1, 1], 'finished: nothing more is proposed or sold');
 });
 
-test('ladder: automatic protection, then 5%, then 10% — each unfilled sell is cancelled and confirmed before the next', async () => {
+test('one limit sell 1% below the current price: no ladder, no market order, trigger and price are recorded', async () => {
   const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
-  w.sellScript = ['open', 'open', 'fill'];
+  w.sellScript = ['open', 'open', 'fill'];                     // only the first would ever be used
   await gw.tickExecute();
-  assert.deepEqual(sells(w).map(s => s.market_protection), ['-1', '5', '10']);
-  assert.deepEqual(cancels(w), ['900', '5001', '5002']);
-  assert.deepEqual(w.orders.map(o => o.status), ['CANCELLED', 'CANCELLED', 'CANCELLED', 'COMPLETE']);
-  assert.deepEqual([i.status, i.result.filled, i.result.attempts.map(a => [a.protection, a.filled])], ['done', 100, [[-1, 0], [5, 0], [10, 100]]]);
-  assert.equal(new Set(sells(w).map(s => s.tag)).size, 3, 'each attempt has its own tag');
-});
-
-test('ladder: a partial fill is kept and only the remainder is sold next; the booked price is the weighted average', async () => {
-  const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
-  w.sellScript = ['partial', 'fill'];
-  await gw.tickExecute();
-  assert.deepEqual(sells(w).map(s => [s.quantity, s.market_protection]), [['100', '-1'], ['50', '5']]);
-  assert.deepEqual([i.status, i.result.filled, i.result.averagePrice, w.db.trades[0].final_exit.qty], ['done', 100, 87, 100]);
-});
-
-test('every rung fails → failed, says how many shares are still held, books nothing', async () => {
-  const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
-  w.sellScript = ['open', 'reject', 'open'];
-  await gw.tickExecute();
-  assert.deepEqual([i.status, sells(w).length, i.result.stillHeld, i.booking ?? null, w.db.trades[0].final_exit], ['failed', 3, 100, null, null]);
-  assert.match(i.result.reason, /still holding 100 shares after 3 attempt\(s\) — sell on Kite now/);
+  assert.equal(sells(w).length, 1, 'exactly one sell attempt');
+  assert.deepEqual([sells(w)[0].order_type, sells(w)[0].market_protection ?? null], ['LIMIT', null]);
+  const a = i.result.attempts[0];
+  assert.equal(a.limit, Math.round(Math.floor(a.cmp * 0.99 / 0.05 + 1e-9) * 0.05 * 100) / 100);
+  assert.ok(a.limit < a.cmp && a.limit >= a.cmp * 0.99 - 0.05, 'limit is within 1% below the current price');
+  assert.equal(a.trigger, 95);
+  assert.deepEqual(cancels(w), ['900', '5001'], 'unfilled order is cancelled and confirmed');
+  assert.deepEqual([i.status, i.result.attempts.length], ['failed', 1]);
+  assert.match(i.result.reason, /still holding 100 shares after 1 attempt\(s\) — sell on Kite now/);
   assert.ok(!w.orders.some(o => o.status === 'OPEN'), 'no order of ours is left open');
+});
+
+test('a filled limit sell is booked at its executed price', async () => {
+  const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
+  w.sellScript = ['fill'];
+  await gw.tickExecute();
+  assert.deepEqual([i.status, i.result.filled, i.result.averagePrice, i.booking, w.db.trades[0].final_exit.qty], ['done', 100, 87, 'booked_final', 100]);
+});
+
+test('a partly filled limit sell is kept (booked as filled); the rest is not chased and the engine re-detects the remainder', async () => {
+  const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
+  w.sellScript = ['partial'];
+  await gw.tickExecute();
+  assert.equal(sells(w).length, 1);
+  assert.deepEqual([i.status, i.result.filled, i.result.stillHeld], ['failed', 50, 50]);
+});
+
+test('a rejected limit sell fails with the held quantity and books nothing', async () => {
+  const { w, gw } = await gapDown(); await gw.tickExecute(); const i = em(w)[0]; approve(i);
+  w.sellScript = ['reject'];
+  await gw.tickExecute();
+  assert.deepEqual([i.status, sells(w).length, i.result.stillHeld, i.booking ?? null, w.db.trades[0].final_exit], ['failed', 1, 100, null, null]);
 });
 
 test('the GTT order cannot be cancelled → unknown, and NO sell is sent; once it is final the case is re-detected', async () => {

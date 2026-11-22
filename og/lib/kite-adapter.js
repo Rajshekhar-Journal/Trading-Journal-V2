@@ -8,8 +8,9 @@
  *   always            log in, read profile / funds / orders / trades / holdings / positions / GTTs
  *   allowGttWrites    place and modify a single-leg stop-loss SELL GTT (LIMIT, CNC)
  *   allowSellOrders   one market SELL of delivery shares (protection -1, 5 or 10), cancel an order, delete a GTT
+ *   allowBuyOrders    one marketable LIMIT BUY of delivery shares, validity IOC (fills now or is cancelled; never rests)
  *
- * There is no function here that can express a BUY, a priced order or any other product.
+ * Nothing else can be expressed here: no other product, no resting buy, no short sell.
  */
 'use strict';
 const { KiteConnect } = require('kiteconnect');
@@ -62,7 +63,7 @@ function fetchTransport(fetchImpl) {
   };
 }
 
-function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, fetchImpl, timeoutMs = 10000, allowGttWrites = false, allowSellOrders = false }) {
+function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, fetchImpl, timeoutMs = 10000, allowGttWrites = false, allowSellOrders = false, allowBuyOrders = false }) {
   const kc = new KiteConnect({ api_key: apiKey, root: baseUrl || undefined, timeout: timeoutMs, access_token: accessToken || undefined });
   if (fetchImpl) kc.requestInstance.defaults.adapter = fetchTransport(fetchImpl);
   let _token = accessToken || '';
@@ -96,14 +97,32 @@ function createKiteAdapter({ baseUrl, loginUrl, apiKey, apiSecret, accessToken, 
         quantity: qty, product: 'CNC', validity: 'DAY', market_protection: protection, tag }));
       return { orderId: String(d.order_id) };
     },
+    /** One LIMIT sell of delivery shares (used by the Emergency Exit: current price less 1%). @returns { orderId } */
+    async placeLimitSell({ symbol, exchange = 'NSE', qty, limit, tag }) {
+      if (!Number.isInteger(qty) || qty <= 0 || !(Number(limit) > 0)) throw new KiteError('a sell needs a whole-number quantity and a limit price', { status: 0, errorType: 'InputException' });
+      const d = await call(() => kc.placeOrder('regular', { tradingsymbol: symbol, exchange, transaction_type: 'SELL', order_type: 'LIMIT',
+        quantity: qty, product: 'CNC', validity: 'DAY', price: Number(limit), tag }));
+      return { orderId: String(d.order_id) };
+    },
     async cancelOrder(orderId) { await call(() => kc.cancelOrder('regular', orderId)); return { orderId: String(orderId) }; },
     async deleteGtt(id) { await call(() => kc.deleteGTT(id)); return { triggerId: String(id) }; },
   } : {};
 
+  const buyWrites = allowBuyOrders ? {
+    /** @returns { orderId } */
+    async placeBuyIoc({ symbol, exchange = 'NSE', qty, limit, tag }) {
+      if (!Number.isInteger(qty) || qty <= 0 || !(Number(limit) > 0)) throw new KiteError('a buy needs a whole-number quantity and a limit price', { status: 0, errorType: 'InputException' });
+      const d = await call(() => kc.placeOrder('regular', { tradingsymbol: symbol, exchange, transaction_type: 'BUY', order_type: 'LIMIT',
+        quantity: qty, product: 'CNC', validity: 'IOC', price: Number(limit), tag }));
+      return { orderId: String(d.order_id) };
+    },
+  } : {};
+
   return {
-    readOnly: !allowGttWrites && !allowSellOrders,
+    readOnly: !allowGttWrites && !allowSellOrders && !allowBuyOrders,
     ...gttWrites,
     ...sellWrites,
+    ...buyWrites,
     setAccessToken(t) { _token = t || ''; kc.setAccessToken(_token); },
     hasToken() { return !!_token; },
 

@@ -19,6 +19,7 @@ import '../_shared/engine/db-cloud.js';
 import '../_shared/engine/indicators.js';
 import '../_shared/engine/tlm-rules.js';
 import '../_shared/engine/tlm-engine.js';
+import '../_shared/engine/strategies.js';
 import '../_shared/engine/chartbook.js';
 import '../_shared/engine/market-data.js';
 import '../_shared/engine/alert-service.js';
@@ -26,6 +27,7 @@ import '../_shared/engine/executors.js';
 import '../_shared/engine/guards.js';
 import '../_shared/engine/order-planner.js';
 import '../_shared/engine/exec-watch.js';
+import '../_shared/engine/fill-booking.js';
 import '../_shared/engine/runner.js';
 
 // deno-lint-ignore no-explicit-any
@@ -105,7 +107,10 @@ async function runUser(uid: string, force: boolean) {
     // Auto Trade Engine: gateway-offline / login / protection alerts, and Telegram for alerts the gateway queued. Read-only checks.
     const watch = await G.db.getSettings().then((settings: unknown) => G.TLMExecWatch.run({ settings }))
       .catch((e: Error) => { console.error('exec-watch failed', e.message); return { outbox: 0, raised: [] }; });
-    return { ran, errors, charts, watch };
+    // Auto Trade Engine: write completed buys / revised stops into the journal, then propose the stop GTT for the new quantity.
+    const fills = await G.db.getSettings().then((settings: unknown) => G.TLMFills.run({ settings }))
+      .catch((e: Error) => { console.error('fill booking failed', e.message); return { booked: 0, stops: [], notBooked: 0 }; });
+    return { ran, errors, charts, watch, fills };
   });
 }
 
