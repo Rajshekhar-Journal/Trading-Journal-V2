@@ -922,6 +922,29 @@ const settingsModule = (() => {
     </svg>`;
   }
 
+  /** Rule table rows [rule, stage, trigger, action] for a Strategy B / custom strategy (same columns as Strategy A's table). */
+  function _strategyRuleRows(sp, p) {
+    const rows = [['LC-01', 'Entry', `Price holds above the trigger for ${p.entryHoldMin} min`, `Buy ${sp.entryPct}% of the planned size; stop = initial stop`]];
+    if (sp.add.on) rows.push(['LC-02', 'Add', `Price holds above ${sp.add.atR}R for ${p.targetHoldMin} min`, `Buy ${sp.add.pct}% of the first qty; stop to initial + ${sp.add.stopToR}R`]);
+    if (sp.partial.on) {
+      rows.push(['ST-01', 'Partial profit', `Price holds above ${sp.partial.atR}R for ${p.targetHoldMin} min`, `Sell ${sp.partial.pct}% of the open qty (once)`]);
+      if (sp.partial.stopAfter === 'cost') rows.push(['ST-04', 'Stop to cost', 'Right after the partial profit', 'Raise the stop to the average cost']);
+    }
+    if (sp.trail.type !== 'none') rows.push(['ST-02', 'Trend exit', (sp.trail.type === 'ema' ? `Daily close below the ${sp.trail.period} EMA less ${sp.trail.bufferPct}%` : `Daily close ${sp.trail.pct}% below the highest close since entry`) + (sp.trail.afterPartial ? ' (after the partial)' : ''), 'Exit the remaining position']);
+    if (sp.timeExit.on) rows.push(['ST-03', 'Time exit', `+${sp.timeExit.minR}R not reached within ${sp.timeExit.days} trading days`, 'Exit the whole position']);
+    rows.push(['LC-10', 'Day start', `${String(Math.floor(p.briefMinute / 60)).padStart(2, '0')}:${String(p.briefMinute % 60).padStart(2, '0')} IST each trading day`, 'Brief: hard stop and today\'s trail level']);
+    rows.push(['LC-09', 'Hard stop', 'Any price below the hard stop', 'Exit the whole position']);
+    return rows;
+  }
+
+  /** One strategy's rules as a table — used on both the Lifecycle & Alerts page and the Strategies page. */
+  function _strategyRulesTable(sp, p) {
+    const rows = sp.kind === 'lifecycle' ? _tlmRuleRows(p) : _strategyRuleRows(sp, p);
+    return `<table class="data-table" style="font-size:12px;margin:6px 0">
+        <thead><tr><th>Rule</th><th>Stage</th><th>Trigger</th><th>Action</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody></table>`;
+  }
+
   async function _pageAlerts() {
     const settings = await db.getSettings();
     const p = TLMRunner.paramsFrom(settings);
@@ -937,6 +960,18 @@ const settingsModule = (() => {
         <tbody>${_tlmRuleRows(p).map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody>
       </table>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">* On a large-candle day (close-to-close move above ${p.largeCandleAtrMult} × ATR14) the base is day low + ½ the move. Stages only move forward; stops and trails never move down. A target that is off still moves the stage forward, but takes no action.</div>
+
+      ${(() => {
+        const others = TLMStrategies.list(settings).filter(x => x.kind === 'rules');
+        const def = TLMStrategies.defaultId(settings);
+        return `<div class="settings-section-header" style="margin-top:24px;display:flex;justify-content:space-between;align-items:center">
+            <span>Other trade management strategies (${others.length})</span>
+            <button class="btn btn-secondary btn-sm" onclick="settingsModule._goPage('strategies')">🧭 Manage strategies</button></div>
+          <div class="alert-banner info" style="margin-bottom:10px">ℹ The table above is <strong>Strategy A</strong>${def === 'A' ? ' (default)' : ''}. A position can follow any strategy below instead; it raises these alerts, each with a one-line reason. The hard stop applies to all.</div>`
+          + others.map(sp => `<details class="card" style="padding:10px 12px;margin-bottom:8px"${sp.id === def ? ' open' : ''}>
+              <summary style="cursor:pointer;font-weight:600">${sp.name}${sp.id === def ? ' <span class="badge badge-muted" style="font-size:10px">default</span>' : ''}${sp.builtin ? '' : ' <span class="badge badge-muted" style="font-size:10px">custom</span>'}</summary>
+              ${_strategyRulesTable(sp, p)}</details>`).join('');
+      })()}
 
       <div class="settings-section-header" style="margin-top:24px">Market Holidays</div>
       <div class="alert-banner info" style="margin-bottom:14px">ℹ Comma-separated dates (DD-MM-YYYY). The engine does not run on these days.</div>
@@ -1003,16 +1038,21 @@ const settingsModule = (() => {
     const all = TLMStrategies.list(settings);
     const def = TLMStrategies.defaultId(settings);
     const savedB = (settings.strategies || []).some(x => x && x.id === 'B');
+    const p = TLMRunner.paramsFrom(settings);
     const card = sp => `<div class="card" style="padding:12px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
           <div><strong>${sp.name}</strong>${sp.id === def ? ' <span class="badge badge-muted" style="font-size:10px">default</span>' : ''}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${sp.kind === 'lifecycle' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openLifecycleSettings()">⚙ Lifecycle settings</button>` : ''}
             ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('${sp.id}')">Edit</button>` : ''}
             ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('', '${sp.id}')">Duplicate</button>` : ''}
             ${sp.id === 'B' && savedB ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('B')">Reset to default</button>` : ''}
             ${sp.kind === 'rules' && !sp.builtin ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('${sp.id}')">Delete</button>` : ''}
           </div></div>
-        <ul style="margin:8px 0 0 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(t => `<li>${t}</li>`).join('')}</ul></div>`;
+        <ul style="margin:8px 0 0 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(t => `<li>${t}</li>`).join('')}</ul>
+        <details style="margin-top:6px"${sp.kind === 'lifecycle' ? '' : ''}><summary style="cursor:pointer;font-size:12.5px;font-weight:600">Rules and alerts</summary>
+          ${sp.kind === 'lifecycle' ? `<div class="card" style="padding:10px;margin:8px 0">${_tlmFlowSvg(p)}</div>` : ''}
+          ${_strategyRulesTable(sp, p)}</details></div>`;
     return `<div class="settings-page">
       <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center">
         <span>Trade Management Strategies</span>
