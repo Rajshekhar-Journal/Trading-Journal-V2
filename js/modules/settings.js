@@ -12,8 +12,7 @@ const settingsModule = (() => {
     { id: 'trading', label: '📊 Trading Defaults', icon: '📊' },
     { id: 'risk', label: '🛡 Risk Management', icon: '🛡️' },
     { id: 'charges', label: '💳 Charges & Brokerage', icon: '💳' },
-    { id: 'alerts', label: '🔁 Trade Lifecycle & Alerts', icon: '🔁' },
-    { id: 'strategies', label: '🧭 Trade Management Strategies', icon: '🧭' },
+    { id: 'alerts', label: '🔁 Trade Management & Alerts', icon: '🔁' },
     { id: 'execution', label: '🔌 Auto Trade – Broker Link', icon: '🔌' },
     { id: 'data', label: '🗄 Data Management', icon: '🗄️' },
     { id: 'app', label: '📱 Application', icon: '📱' },
@@ -53,9 +52,10 @@ const settingsModule = (() => {
   }
 
   async function _showPage(id) {
+    if (id === 'strategies') { id = 'alerts'; _activePage = 'alerts'; }
     const el = document.getElementById('settings-content');
     if (!el) return;
-    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, strategies: _pageStrategies, execution: _pageExecution, data: _pageData, app: _pageApp, formulas: _pageFormulas };
+    const asyncPages = { start: _pageStart, general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, strategies: _pageAlerts, execution: _pageExecution, data: _pageData, app: _pageApp, formulas: _pageFormulas };
     if (asyncPages[id]) {
       el.innerHTML = await asyncPages[id]();
       if (id === 'alerts') _showTelegramStatus();
@@ -348,7 +348,7 @@ const settingsModule = (() => {
 
           ${S('um8','&#128257;','Trade Lifecycle Rule Engine v3.0 &mdash; Guide',`
             <h4>Trade management strategies</h4>
-            <p>Each position follows one strategy, chosen on the Watchlist item before entry or changed later on the position (<em>Change strategy</em>). Build and edit them in <strong>Settings &rarr; Trade Management Strategies</strong>.</p>
+            <p>Each position follows one strategy, chosen on the Watchlist item before entry or changed later on the position (<em>Change strategy</em>). Build and edit them in <strong>Settings &rarr; Trade Management &amp; Alerts</strong>.</p>
             <ul>
               <li><strong>Strategy A</strong> &mdash; the lifecycle described below (adds, stop locks, tranche trails).</li>
               <li><strong>Strategy B</strong> &mdash; buy the full planned size, sell 50% at 3R and move the stop to cost, trail the rest: exit on a daily close below the 21 EMA less 1%. Time exit: if +1R is not reached within 10 trading days, exit all. All numbers are editable.</li>
@@ -945,41 +945,75 @@ const settingsModule = (() => {
         <tbody>${rows.map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody></table>`;
   }
 
+  // ── Strategy list (shared by the Lifecycle & Alerts page and the Strategies page) ──
+  const _ACC_CSS = `<style>
+    .st-acc{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+    .st-acc details{border-top:1px solid var(--border)} .st-acc details:first-child{border-top:0}
+    .st-acc summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;align-items:center;gap:10px}
+    .st-acc summary::-webkit-details-marker{display:none}
+    .st-acc summary::before{content:'›';color:var(--text-muted);transition:transform .15s;display:inline-block;width:10px}
+    .st-acc details[open]>summary::before{transform:rotate(90deg)}
+    .st-acc summary:hover{background:var(--bg)}
+    .st-acc .st-name{font-weight:600;font-size:13.5px} .st-acc .st-line{color:var(--text-muted);font-size:12px;margin-left:auto;text-align:right}
+    .st-acc .st-body{padding:4px 14px 14px 34px}
+    .st-acc .st-tag{font-size:10px;padding:1px 7px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-muted)}
+    .st-sec{border:1px solid var(--border);border-radius:10px;margin-bottom:12px}
+    .st-sec>summary{list-style:none;cursor:pointer;padding:10px 14px;font-weight:600;font-size:13.5px;display:flex;justify-content:space-between}
+    .st-sec>summary::-webkit-details-marker{display:none}
+    .st-sec>summary::after{content:'+';color:var(--text-muted)} .st-sec[open]>summary::after{content:'−'}
+    .st-sec>.st-in{padding:0 14px 14px}
+    .st-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+    .st-note{color:var(--text-muted);font-size:12.5px;margin:0 0 14px}
+  </style>`;
+
+  /** Short one-line summary of a strategy, shown on its collapsed row. */
+  function _stratLine(sp, p) {
+    if (sp.kind === 'lifecycle') {
+      const t = TLMRules.targetPlan(p), on = (k, txt) => (t[k].on ? txt : null);
+      return [on('T1', `add ${t.T1.r}R`), on('T2', `lock ${t.T2.r}R`), on('T5', `trail ${t.T5.r}R`), on('T10', `trail ${t.T10.r}R`)].filter(Boolean).join(' · ');
+    }
+    return [sp.entryPct < 100 ? `entry ${sp.entryPct}%` : null, sp.add.on ? `add ${sp.add.atR}R` : null, sp.partial.on ? `sell ${sp.partial.pct}% @ ${sp.partial.atR}R` : null,
+      sp.trail.type === 'ema' ? `${sp.trail.period} EMA trail` : sp.trail.type === 'pct' ? `${sp.trail.pct}% trail` : null,
+      sp.timeExit.on ? `time exit ${sp.timeExit.days}d` : null].filter(Boolean).join(' · ');
+  }
+
+  /** Every strategy as a collapsed row; open one to see its rules, alerts and actions. */
+  function _strategyAccordion(settings, p) {
+    const def = TLMStrategies.defaultId(settings);
+    const savedB = (settings.strategies || []).some(x => x && x.id === 'B');
+    const btn = (label, fn) => `<button class="btn btn-secondary btn-sm" onclick="${fn}">${label}</button>`;
+    return _ACC_CSS + '<div class="st-acc">' + TLMStrategies.list(settings).map(sp => {
+      const tags = (sp.id === def ? '<span class="st-tag">default</span>' : '') + (sp.builtin || sp.kind === 'lifecycle' ? '' : '<span class="st-tag">custom</span>');
+      const actions = sp.kind === 'lifecycle' ? btn('⚙ Settings', 'settingsModule._openLifecycleSettings()')
+        : btn('Edit', `settingsModule._openStrategyEditor('${sp.id}')`) + btn('Duplicate', `settingsModule._openStrategyEditor('', '${sp.id}')`)
+          + (sp.id === 'B' && savedB ? btn('Reset', "settingsModule._deleteStrategy('B')") : '')
+          + (!sp.builtin ? btn('Delete', `settingsModule._deleteStrategy('${sp.id}')`) : '');
+      return `<details><summary><span class="st-name">${sp.name.split(' — ')[0]}</span>${tags}<span class="st-line">${_stratLine(sp, p)}</span></summary>
+        <div class="st-body">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${actions}</div>
+          ${_strategyRulesTable(sp, p)}
+          ${sp.kind === 'lifecycle' ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Show flow diagram</summary><div style="padding-top:8px">${_tlmFlowSvg(p)}</div></details>` : ''}
+        </div></details>`;
+    }).join('') + '</div>';
+  }
+
   async function _pageAlerts() {
     const settings = await db.getSettings();
     const p = TLMRunner.paramsFrom(settings);
     return `<div class="settings-page">
-      <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Trade Lifecycle rules (v${p.rulesVersion})</span>
-        <button class="btn btn-primary btn-sm" onclick="settingsModule._openLifecycleSettings()">⚙ Lifecycle settings</button>
-      </div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Real and paper trades follow the same rules. Real trades get an alert (Telegram + Alert Dashboard); paper trades are executed automatically. Change targets and timings with <strong>⚙ Lifecycle settings</strong>.</div>
-      <div class="card" style="padding:12px;margin-bottom:16px">${_tlmFlowSvg(p)}</div>
-      <table class="data-table" style="font-size:12px;margin-bottom:6px">
-        <thead><tr><th>Rule</th><th>Stage</th><th>Trigger</th><th>Action</th></tr></thead>
-        <tbody>${_tlmRuleRows(p).map(r => `<tr><td class="font-mono">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody>
-      </table>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:20px">* On a large-candle day (close-to-close move above ${p.largeCandleAtrMult} × ATR14) the base is day low + ½ the move. Stages only move forward; stops and trails never move down. A target that is off still moves the stage forward, but takes no action.</div>
+      <div class="st-top"><div class="settings-section-header" style="margin:0">Trade Management & Alerts</div>
+        <button class="btn btn-primary btn-sm" onclick="settingsModule._openStrategyEditor('')">+ New strategy</button></div>
+      <p class="st-note">Each position follows one strategy — pick it on the Watchlist item or change it on the position. Open a strategy to see its rules and the alerts it raises. Real trades alert you (Telegram + dashboard); paper trades execute automatically. The hard stop always applies.</p>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px"><span style="color:var(--text-muted)">Default strategy</span>
+        <select class="form-select" id="st-default" style="width:auto" onchange="settingsModule._saveDefaultStrategy()">${TLMStrategies.list(settings).map(x => `<option value="${x.id}"${x.id === TLMStrategies.defaultId(settings) ? ' selected' : ''}>${x.name.split(' — ')[0]}</option>`).join('')}</select></div>
+      ${_strategyAccordion(settings, p)}
 
-      ${(() => {
-        const others = TLMStrategies.list(settings).filter(x => x.kind === 'rules');
-        const def = TLMStrategies.defaultId(settings);
-        return `<div class="settings-section-header" style="margin-top:24px;display:flex;justify-content:space-between;align-items:center">
-            <span>Other trade management strategies (${others.length})</span>
-            <button class="btn btn-secondary btn-sm" onclick="settingsModule._goPage('strategies')">🧭 Manage strategies</button></div>
-          <div class="alert-banner info" style="margin-bottom:10px">ℹ The table above is <strong>Strategy A</strong>${def === 'A' ? ' (default)' : ''}. A position can follow any strategy below instead; it raises these alerts, each with a one-line reason. The hard stop applies to all.</div>`
-          + others.map(sp => `<details class="card" style="padding:10px 12px;margin-bottom:8px"${sp.id === def ? ' open' : ''}>
-              <summary style="cursor:pointer;font-weight:600">${sp.name}${sp.id === def ? ' <span class="badge badge-muted" style="font-size:10px">default</span>' : ''}${sp.builtin ? '' : ' <span class="badge badge-muted" style="font-size:10px">custom</span>'}</summary>
-              ${_strategyRulesTable(sp, p)}</details>`).join('');
-      })()}
-
-      <div class="settings-section-header" style="margin-top:24px">Market Holidays</div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Comma-separated dates (DD-MM-YYYY). The engine does not run on these days.</div>
-      <div class="form-group">
+      <details class="st-sec"><summary>Market holidays</summary><div class="st-in">
+        <p class="st-note" style="margin-bottom:8px">Comma-separated dates (DD-MM-YYYY). The engine does not run on these days.</p>
         <input class="form-input" type="text" id="al-holidays" value="${settings.marketHolidays || ''}" placeholder="e.g. 26-01-2026, 15-08-2026, 02-10-2026">
-      </div>
+      </div></details>
 
-      <div class="settings-section-header" style="margin-top:24px;">Telegram (real-trade alerts only)</div>
+      <details class="st-sec"><summary>Telegram</summary><div class="st-in">
       <details class="tg-guide" style="margin:0 0 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg);padding:10px 14px;font-size:12.5px;line-height:1.6">
         <summary style="cursor:pointer;font-weight:600;color:var(--primary)">📖 Account setup — step-by-step guide (about 3 minutes)</summary>
         <ol style="margin:10px 0 4px 18px;padding:0">
@@ -1015,6 +1049,7 @@ const settingsModule = (() => {
         <button class="btn btn-secondary btn-sm" id="al-telegram-test" onclick="settingsModule._testTelegram()">📨 Send test message</button>
         <span id="al-telegram-result" style="font-size:12px;color:var(--text-muted)">Saves the Chat ID, then the server sends a test message.</span>
       </div>
+      </div></details>
 
       ${_saveBtn('saveAlerts')}
     </div>`;
@@ -1033,44 +1068,15 @@ const settingsModule = (() => {
 
   /** Dialog: target levels (on/off, R, trail %) and engine timings. Saves settings.tlmParams. */
   // ── PAGE: Trade Management Strategies ──────────────────────────────────────
-  async function _pageStrategies() {
-    const settings = await db.getSettings();
-    const all = TLMStrategies.list(settings);
-    const def = TLMStrategies.defaultId(settings);
-    const savedB = (settings.strategies || []).some(x => x && x.id === 'B');
-    const p = TLMRunner.paramsFrom(settings);
-    const card = sp => `<div class="card" style="padding:12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-          <div><strong>${sp.name}</strong>${sp.id === def ? ' <span class="badge badge-muted" style="font-size:10px">default</span>' : ''}</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${sp.kind === 'lifecycle' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openLifecycleSettings()">⚙ Lifecycle settings</button>` : ''}
-            ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('${sp.id}')">Edit</button>` : ''}
-            ${sp.kind === 'rules' ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._openStrategyEditor('', '${sp.id}')">Duplicate</button>` : ''}
-            ${sp.id === 'B' && savedB ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('B')">Reset to default</button>` : ''}
-            ${sp.kind === 'rules' && !sp.builtin ? `<button class="btn btn-secondary btn-sm" onclick="settingsModule._deleteStrategy('${sp.id}')">Delete</button>` : ''}
-          </div></div>
-        <ul style="margin:8px 0 0 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(t => `<li>${t}</li>`).join('')}</ul>
-        <details style="margin-top:6px"${sp.kind === 'lifecycle' ? '' : ''}><summary style="cursor:pointer;font-size:12.5px;font-weight:600">Rules and alerts</summary>
-          ${sp.kind === 'lifecycle' ? `<div class="card" style="padding:10px;margin:8px 0">${_tlmFlowSvg(p)}</div>` : ''}
-          ${_strategyRulesTable(sp, p)}</details></div>`;
-    return `<div class="settings-page">
-      <div class="settings-section-header" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Trade Management Strategies</span>
-        <button class="btn btn-primary btn-sm" onclick="settingsModule._openStrategyEditor('')">+ New strategy</button>
-      </div>
-      <div class="alert-banner info" style="margin-bottom:14px">ℹ Each position follows one strategy. Pick it on the Watchlist item (before entry), or change it later on the position (Change strategy). The strategy is copied into the trade when it opens, so editing one here never changes a trade that is already open. Every strategy keeps the hard stop. Every alert says in one line why it was raised.</div>
-      <div class="form-group" style="max-width:420px;margin-bottom:16px"><label class="form-label">Default strategy (used when none is chosen)</label>
-        <select class="form-select" id="st-default" onchange="settingsModule._saveDefaultStrategy()">${all.map(x => `<option value="${x.id}"${x.id === def ? ' selected' : ''}>${x.name}</option>`).join('')}</select></div>
-      ${all.map(card).join('')}
-    </div>`;
-  }
+
+
 
   async function _saveDefaultStrategy() {
     const settings = await db.getSettings();
     settings.defaultStrategy = document.getElementById('st-default').value;
     await db.saveSettings(settings);
     app.toast('Default strategy saved', 'success');
-    await _showPage('strategies');
+    await _showPage('alerts');
   }
 
   /** Editor for a rules strategy. id = edit this one; baseId = start a new one from a copy of that strategy. */
@@ -1118,7 +1124,7 @@ const settingsModule = (() => {
         await db.saveSettings(st);
         app.closeModal();
         app.toast('Strategy saved', 'success');
-        await _showPage('strategies');
+        await _showPage('alerts');
       } }
     ]);
   }
@@ -1130,7 +1136,7 @@ const settingsModule = (() => {
     st.strategies = (st.strategies || []).filter(x => x && x.id !== id);
     if (st.defaultStrategy === id && id !== 'B') delete st.defaultStrategy;
     await db.saveSettings(st);
-    await _showPage('strategies');
+    await _showPage('alerts');
   }
 
   async function _openLifecycleSettings(useDefaults = false) {
