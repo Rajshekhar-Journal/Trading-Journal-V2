@@ -29,13 +29,13 @@ test('list: A, B and custom; default A; B carries the agreed rules', () => {
   assert.deepEqual(l.map(x => x.id), ['A', 'B', 'c1']);
   const b = S.find('B', settings);
   assert.deepEqual([b.entryPct, b.add.on, b.stopToCost.on, b.stopToCost.atR, b.partial.mode, b.partial.atR, b.partial.pct, b.partial.holdMin, b.partial.largeAtr, b.partial.largeFrac],
-    [100, false, true, 2, 'trail', 3, 50, 5, 3, 0.25]);
+    [100, false, true, 2, 'trail', 3, 50, 10, 3, 0.25]);
   assert.deepEqual([b.trail.type, b.trail.period, b.trail.deepPct, b.trail.confirm, b.timeExit.days, b.timeExit.minR], ['ema', 21, 2, true, 10, 1]);
   assert.equal(S.validate(b), null);
   assert.equal(S.defaultId({}), 'A'); assert.equal(S.defaultId({ defaultStrategy: 'B' }), 'B');
   const d = S.describe(b).join(' ');
   assert.match(d, /at 2R the hard stop moves to your average cost/);
-  assert.match(d, /at 3R, 50% becomes a tranche .* sold after 5 min below the stop/);
+  assert.match(d, /at 3R, 50% becomes a tranche .* sold after 10 min below the stop/);
   assert.match(d, /21 EMA − 2% exits; a close between that and the EMA marks a warning low/);
 });
 
@@ -66,14 +66,14 @@ test('B at 3R: no sale — 50% gets a profit-booking stop = max(today\'s low, ha
   assert.equal(S.activeTranche(low.state).trail, 112, 'hard stop above the day low wins');
 });
 
-test('B tranche: sold only after 5 minutes below its stop', () => {
+test('B tranche: sold only after 10 minutes below its stop', () => {
   const s = ev(stateB(), 116, 1000, minutes(116, 6, NOW).map((c, i) => (i === 0 ? { ...c, low: 108 } : c))).state;
   const later = NOW + 86400000;
-  const dip = [...minutes(110, 2, later - 180000), ...minutes(107, 3, later)];
-  assert.deepEqual(S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: dip, daily: [] }, now: later, params: p }).actions, [], '3 minutes below: no sale');
-  const r = S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: minutes(107, 6, later), daily: [] }, now: later, params: p });
+  const dip = [...minutes(110, 6, later - 300000), ...minutes(107, 5, later)];
+  assert.deepEqual(S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: dip, daily: [] }, now: later, params: p }).actions, [], '5 minutes below: no sale');
+  const r = S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: minutes(107, 11, later), daily: [] }, now: later, params: p });
   assert.deepEqual(r.actions.map(a => [a.rule, a.kind, a.qty]), [['ST-05', 'SELL', 500]]);
-  assert.match(r.actions[0].why, /held below the profit-booking stop ₹108\.00 for 5 min — sell the 500-share tranche/);
+  assert.match(r.actions[0].why, /held below the profit-booking stop ₹108\.00 for 10 min — sell the 500-share tranche/);
   assert.equal(S.activeTranche(r.state), null);
 });
 
@@ -182,7 +182,7 @@ test('paper trade on B: stop to cost, tranche set (nothing booked), tranche sold
   t = X.applyPaper(t, r.actions, { settings: {}, date: '2026-11-18', openQty: 1000 });
   assert.deepEqual([t.partialExits.length, t.currentStop], [0, 100]);
   const later = NOW + 86400000;
-  const x = S.evaluate({ state: r.state, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: minutes(107, 6, later), daily: [] }, now: later, params: p });
+  const x = S.evaluate({ state: r.state, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: minutes(107, 11, later), daily: [] }, now: later, params: p });
   t = X.applyPaper(t, x.actions, { settings: {}, date: '2026-11-19', openQty: 1000 });
   assert.deepEqual([t.partialExits.length, t.partialExits[0].qty, t.partialExits[0].actionSource], [1, 500, 'ST-05 Tranche sold (Paper)']);
 });
@@ -198,4 +198,37 @@ test('switch checklist: what the user ticks decides the starting point', () => {
   const a = S.switchState({ trade, strategyId: 'A', params: p, settings, now: NOW, done: { stage: 3 } });
   assert.equal(a.stage, R.STAGES.R2);
   assert.ok(S.describe(S.find('A', settings), p).length >= 6, 'Strategy A is described rule by rule');
+});
+
+test('B protective trail from 2R: max(cost, 21 EMA − 2%), raised each morning, 10 min below sells everything', () => {
+  const up = mkDaily(40, 80, 1, '2026-11-17');                           // EMA21 ≈ 109 → 106.82 after −2%
+  const r = S.evaluate({ state: stateB(), position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 111, intraday: minutes(111, 6, NOW), daily: up }, now: NOW, params: p });
+  const e = G.TLMIndicators.ema(up.map(c => c.close), 21);
+  assert.equal(r.state.protStop, G.TLMIndicators.roundTick(e * 0.98));
+  assert.match(r.actions[0].why, /protective trail ₹[\d.]+ = max\(cost, 21 EMA − 2%\), 10 min below it sells everything/);
+  const later = NOW + 86400000, lvl = r.state.protStop;
+  const short = [...minutes(lvl + 2, 6, later - 300000), ...minutes(lvl - 1, 5, later)];
+  assert.deepEqual(S.evaluate({ state: r.state, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: lvl - 1, intraday: short, daily: up }, now: later, params: p }).actions, []);
+  const x = S.evaluate({ state: r.state, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: lvl - 1, intraday: minutes(lvl - 1, 11, later), daily: up }, now: later, params: p });
+  assert.deepEqual(x.actions.map(a => [a.rule, a.kind, a.qty]), [['ST-06', 'EXIT_ALL', 1000]]);
+  const low = S.dayStart({ state: { ...r.state, protStop: 101 }, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 111, daily: up }, now: Date.parse('2026-11-18T09:00:00+05:30'), params: p });
+  assert.equal(low.state.protStop, G.TLMIndicators.roundTick(e * 0.98), 'raised to the EMA level, never down');
+});
+
+test('B 15:25 check: today\'s 15:25 price is the close; trend exit and warning decided the same day, not next morning', () => {
+  const up = mkDaily(40, 100, 1, '2026-11-17');
+  const e = G.TLMIndicators.ema(up.map(c => c.close), 21);
+  const s = stateB({ partialDone: true, costDone: true, hardStop: 100, tranches: [{ id: 'P1', qty: 500, trail: 108, status: 'active' }] });
+  const at1525 = Date.parse('2026-11-18T15:25:00+05:30');
+  const px = Math.floor(e * 0.96);
+  const before = S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: px, intraday: minutes(px, 6, at1525 - 60000), daily: up }, now: at1525 - 60000, params: p });
+  assert.deepEqual(before.actions, [], '15:24: not yet');
+  const r = S.evaluate({ state: s, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: px, intraday: minutes(px, 6, at1525), daily: up }, now: at1525, params: p });
+  assert.deepEqual(r.actions.map(a => [a.rule, a.kind, a.qty]), [['ST-02', 'SELL', 500]]);
+  assert.match(r.actions[0].why, /^15:25 close ₹[\d.]+ is below the 21 EMA − 2%/);
+  assert.equal(r.state.lastCloseCheck, '2026-11-18');
+  const again = S.evaluate({ state: r.state, position: { openQty: 500, avgEntry: 100 }, market: { ltp: px, intraday: minutes(px, 6, at1525 + 60000), daily: up }, now: at1525 + 60000, params: p });
+  assert.ok(!again.actions.some(a => a.rule === 'ST-02'), 'once a day');
+  const next = S.dayStart({ state: r.state, position: { openQty: 500, avgEntry: 100 }, market: { ltp: px, daily: [...up, day('2026-11-18', 130, 131, px, px)] }, now: Date.parse('2026-11-19T09:00:00+05:30'), params: p });
+  assert.deepEqual(next.actions.map(a => a.kind), ['BRIEF'], 'already decided at 15:25 — not repeated next morning');
 });

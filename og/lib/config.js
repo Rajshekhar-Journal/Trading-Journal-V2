@@ -16,7 +16,7 @@ const DEFAULTS = Object.freeze({
   buyOrdersEnabled: false,           // buy orders (entries, adds) for intents that were approved; also needs the static IP to match
   sellOrdersEnabled: false,          // exits (market sell) for intents you approve; also needs the static IP to match
   entryWindow: [560, 915],           // IST minutes 09:20–15:15
-  exitWindow: [556, 925],            // IST minutes 09:16–15:25
+  exitWindow: [556, 928],            // IST minutes 09:16–15:28 (15:25 close decisions must still go out)
   fillWaitSec: 20,                   // wait this long for a sell to fill before cancelling it
   cancelWaitSec: 10,
   orderPollMs: 2000,

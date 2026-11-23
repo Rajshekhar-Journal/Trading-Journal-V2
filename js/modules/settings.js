@@ -849,12 +849,12 @@ const settingsModule = (() => {
       ${step(29, 'Pick the default strategy', `<p>${go('alerts', 'Settings → Trade Management & Alerts')} → <strong>Default strategy</strong>. Strategy A (the lifecycle) is the default out of the box. Open any strategy row to see its rules, alerts and flow chart.</p>`)}
       ${step(30, 'Strategy B in short', `<ul>
           <li><strong>Entry:</strong> the full planned size (RPT ÷ risk per share), no add.</li>
-          <li><strong>2R:</strong> stop moves to your average cost (stop GTT revised).</li>
-          <li><strong>3R:</strong> no sale. Half becomes a profit-booking tranche with stop = max(today's low, hard stop). Each morning it rises to max(yesterday's low, stop); after a candle wider than 3 × ATR14, to max(low + 0.25 × range, stop). It never moves down. If price stays below it for 5 minutes, the tranche is sold.</li>
-          <li><strong>Other half, from 3R:</strong> a daily close below the 21 EMA − 2% sells it; a close between EMA − 2% and the EMA sets a warning low (that day's low), and a later close below the warning low sells it. A close back above the EMA clears the warning.</li>
-          <li><strong>Time exit:</strong> if +1R is not reached within 10 trading days, everything is sold. The hard stop always applies.</li></ul>
+          <li><strong>2R:</strong> stop moves to your average cost (stop GTT revised), and a protective trail starts at max(cost, 21 EMA − 2%), raised each morning. If price stays below it for 10 minutes, everything is sold.</li>
+          <li><strong>3R:</strong> no sale. Half becomes a profit-booking tranche with stop = max(today's low, hard stop). Each morning it rises to max(yesterday's low, stop); after a candle wider than 3 × ATR14, to max(low + 0.25 × range, stop). It never moves down. If price stays below it for 10 minutes, the tranche is sold.</li>
+          <li><strong>Other half, from 3R</strong> (decided at 15:25, using the 15:25 price as the day's close, and sold at once): below the 21 EMA − 2% sells it; between EMA − 2% and the EMA sets a warning low (that day's low), and a later 15:25 price below the warning low sells it. Back above the EMA clears the warning.</li>
+          <li><strong>Time exit:</strong> if +1R is not reached within 10 trading days (checked at 15:25), everything is sold. The hard stop always applies.</li></ul>
         <details style="margin-top:6px"><summary style="cursor:pointer;font-weight:600">Strategy B flow chart</summary><div style="padding-top:8px">${_strategyFlowSvg(TLMStrategies.find('B', {}), TLMRules.DEFAULT_PARAMS)}</div></details>
-        <p>The broker holds only the hard-stop GTT. The tranche stop and the EMA checks are watched by the engine and sent as orders (Auto modes) or alerts.</p>`)}
+        <p>The broker holds only the hard-stop GTT. The protective trail, the tranche stop and the EMA checks are watched by the engine and sent as orders (Auto modes) or alerts. In Confirm mode a 15:25 sale must be approved before 15:28.</p>`)}
       ${step(31, 'Choose per setup', `<p>${nav('watchlist', 'Watchlist')} → <strong>+ Add</strong> → <em>Trade management strategy</em>. The entry size follows the strategy. You can change it again in <strong>▶ Execute</strong>.</p>`)}
       ${step(32, 'Change or build', `<p>On an open position: <strong>Change strategy</strong> in its lifecycle panel (adds, partial exits and the stop are kept). To make your own: <strong>+ New strategy</strong>, or <strong>Duplicate</strong> on B. A strategy is copied into a trade when it opens, so later edits never change open trades. Every alert ends with a one-line <em>Reason</em>.</p>`)}
 
@@ -948,7 +948,11 @@ const settingsModule = (() => {
     const at = r => hold.replace('${R}', r);
     const rows = [['LC-01', 'Entry', `Price holds above the trigger for ${p.entryHoldMin} min`, `Buy ${sp.entryPct}% of the planned size; stop = initial stop`]];
     if (sp.add.on) rows.push(['LC-02', 'Add', at(sp.add.atR), `Buy ${sp.add.pct}% of the first qty; stop to initial + ${sp.add.stopToR}R`]);
-    if (sp.stopToCost.on) rows.push(['ST-04', 'Stop to cost', at(sp.stopToCost.atR), 'Raise the hard stop to the average cost (stop GTT revised)']);
+    const c = sp.stopToCost, hmS = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    const closeWord = sp.closeMinute ? `${hmS(sp.closeMinute)} price (taken as the close)` : 'Daily close';
+    const exitWhen = sp.closeMinute ? 'Sell the trailed shares at once' : 'Sell the trailed shares next morning';
+    if (c.on) rows.push(['ST-04', 'Stop to cost', at(c.atR), 'Raise the hard stop to the average cost (stop GTT revised)' + (c.trail ? `; start the protective trail = max(cost, ${c.emaPeriod} EMA − ${c.emaPct}%), raised each morning, never down` : '')]);
+    if (c.on && c.trail) rows.push(['ST-06', 'Protective trail hit', `Price stays below the protective trail for ${c.holdMin} min`, 'Sell everything at market']);
     const pa = sp.partial;
     if (pa.on && pa.mode === 'trail') {
       rows.push(['ST-01', 'Tranche set', at(pa.atR), `No sale: ${pa.pct}% of the open qty gets a profit-booking stop = max(today's low, hard stop)`]);
@@ -960,12 +964,12 @@ const settingsModule = (() => {
     }
     const t = sp.trail, from = t.afterPartial && pa.on ? ` (from ${pa.atR}R)` : '';
     if (t.type === 'ema' && t.confirm) {
-      rows.push(['ST-02', 'Trend exit', `Daily close below the ${t.period} EMA − ${t.deepPct}%${from}`, 'Sell the trailed shares next morning']);
-      rows.push(['ST-02', 'Trend warning', `Daily close between the ${t.period} EMA − ${t.deepPct}% and the EMA`, 'No sale; that day\'s low becomes the warning low (a close above the EMA clears it)']);
-      rows.push(['ST-02', 'Trend exit', 'A later daily close below the warning low', 'Sell the trailed shares next morning']);
+      rows.push(['ST-02', 'Trend exit', `${closeWord} below the ${t.period} EMA − ${t.deepPct}%${from}`, exitWhen]);
+      rows.push(['ST-02', 'Trend warning', `${closeWord} between the ${t.period} EMA − ${t.deepPct}% and the EMA`, 'No sale; that day\'s low becomes the warning low (a close above the EMA clears it)']);
+      rows.push(['ST-02', 'Trend exit', `A later ${sp.closeMinute ? hmS(sp.closeMinute) + ' price' : 'daily close'} below the warning low`, exitWhen]);
     } else if (t.type !== 'none') rows.push(['ST-02', 'Trend exit', (t.type === 'ema' ? `Daily close below the ${t.period} EMA less ${t.bufferPct}%` : `Daily close ${t.pct}% below the highest close since entry`) + from, 'Sell the trailed shares']);
-    if (sp.timeExit.on) rows.push(['ST-03', 'Time exit', `+${sp.timeExit.minR}R not reached within ${sp.timeExit.days} trading days`, 'Exit the whole position']);
-    rows.push(['LC-10', 'Day start', `${String(Math.floor(p.briefMinute / 60)).padStart(2, '0')}:${String(p.briefMinute % 60).padStart(2, '0')} IST each trading day`, 'Brief: hard stop, profit-booking stop, trend-exit level']);
+    if (sp.timeExit.on) rows.push(['ST-03', 'Time exit', `+${sp.timeExit.minR}R not reached within ${sp.timeExit.days} trading days (checked at ${sp.closeMinute ? hmS(sp.closeMinute) : 'the next day start'})`, 'Exit the whole position']);
+    rows.push(['LC-10', 'Day start', `${String(Math.floor(p.briefMinute / 60)).padStart(2, '0')}:${String(p.briefMinute % 60).padStart(2, '0')} IST each trading day`, 'Brief: hard stop, protective trail, profit-booking stop, trend-exit level']);
     rows.push(['LC-09', 'Hard stop', 'Any price below the hard stop', 'Exit the whole position']);
     return rows;
   }
@@ -988,9 +992,9 @@ const settingsModule = (() => {
     out.push(box(380, 16, 280, 'Hard stop hit', 'Any time: sell all at market', 'red'));
     if (sp.timeExit.on) out.push(box(380, 96, 280, `Time exit — ${sp.timeExit.days} trading days`, `+${sp.timeExit.minR}R never reached: sell all`, 'red'));
     if (sp.add.on) { next(); out.push(box(X, y, W, `${sp.add.atR}R — add ${sp.add.pct}%`, `Stop to initial + ${sp.add.stopToR}R`, 'stage')); }
-    if (sp.stopToCost.on) { next(); out.push(box(X, y, W, `${sp.stopToCost.atR}R — stop to cost`, 'Hard stop = average cost; GTT revised', 'stage')); }
+    if (sp.stopToCost.on) { next(); out.push(box(X, y, W, `${sp.stopToCost.atR}R — stop to cost${sp.stopToCost.trail ? ' + trail' : ''}`, sp.stopToCost.trail ? `max(cost, EMA−${sp.stopToCost.emaPct}%) · ${sp.stopToCost.holdMin} min below: sell all` : 'Hard stop = average cost; GTT revised', 'stage')); }
     const t = sp.trail, pa = sp.partial;
-    const trailTitle = t.type === 'ema' ? `${t.period} EMA trail (daily close)` : t.type === 'pct' ? `${t.pct}% trail (daily close)` : 'No trail';
+    const trailTitle = t.type === 'ema' ? `${t.period} EMA trail (close rule)` : t.type === 'pct' ? `${t.pct}% trail (daily close)` : 'No trail';
     const LX = 20, RX = 350, CW = 310, LC = LX + CW / 2, RC = RX + CW / 2;
     let endY;
     if (pa.on && pa.mode === 'trail') {
@@ -998,14 +1002,14 @@ const settingsModule = (() => {
       const top = y + 52, mid = y + 66; y += step;
       out.push(arrow(`M${C} ${top} V${mid} H${LC} V${y - 2}`), arrow(`M${C} ${mid} H${RC} V${y - 2}`));
       out.push(box(LX, y, CW, 'Profit-booking stop', 'Start: max(day low, hard stop)', 'stage'));
-      out.push(box(RX, y, CW, trailTitle, 'Checked at 09:00 on yesterday\'s close', 'stage'));
+      out.push(box(RX, y, CW, trailTitle, sp.closeMinute ? `Checked at ${String(Math.floor(sp.closeMinute / 60)).padStart(2, '0')}:${String(sp.closeMinute % 60).padStart(2, '0')}; that price = the close` : 'Checked at 09:00 on yesterday\'s close', 'stage'));
       out.push(arrow(`M${LC} ${y + 52} V${y + step - 2}`), arrow(`M${RC} ${y + 52} V${y + step - 2}`)); y += step;
       out.push(box(LX, y, CW, 'Each morning: raise it', `prev low · >${pa.largeAtr}×ATR day: low + ${pa.largeFrac}×range`, 'stage'));
       if (t.type === 'ema' && t.confirm) out.push(box(RX, y, CW, `Close in EMA − ${t.deepPct}% … EMA`, 'Warning low = that day\'s low', 'gray'));
       else out.push(box(RX, y, CW, 'Close below the trail level', 'Sell the trailed shares', 'teal'));
       out.push(arrow(`M${LC} ${y + 52} V${y + step - 2}`), arrow(`M${RC} ${y + 52} V${y + step - 2}`)); y += step;
       out.push(box(LX, y, CW, 'Sell the tranche', `${pa.holdMin} min below the profit-booking stop`, 'teal'));
-      out.push(box(RX, y, CW, t.type === 'ema' && t.confirm ? `Close &lt; EMA − ${t.deepPct}% or &lt; warning low` : 'Trailed shares sold', 'Sell the trailed shares next morning', 'teal'));
+      out.push(box(RX, y, CW, t.type === 'ema' && t.confirm ? `Close &lt; EMA − ${t.deepPct}% or &lt; warning low` : 'Trailed shares sold', sp.closeMinute ? 'Sell the trailed shares at once' : 'Sell the trailed shares next morning', 'teal'));
       endY = y + step;
       out.push(arrow(`M${LC} ${y + 52} V${endY + 26} H${190 - 2}`), arrow(`M${RC} ${y + 52} V${endY + 26} H${490 + 2}`));
       out.push(box(190, endY, 300, 'Closed — open qty = 0', 'Moves to Trades / Paper history', 'teal'));
@@ -1180,14 +1184,15 @@ const settingsModule = (() => {
         <tr><td>${chk('add-on', sp.add.on)}</td><td><strong>Add</strong><div style="font-size:11px;color:var(--text-muted)">Buy more when price holds above R</div></td>
           <td>at ${num('add-r', sp.add.atR, 0.25, 64)} R · ${num('add-pct', sp.add.pct, 10, 64)} % of first qty · stop to initial + ${num('add-stop', sp.add.stopToR, 0.25, 64)} R</td></tr>
         <tr><td>${chk('cost-on', sp.stopToCost.on)}</td><td><strong>Stop to cost</strong><div style="font-size:11px;color:var(--text-muted)">Move the hard stop to your average cost</div></td>
-          <td>at ${num('cost-r', sp.stopToCost.atR, 0.25, 64)} R</td></tr>
+          <td>at ${num('cost-r', sp.stopToCost.atR, 0.25, 64)} R
+            <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-prot-on" ${sp.stopToCost.trail ? 'checked' : ''}> then a protective trail = max(cost, EMA ${num('prot-ema', sp.stopToCost.emaPeriod, 1, 56)} − ${num('prot-pct', sp.stopToCost.emaPct, 0.5, 56)} %), sell everything after ${num('prot-hold', sp.stopToCost.holdMin, 1, 56)} min below it</label></td></tr>
         <tr><td>${chk('par-on', sp.partial.on)}</td><td><strong>Partial profit</strong><div style="font-size:11px;color:var(--text-muted)">Book part of the open quantity</div></td>
           <td>at ${num('par-r', sp.partial.atR, 0.25, 64)} R · ${num('par-pct', sp.partial.pct, 5, 64)} % ·
             <select class="form-select" id="st-par-mode" style="width:auto;display:inline-block"><option value="trail"${sp.partial.mode === 'trail' ? ' selected' : ''}>trail it with its own stop</option><option value="sell"${sp.partial.mode === 'sell' ? ' selected' : ''}>sell at once</option></select>
             <div style="font-size:12px;margin-top:4px">Trailed: sell after ${num('par-hold', sp.partial.holdMin, 1, 56)} min below its stop · large candle &gt; ${num('par-atr', sp.partial.largeAtr, 0.5, 56)} × ATR → low + ${num('par-frac', sp.partial.largeFrac, 0.05, 60)} × range</div>
             <div style="font-size:12px;margin-top:4px">Sold at once: then stop
             <select class="form-select" id="st-par-stop" style="width:auto;display:inline-block"><option value="cost"${sp.partial.stopAfter === 'cost' ? ' selected' : ''}>to cost</option><option value="none"${sp.partial.stopAfter === 'none' ? ' selected' : ''}>unchanged</option></select></div></td></tr>
-        <tr><td></td><td><strong>Trail (exit on a daily close)</strong><div style="font-size:11px;color:var(--text-muted)">Checked once a day at the start, on the last closed day</div></td>
+        <tr><td></td><td><strong>Trail (close rule)</strong><div style="font-size:11px;color:var(--text-muted)">Decided once a day at <input class="form-input" type="time" id="st-close" value="${sp.closeMinute ? String(Math.floor(sp.closeMinute / 60)).padStart(2, '0') + ':' + String(sp.closeMinute % 60).padStart(2, '0') : ''}" min="15:00" max="15:28" style="width:100px;display:inline-block"> with that price as the close (empty = next morning on the real close)</div></td>
           <td><select class="form-select" id="st-trail-type" style="width:auto;display:inline-block"><option value="ema"${sp.trail.type === 'ema' ? ' selected' : ''}>Below EMA</option><option value="pct"${sp.trail.type === 'pct' ? ' selected' : ''}>% below highest close</option><option value="none"${sp.trail.type === 'none' ? ' selected' : ''}>No trail</option></select>
             EMA ${num('trail-period', sp.trail.period, 1, 60)} · or ${num('trail-pct', sp.trail.pct, 1, 60)} %
             <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-trail-confirm" ${sp.trail.confirm ? 'checked' : ''}> Two levels: close &lt; EMA − ${num('trail-deep', sp.trail.deepPct, 0.5, 56)} % sells; a close between that and the EMA sets a warning low, a later close below it sells</label>
@@ -1205,7 +1210,8 @@ const settingsModule = (() => {
         const spec = TLMStrategies.normalise({
           id: id || ('c_' + Date.now().toString(36)), name: g('name').value, entryPct: n('entryPct'),
           add: { on: g('add-on').checked, atR: n('add-r'), pct: n('add-pct'), stopToR: n('add-stop') },
-          stopToCost: { on: g('cost-on').checked, atR: n('cost-r') },
+          stopToCost: { on: g('cost-on').checked, atR: n('cost-r'), trail: g('prot-on').checked, emaPeriod: n('prot-ema'), emaPct: n('prot-pct'), holdMin: n('prot-hold') },
+          closeMinute: (v => v ? Number(v.slice(0, 2)) * 60 + Number(v.slice(3, 5)) : 0)(g('close').value),
           partial: { on: g('par-on').checked, atR: n('par-r'), pct: n('par-pct'), mode: g('par-mode').value, stopAfter: g('par-stop').value,
             holdMin: n('par-hold'), largeAtr: n('par-atr'), largeFrac: n('par-frac') },
           trail: { type: g('trail-type').value, period: n('trail-period'), confirm: g('trail-confirm').checked, deepPct: n('trail-deep'), bufferPct: n('trail-buf'), pct: n('trail-pct'), afterPartial: g('trail-after').checked },

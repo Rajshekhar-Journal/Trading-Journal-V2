@@ -38,6 +38,7 @@ const TLMPanel = (() => {
         ${sp.partial.on ? cell(`${sp.partial.atR}R · ${sp.partial.mode === 'trail' ? `${sp.partial.pct}% tranche` : `sell ${sp.partial.pct}%`}`, lv(sp.partial.atR), !!s.partialDone) : ''}
         ${sp.trail.type !== 'none' ? cell('Trail', sp.trail.type === 'ema' ? (sp.trail.confirm ? `${sp.trail.period} EMA −${sp.trail.deepPct}% / warning` : `${sp.trail.period} EMA −${sp.trail.bufferPct}%`) : `${sp.trail.pct}% below high close`, !sp.trail.afterPartial || !!s.partialDone) : ''}
         ${sp.timeExit.on ? cell(`Time exit · ${sp.timeExit.days} days`, `+${sp.timeExit.minR}R ${lv(sp.timeExit.minR)}`) : ''}
+        ${s.protStop ? cell(`Protective trail · ${sp.stopToCost.holdMin} min`, inr(s.protStop), true) : ''}
         ${t ? cell(`Profit-booking stop · ${t.qty} sh`, inr(t.trail), true) : ''}
         ${s.warnLow ? cell('EMA warning low', inr(s.warnLow), true) : ''}
       </div>`; })() : `<div class="tlm-grid">

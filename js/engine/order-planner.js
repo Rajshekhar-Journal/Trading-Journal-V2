@@ -30,7 +30,7 @@
     dataMaxAgeExitSec: 180,        // … for stops and exits
     gatewayStaleSec: 180,
     entryWindow: [560, 915],       // IST minutes: 09:20–15:15
-    exitWindow: [556, 925],        //              09:16–15:25
+    exitWindow: [556, 928],        //              09:16–15:28
     intentExpirySec: 90,
   });
   /**

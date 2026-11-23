@@ -22,6 +22,7 @@
     TIME_EXIT:      'ST-03',
     STOP_TO_COST:   'ST-04',
     TRANCHE_EXIT:   'ST-05',
+    PROTECT_EXIT:   'ST-06',
   });
 
   /** Stages only move forward. */
@@ -64,6 +65,7 @@
     [RULES.TIME_EXIT]:    'Time exit — trade is stale',
     [RULES.STOP_TO_COST]: 'Raise stop loss to cost',
     [RULES.TRANCHE_EXIT]: 'Partial profit — tranche sold',
+    [RULES.PROTECT_EXIT]: 'Protective trail hit — exit all',
   });
 
   const DEFAULT_PARAMS = Object.freeze({
