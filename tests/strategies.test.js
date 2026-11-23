@@ -160,7 +160,7 @@ test('switching an open position keeps what already happened', () => {
   const b = S.switchState({ trade, strategyId: 'B', params: p, settings, now: NOW });
   assert.deepEqual([b.strategy, b.hardStop, b.partialDone, b.costDone], ['B', 102, true, true]);
   const a = S.switchState({ trade, strategyId: 'A', params: p, settings, now: NOW });
-  assert.deepEqual([a.strategy, a.hardStop, a.stage], [undefined, 102, R.STAGES.R1]);
+  assert.deepEqual([a.strategy, a.hardStop, a.stage], [undefined, 102, R.STAGES.R2], 'add done and stop above cost → lock detected');
 });
 
 test('every alert says why in one line', () => {
@@ -185,4 +185,17 @@ test('paper trade on B: stop to cost, tranche set (nothing booked), tranche sold
   const x = S.evaluate({ state: r.state, position: { openQty: 1000, avgEntry: 100 }, market: { ltp: 107, intraday: minutes(107, 6, later), daily: [] }, now: later, params: p });
   t = X.applyPaper(t, x.actions, { settings: {}, date: '2026-11-19', openQty: 1000 });
   assert.deepEqual([t.partialExits.length, t.partialExits[0].qty, t.partialExits[0].actionSource], [1, 500, 'ST-05 Tranche sold (Paper)']);
+});
+
+test('switch checklist: what the user ticks decides the starting point', () => {
+  const trade = { entries: [{ date: '2026-11-02', price: 100, qty: 1000 }], pyramids: [], partialExits: [], initialStop: 95, currentStop: 100 };
+  const d = S.detectDone(trade, 'B', settings);
+  assert.deepEqual([d.cost, d.partial], [true, false]);
+  const b = S.switchState({ trade, strategyId: 'B', params: p, settings, now: NOW, done: { cost: true, partial: true, trancheSold: false, trancheQty: 500, trancheStop: 112 } });
+  assert.deepEqual([b.costDone, b.partialDone, S.activeTranche(b).qty, S.activeTranche(b).trail], [true, true, 500, 112]);
+  const none = S.switchState({ trade, strategyId: 'B', params: p, settings, now: NOW, done: {} });
+  assert.deepEqual([none.costDone, none.partialDone, S.activeTranche(none)], [false, false, null]);
+  const a = S.switchState({ trade, strategyId: 'A', params: p, settings, now: NOW, done: { stage: 3 } });
+  assert.equal(a.stage, R.STAGES.R2);
+  assert.ok(S.describe(S.find('A', settings), p).length >= 6, 'Strategy A is described rule by rule');
 });

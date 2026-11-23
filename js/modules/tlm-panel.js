@@ -88,36 +88,86 @@ const TLMPanel = (() => {
     });
   }
 
-  /** Move an open trade to another strategy; what already happened (adds, partial exits, stop) is kept. */
+  /** Move an open trade to another strategy; the user ticks what this trade has already done. */
   async function changeStrategy(tradeId) {
     const paper = String(tradeId).startsWith('pt');
     const trade = paper ? await db.getPaperTradeById(tradeId) : await db.getTradeById(tradeId);
     if (!trade) return;
     const settings = await db.getSettings();
+    const params = TLMRunner.paramsFrom(settings);
     const cur = TLMStrategies.strategyOf(trade.tlmState);
     const all = TLMStrategies.list(settings);
+    const m = calc.getTradeMetrics(trade);
+    const first = (trade.entries || [])[0] || {};
+    const R1 = Number(first.price) - Number(trade.initialStop);
+    const lv = r => R1 > 0 ? ` (${inr(Number(first.price) + r * R1)})` : '';
     const opts = all.map(x => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${x.name}</option>`).join('');
-    const info = id => (TLMStrategies.describe(all.find(x => x.id === id)) || []).map(t => `<li>${t}</li>`).join('');
-    window._tlmStratInfo = id => { const el = document.getElementById('tlm-strat-info'); if (el) el.innerHTML = info(id); };
+    const box = (id, on, label) => `<label style="display:flex;gap:8px;align-items:flex-start;margin:6px 0;font-size:13px"><input type="checkbox" id="sw-${id}" ${on ? 'checked' : ''} style="margin-top:3px" onchange="TLMPanel._swToggle()"> <span>${label}</span></label>`;
+
+    const render = id => {
+      const sp = all.find(x => x.id === id);
+      const d = TLMStrategies.detectDone(trade, id, settings);
+      const info = TLMStrategies.describe(sp, params).map(t => `<li>${t}</li>`).join('');
+      let checks;
+      if (sp.kind === 'lifecycle') {
+        const t = TLMRules.targetPlan(params);
+        checks = box('a1', d.stage >= 2, `${t.T1.r}R reached — add done${lv(t.T1.r)}`)
+          + box('a2', d.stage >= 3, `${t.T2.r}R reached — stop locked${lv(t.T2.r)}`)
+          + box('a3', d.stage >= 4, `${t.T5.r}R reached — first trail started${lv(t.T5.r)}`)
+          + box('a4', d.stage >= 5, `${t.T10.r}R reached — second trail started${lv(t.T10.r)}`)
+          + '<div style="font-size:11.5px;color:var(--text-muted)">Ticked steps are skipped. Open trails are not carried over; the next target starts a new one.</div>';
+      } else {
+        const n = TLMStrategies.normalise(sp), trail = n.partial.mode === 'trail';
+        checks = (n.add.on ? box('add', d.add, `${n.add.atR}R reached — add done${lv(n.add.atR)}`) : '')
+          + (n.stopToCost.on ? box('cost', d.cost, `${n.stopToCost.atR}R reached — stop already at cost${lv(n.stopToCost.atR)}`) : '')
+          + (n.partial.on ? box('partial', d.partial, `${n.partial.atR}R reached — ${trail ? 'profit-booking tranche started' : `${n.partial.pct}% already sold`}${lv(n.partial.atR)}`) : '')
+          + (n.partial.on && trail ? `<div id="sw-tr" style="margin-left:24px;${d.partial ? '' : 'display:none'}">
+              ${box('sold', d.trancheSold, 'Tranche already sold')}
+              <div id="sw-tr-in" style="font-size:13px;${d.trancheSold ? 'display:none' : ''}">Tranche qty <input class="form-input" type="number" id="sw-tqty" min="1" value="${Math.floor(m.openQty * n.partial.pct / 100)}" style="width:90px;display:inline-block">
+                · profit-booking stop ₹ <input class="form-input" type="number" step="0.05" id="sw-tstop" value="${Number(m.currentStop) || ''}" style="width:110px;display:inline-block"></div></div>` : '')
+          + '<div style="font-size:11.5px;color:var(--text-muted)">Ticked steps are skipped. Unticked steps act when price reaches them.</div>';
+      }
+      document.getElementById('sw-info').innerHTML = info;
+      document.getElementById('sw-checks').innerHTML = checks;
+    };
+    TLMPanel._swRender = () => render(document.getElementById('tlm-strat-pick').value);
+
     app.openModal(`Change strategy — ${trade.symbol}`, `
-      <p style="font-size:13px;color:var(--text-muted);margin-top:0">The position keeps its entries, adds, partial exits and stop. From now on the new strategy's rules decide what happens next. Strategy A tranche trails that were open are not carried over.</p>
-      <div class="form-group"><label class="form-label">Strategy</label><select class="form-select" id="tlm-strat-pick" onchange="_tlmStratInfo(this.value)">${opts}</select></div>
-      <ul id="tlm-strat-info" style="font-size:12px;color:var(--text-muted);margin:6px 0 0 18px;padding:0">${info(cur)}</ul>`, [
+      <p style="font-size:13px;color:var(--text-muted);margin-top:0">The position keeps its entries, adds, partial exits and stop (₹${calc.formatNumber(m.currentStop)}, open qty ${m.openQty}). From now on the chosen strategy decides what happens next.</p>
+      <div class="form-group"><label class="form-label">Strategy</label><select class="form-select" id="tlm-strat-pick" onchange="TLMPanel._swRender()">${opts}</select></div>
+      <ul id="sw-info" style="font-size:12px;color:var(--text-muted);margin:6px 0 10px 18px;padding:0"></ul>
+      <div style="font-weight:600;font-size:13px;margin-bottom:2px">Already completed on this trade</div>
+      <div id="sw-checks"></div>`, [
       { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
       { id: 'save', label: 'Switch', class: 'btn-primary', onClick: async () => {
           const id = document.getElementById('tlm-strat-pick').value;
-          if (id === cur) { app.closeModal(); return; }
-          const m = calc.getTradeMetrics(trade);
-          const state = TLMStrategies.switchState({ trade, strategyId: id, params: TLMRunner.paramsFrom(settings), settings, now: Date.now() });
+          const sp = all.find(x => x.id === id);
+          const c = k => !!document.getElementById('sw-' + k)?.checked;
+          let done;
+          if (sp.kind === 'lifecycle') done = { stage: 1 + ['a1', 'a2', 'a3', 'a4'].filter(c).length };
+          else {
+            done = { add: c('add'), cost: c('cost'), partial: c('partial'), trancheSold: c('sold'),
+              trancheQty: parseFloat(document.getElementById('sw-tqty')?.value), trancheStop: parseFloat(document.getElementById('sw-tstop')?.value) };
+            if (done.partial && TLMStrategies.normalise(sp).partial.mode === 'trail' && !done.trancheSold && !(done.trancheQty > 0 && done.trancheQty < m.openQty && done.trancheStop > 0)) {
+              app.toast('Enter the tranche quantity (less than the open quantity) and its stop, or tick "Tranche already sold"', 'error'); return; }
+          }
+          const state = TLMStrategies.switchState({ trade, strategyId: id, params, settings, now: Date.now(), done });
           if (!state) { app.toast('Cannot switch: entry or initial stop is missing', 'error'); return; }
-          const updated = { ...trade, tlmState: state };
-          await (paper ? db.savePaperTrade(updated) : db.saveTrade(updated));
+          await (paper ? db.savePaperTrade({ ...trade, tlmState: state }) : db.saveTrade({ ...trade, tlmState: state }));
           app.closeModal();
-          app.toast(`Now following ${all.find(x => x.id === id).name}`, 'success');
+          app.toast(`Now following ${sp.name.split(' — ')[0]}`, 'success');
           if (paper) { await PaperTradesModule.init(); PaperTradesModule._open(tradeId); }
           else { await positionsModule.init(); positionsModule._onRowClick(tradeId); }
       }}
     ]);
+    render(cur);
+  }
+
+  /** Checklist: show the tranche fields only when "tranche started" is ticked and not sold. */
+  function _swToggle() {
+    const p = document.getElementById('sw-partial'), tr = document.getElementById('sw-tr'), sold = document.getElementById('sw-sold'), inp = document.getElementById('sw-tr-in');
+    if (tr) tr.style.display = p && p.checked ? '' : 'none';
+    if (inp) inp.style.display = sold && sold.checked ? 'none' : '';
   }
 
   const _snaps = {};
@@ -126,6 +176,6 @@ const TLMPanel = (() => {
     if (sn) ChartRender.enlarge(sn, `${ChartRender.KIND_LABEL[ChartRender.kindOf(sn)]} chart · ${sn.entry_date}`);
   }
 
-  return { html, loadSnapshots, stateOf, changeStrategy, _enlarge };
+  return { html, loadSnapshots, stateOf, changeStrategy, _swToggle, _swRender: null, _enlarge };
 })();
 window.TLMPanel = TLMPanel;

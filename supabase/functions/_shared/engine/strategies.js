@@ -101,9 +101,20 @@
   }
 
   /** One line per rule, for settings, the position panel and the guide. */
-  function describe(sp) {
+  function describe(sp, params) {
     if (!sp) return [];
-    if (sp.kind === 'lifecycle') return ['Strategy A: the lifecycle rules LC-01 … LC-10 (adds, stop locks, tranche trails) as set in Lifecycle settings.'];
+    if (sp.kind === 'lifecycle') {
+      const q = { ...R.DEFAULT_PARAMS, ...(params || {}) }, t = R.targetPlan(q), off = k => (t[k].on ? '' : ' (switched off)');
+      return [
+        `Entry: ${q.firstEntryPct}% of the planned size after price holds above the trigger for ${q.entryHoldMin} min.`,
+        `${t.T1.r}R: add the same quantity again; stop up by ${q.stopRaiseAt1R}R${off('T1')}.`,
+        `${t.T2.r}R: lock — stop = max(average cost, ${q.emaPeriod} EMA − ${q.emaBufferPct}%); from here the hard stop rises each morning to the ${q.emaPeriod} EMA − ${q.emaBufferPct}%${off('T2')}.`,
+        `${t.T5.r}R: ${t.T5.pct}% of the open quantity trails under the previous day's low (low + ½ the move after a candle above ${q.largeCandleAtrMult} × ATR)${off('T5')}.`,
+        `${t.T10.r}R: the earlier trail is dropped; ${t.T10.pct}% of the open quantity trails the same way${off('T10')}.`,
+        `Trail exit: price below a trail for ${q.trailHoldMin} min, or ${q.trailDeepBreakPct}% below it at once, sells that part.`,
+        'Hard stop always applies.',
+      ];
+    }
     sp = normalise(sp);
     const out = [`Entry: ${sp.entryPct}% of the planned size.`];
     out.push(sp.add.on ? `Add: ${sp.add.pct}% of the first quantity at ${sp.add.atR}R, stop to initial + ${sp.add.stopToR}R.` : 'No add.');
@@ -135,19 +146,42 @@
     return s;
   }
 
-  /** Move an open trade to another strategy. Flags follow what already happened (adds, partial exits, stop at/above cost). */
-  function switchState({ trade, strategyId, params, settings, now }) {
+  /** What an open trade has most likely already done, as a starting point for the switch checklist. */
+  function detectDone(trade, strategyId, settings) {
+    const sp = find(strategyId, settings);
+    const first = (trade.entries || [])[0] || {};
+    const qty = (trade.entries || []).concat(trade.pyramids || []).reduce((a, e) => a + (Number(e.qty) || 0), 0);
+    const cost = qty ? (trade.entries || []).concat(trade.pyramids || []).reduce((a, e) => a + Number(e.qty) * (Number(e.price) || Number(first.price)), 0) / qty : Number(first.price);
+    const stop = Number(trade.currentStop) || 0, sold = (trade.partialExits || []).length > 0;
+    if (!sp || sp.kind === 'lifecycle') return { stage: (trade.pyramids || []).length ? (stop >= cost ? 3 : 2) : 1 };
+    const n = normalise(sp);
+    return { add: (trade.pyramids || []).length > 0, cost: stop >= cost, partial: sold, trancheSold: sold && n.partial.mode === 'trail' };
+  }
+
+  /**
+   * Move an open trade to another strategy. `done` = what the user marked as already completed:
+   *   lifecycle: { stage: 1..5 }   rules: { add, cost, partial, trancheSold, trancheQty, trancheStop }
+   * Without `done`, it is detected from the trade (detectDone).
+   */
+  function switchState({ trade, strategyId, params, settings, now, done }) {
     const sp = find(strategyId, settings);
     const first = (trade.entries || [])[0];
     if (!sp || !first) return null;
+    const d = done || detectDone(trade, strategyId, settings);
     const entered = Date.parse(`${first.date}T09:15:00+05:30`);
     const s = createState({ strategyId: sp.id, entryPrice: Number(first.price), firstQty: Number(first.qty), initialStop: Number(trade.initialStop), params, settings, now: Number.isFinite(entered) ? entered : now });
     if (!s) return null;
     s.hardStop = Math.max(s.hardStop, Number(trade.currentStop) || 0);
-    if ((trade.pyramids || []).length) s.stage = Math.max(s.stage, STAGES.R1);
-    if (sp.kind === 'rules') {
-      if (s.hardStop >= s.entryPrice) s.costDone = true;
-      if ((trade.partialExits || []).length) { s.partialDone = true; s.stage = Math.max(s.stage, STAGES.R2); }
+    if (sp.kind === 'lifecycle') {
+      s.stage = Math.min(STAGES.R10, Math.max(STAGES.ENTERED, Number(d.stage) || STAGES.ENTERED));
+      return s;
+    }
+    if (d.add) s.stage = Math.max(s.stage, STAGES.R1);
+    if (d.cost) { s.costDone = true; s.stage = Math.max(s.stage, STAGES.R1); }
+    if (d.partial) {
+      s.partialDone = true; s.stage = Math.max(s.stage, STAGES.R2);
+      if (normalise(sp).partial.mode === 'trail' && !d.trancheSold && Number(d.trancheQty) > 0 && Number(d.trancheStop) > 0)
+        s.tranches = [{ id: 'P1', rule: RULES.PARTIAL_PROFIT, qty: Math.floor(Number(d.trancheQty)), trail: I.roundTick(Number(d.trancheStop)), status: 'active', openedAt: I.istDate(now || Date.now()), why: 'set when the strategy was switched' }];
     }
     return s;
   }
@@ -329,7 +363,7 @@
   const dayStart = args => (isRules(args.state) ? rulesDayStart(args) : E.dayStart(args));
   const evaluate = args => (isRules(args.state) ? rulesEvaluate(args) : E.evaluate(args));
 
-  const api = { STRATEGY_A, STRATEGY_B, list, find, defaultId, normalise, validate, describe, paramsFor, createState, switchState, dayStart, evaluate, isRules, strategyOf, activeTranche };
+  const api = { STRATEGY_A, STRATEGY_B, list, find, defaultId, normalise, validate, describe, paramsFor, createState, detectDone, switchState, dayStart, evaluate, isRules, strategyOf, activeTranche };
   root.TLMStrategies = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

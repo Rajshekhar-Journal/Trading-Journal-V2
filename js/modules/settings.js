@@ -479,6 +479,10 @@ const settingsModule = (() => {
         <div class="form-group"><label class="form-label">Default Review Status</label>
           <select class="form-select" id="td-review"><option ${s.defaultReviewStatus==='Pending'?'selected':''}>Pending</option><option>Reviewed</option></select>
         </div>
+        <div class="form-group"><label class="form-label">Default trade management strategy</label>
+          <select class="form-select" id="td-strategy">${TLMStrategies.list(settings).map(x => `<option value="${x.id}"${x.id === TLMStrategies.defaultId(settings) ? ' selected' : ''}>${x.name}</option>`).join('')}</select>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Used for new trades when none is chosen. Same setting as in <a href="#" onclick="settingsModule._goPage('alerts');return false;" style="color:#5b6af0">Trade Management &amp; Alerts →</a></div>
+        </div>
         <div class="form-group form-full">
           <label class="form-label">Current Computed RPT <span class="badge badge-primary" style="font-size:10px">${rm.riskMode || 'Dynamic'}</span></label>
           <div class="form-input" style="background:#f8fafc;cursor:default;font-weight:600;color:#5b6af0;">₹${calc.formatNumber(computedRPT)}</div>
@@ -500,6 +504,8 @@ const settingsModule = (() => {
       defaultReviewStatus: document.getElementById('td-review')?.value
       // defaultRPT is computed dynamically from Risk Management — not stored here
     };
+    const strat = document.getElementById('td-strategy')?.value;
+    if (strat) settings.defaultStrategy = strat;        // one key, shown on both pages
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Trading defaults saved', 'success');
@@ -1071,7 +1077,7 @@ const settingsModule = (() => {
         <div class="st-body">
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${actions}</div>
           ${_strategyRulesTable(sp, p)}
-          ${sp.kind === 'rules' ? `<ul style="margin:6px 0 4px 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
+          <ul style="margin:6px 0 4px 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp, p).map(x => `<li>${x}</li>`).join('')}</ul>
           <details style="margin-top:6px"${sp.kind === 'rules' && sp.id === TLMStrategies.defaultId(settings) ? ' open' : ''}><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Show flow diagram</summary><div style="padding-top:8px">${sp.kind === 'lifecycle' ? _tlmFlowSvg(p) : _strategyFlowSvg(sp, p)}</div></details>
         </div></details>`;
     }).join('') + '</div>';
@@ -1084,7 +1090,7 @@ const settingsModule = (() => {
       <div class="st-top"><div class="settings-section-header" style="margin:0">Trade Management & Alerts</div>
         <button class="btn btn-primary btn-sm" onclick="settingsModule._openStrategyEditor('')">+ New strategy</button></div>
       <p class="st-note">Each position follows one strategy — pick it on the Watchlist item or change it on the position. Open a strategy to see its rules and the alerts it raises. Real trades alert you (Telegram + dashboard); paper trades execute automatically. The hard stop always applies.</p>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px"><span style="color:var(--text-muted)">Default strategy</span>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;font-size:13px"><span style="color:var(--text-muted)" title="Same setting as Settings → Trading Defaults">Default strategy (also in Trading Defaults)</span>
         <select class="form-select" id="st-default" style="width:auto" onchange="settingsModule._saveDefaultStrategy()">${TLMStrategies.list(settings).map(x => `<option value="${x.id}"${x.id === TLMStrategies.defaultId(settings) ? ' selected' : ''}>${x.name.split(' — ')[0]}</option>`).join('')}</select></div>
       ${_strategyAccordion(settings, p)}
 
