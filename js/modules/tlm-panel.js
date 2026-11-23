@@ -19,7 +19,7 @@ const TLMPanel = (() => {
     const rules = TLMStrategies.isRules(s);
     const pl = TLMRules.planOf(s);
     const cell = (k, v, hit) => `<div class="tlm-cell ${hit ? 'hit' : ''}"><div class="k">${k}</div><div class="v">${v}</div></div>`;
-    const stratName = rules ? s.spec.name : (TLMStrategies.STRATEGY_A.name);
+    const stratName = rules ? String(s.spec.name).split(' — ')[0] : (TLMStrategies.STRATEGY_A.name);
     const stratHtml = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0 4px">
         <div style="font-size:12px"><span style="color:var(--text-muted)">Strategy</span> <strong>${stratName}</strong></div>
         <button class="btn btn-secondary btn-sm" onclick="TLMPanel.changeStrategy('${trade.id}')">Change strategy</button></div>`
@@ -32,12 +32,15 @@ const TLMPanel = (() => {
         <div style="font-size:11px;color:var(--text-muted)">Rules v${s.rulesVersion} · 1R = ${inr(s.r)}</div>
       </div>
       ${stratHtml}
-      ${rules ? `<div class="tlm-grid">
-        ${s.spec.add.on ? cell(`${s.spec.add.atR}R · add`, inr(s.entryPrice + s.spec.add.atR * s.r), s.stage >= STAGES.R1) : ''}
-        ${s.spec.partial.on ? cell(`${s.spec.partial.atR}R · sell ${s.spec.partial.pct}%`, inr(s.entryPrice + s.spec.partial.atR * s.r), !!s.partialDone) : ''}
-        ${s.spec.timeExit.on ? cell(`Time exit · ${s.spec.timeExit.days} days`, `+${s.spec.timeExit.minR}R ${inr(s.entryPrice + s.spec.timeExit.minR * s.r)}`) : ''}
-        ${s.spec.trail.type !== 'none' ? cell('Trail', s.spec.trail.type === 'ema' ? `${s.spec.trail.period} EMA −${s.spec.trail.bufferPct}%` : `${s.spec.trail.pct}% below high close`, !s.spec.trail.afterPartial || !!s.partialDone) : ''}
-      </div>` : `<div class="tlm-grid">
+      ${rules ? (() => { const sp = TLMStrategies.normalise(s.spec), lv = r => inr(s.entryPrice + r * s.r), t = TLMStrategies.activeTranche(s); return `<div class="tlm-grid">
+        ${sp.add.on ? cell(`${sp.add.atR}R · add`, lv(sp.add.atR), s.stage >= STAGES.R1) : ''}
+        ${sp.stopToCost.on ? cell(`${sp.stopToCost.atR}R · stop to cost`, lv(sp.stopToCost.atR), !!s.costDone) : ''}
+        ${sp.partial.on ? cell(`${sp.partial.atR}R · ${sp.partial.mode === 'trail' ? `${sp.partial.pct}% tranche` : `sell ${sp.partial.pct}%`}`, lv(sp.partial.atR), !!s.partialDone) : ''}
+        ${sp.trail.type !== 'none' ? cell('Trail', sp.trail.type === 'ema' ? (sp.trail.confirm ? `${sp.trail.period} EMA −${sp.trail.deepPct}% / warning` : `${sp.trail.period} EMA −${sp.trail.bufferPct}%`) : `${sp.trail.pct}% below high close`, !sp.trail.afterPartial || !!s.partialDone) : ''}
+        ${sp.timeExit.on ? cell(`Time exit · ${sp.timeExit.days} days`, `+${sp.timeExit.minR}R ${lv(sp.timeExit.minR)}`) : ''}
+        ${t ? cell(`Profit-booking stop · ${t.qty} sh`, inr(t.trail), true) : ''}
+        ${s.warnLow ? cell('EMA warning low', inr(s.warnLow), true) : ''}
+      </div>`; })() : `<div class="tlm-grid">
         ${cell(`${pl.T1.r}R · ${pl.T1.on ? 'add' : 'off'}`, inr(s.targets.T1), s.stage >= STAGES.R1)}
         ${cell(`${pl.T2.r}R · ${pl.T2.on ? 'lock' : 'off'}`, inr(s.targets.T2), s.stage >= STAGES.R2)}
         ${cell(`${pl.T5.r}R · ${pl.T5.on ? pl.T5.pct + '% trail' : 'off'}`, inr(s.targets.T5), s.stage >= STAGES.R5)}

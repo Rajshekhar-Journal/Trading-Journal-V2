@@ -21,6 +21,7 @@
     TREND_EXIT:     'ST-02',
     TIME_EXIT:      'ST-03',
     STOP_TO_COST:   'ST-04',
+    TRANCHE_EXIT:   'ST-05',
   });
 
   /** Stages only move forward. */
@@ -58,10 +59,11 @@
     [RULES.TRAIL_EXIT]:   'Partial exit',
     [RULES.HARD_EXIT]:    'Stop loss breached',
     [RULES.DAY_BRIEF]:    'Set stop loss (day start)',
-    [RULES.PARTIAL_PROFIT]: 'Partial profit',
+    [RULES.PARTIAL_PROFIT]: 'Partial profit — tranche stop set',
     [RULES.TREND_EXIT]:   'Trend exit — trail broken',
     [RULES.TIME_EXIT]:    'Time exit — trade is stale',
-    [RULES.STOP_TO_COST]: 'Raise stop loss (after partial profit)',
+    [RULES.STOP_TO_COST]: 'Raise stop loss to cost',
+    [RULES.TRANCHE_EXIT]: 'Partial profit — tranche sold',
   });
 
   const DEFAULT_PARAMS = Object.freeze({

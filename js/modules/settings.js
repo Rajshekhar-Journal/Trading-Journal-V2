@@ -775,7 +775,7 @@ const settingsModule = (() => {
     const part = (title, sub) => `<div class="settings-section-header" style="margin-top:26px">${title}</div>${sub ? `<p class="gs-sub">${sub}</p>` : ''}`;
     return `<div class="settings-page gs">
       <div class="settings-section-header">🚀 Getting Started — account setup guide</div>
-      <div class="alert-banner info" style="margin-bottom:6px">ℹ Follow parts A → C once, in order (about 20 minutes). Part D is the daily routine; Part E the weekly one; Part F (optional) links your Zerodha account. Every number in the journal — equity, RPT, position size, heat — flows from the capital and risk settings in Part B, so do those first.</div>
+      <div class="alert-banner info" style="margin-bottom:6px">ℹ Follow parts A → C once, in order (about 20 minutes). Part D is the daily routine; Part E the weekly one; Part F (optional) links your Zerodha account; Part G sets up trade management strategies. Every number in the journal — equity, RPT, position size, heat — flows from the capital and risk settings in Part B, so do those first.</div>
 
       ${part('A · Get access', 'Accounts are created by the administrator; there is no self sign-up page in this version.')}
       ${step(1, 'Create the account (administrator)', `<p>Supabase dashboard → <strong>Authentication → Users → Add user</strong>. Enter the trader's email and a temporary password and tick <em>Auto Confirm User</em>. Send the site link and the password to the trader.</p>`)}
@@ -793,7 +793,7 @@ const settingsModule = (() => {
       ${step(8, 'Charges', `<p>${go('charges', 'Settings → Charges & Brokerage')}: pick your broker and enter its brokerage. Government charges (STT, exchange, SEBI, GST, stamp duty) are pre-filled. Charges are deducted from every P&amp;L, paper trades included.</p>`)}
 
       ${part('C · Rules, alerts and research tools')}
-      ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Lifecycle & Alerts')}: read the flow and rule table (entry → add → lock → two trails → hard stop; defaults 1R / 2R / 5R / 10R). Change targets or switch any off with <strong>⚙ Lifecycle settings</strong> — changes apply to new trades only. Keep the defaults unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
+      ${step(9, 'Trade lifecycle rules', `<p>${go('alerts', 'Settings → Trade Management & Alerts')}: read the flow and rule table (entry → add → lock → two trails → hard stop; defaults 1R / 2R / 5R / 10R). Change targets or switch any off with <strong>⚙ Lifecycle settings</strong> — changes apply to new trades only. Keep the defaults unless you have tested a change. Enter this year's <strong>NSE holidays</strong> (DD-MM-YYYY, comma-separated) so the engine skips them.</p>`)}
       ${step(10, 'Telegram alerts', `<p>On the same page, open <strong>📖 Account setup — step-by-step guide</strong> under Telegram, create your bot, store the bot token as the server secret <code>TELEGRAM_BOT_TOKEN</code>, paste your chat ID and click <strong>📨 Send test message</strong>. Real-trade alerts then reach your phone from the server runner, even with the app closed; paper alerts stay on the Alert Dashboard.</p>`)}
       ${step(11, 'Playbooks', `<p>${nav('playbook', 'Playbook')} → <strong>+ New Playbook</strong> for each setup you trade (e.g. VCP breakout): entry rules, exit rules, checklist. Keep one <em>Active</em> version per setup and tag each trade with it — Analytics then shows which setups make money.</p>`)}
       ${step(12, 'Market Health', `<p>Click <strong>🌡 Market Health</strong> (top bar) → run <strong>Auto Fetch</strong> once. After that it refreshes automatically at 08:45 IST on trading days. Use trend and breadth to decide how aggressive to be.</p>`)}
@@ -838,6 +838,19 @@ const settingsModule = (() => {
           </tbody></table>
         <p>Switches on the <strong>gateway page</strong> (all off at the start) decide what may actually leave for Zerodha: <em>Stop-GTT placement</em>, <em>Exits (market sell)</em>, <em>Buy orders</em>, and <em>Emergency Exit</em> — off / ask me / automatic — which sells once with a limit order 1% below the current price when a triggered stop GTT is left unfilled or rejected (no ladder; if it does not fill you are alerted). The <strong>Kill switch</strong> on the journal page blocks all new entries and adds at once. Auto modes never bypass a safety check: every order passes the same guards, is re-checked at the moment of sending, and needs its gateway switch on.</p>`)}
       ${step(28, 'Rules that always apply', `<ul><li>The journal's rule engine decides; Zerodha only holds one hard-stop GTT per position and receives the orders.</li><li>A stop is never lowered automatically, and a sell is never larger than the quantity Zerodha shows.</li><li>If any position is not PROTECTED, new entries and adds are blocked for every symbol.</li><li>Gateway offline or Kite login missing → nothing is sent, and you get an alert.</li></ul>`)}
+
+      ${part('G · Trade management strategies', 'Each position follows one strategy. Set the default once, then pick per setup.')}
+      ${step(29, 'Pick the default strategy', `<p>${go('alerts', 'Settings → Trade Management & Alerts')} → <strong>Default strategy</strong>. Strategy A (the lifecycle) is the default out of the box. Open any strategy row to see its rules, alerts and flow chart.</p>`)}
+      ${step(30, 'Strategy B in short', `<ul>
+          <li><strong>Entry:</strong> the full planned size (RPT ÷ risk per share), no add.</li>
+          <li><strong>2R:</strong> stop moves to your average cost (stop GTT revised).</li>
+          <li><strong>3R:</strong> no sale. Half becomes a profit-booking tranche with stop = max(today's low, hard stop). Each morning it rises to max(yesterday's low, stop); after a candle wider than 3 × ATR14, to max(low + 0.25 × range, stop). It never moves down. If price stays below it for 5 minutes, the tranche is sold.</li>
+          <li><strong>Other half, from 3R:</strong> a daily close below the 21 EMA − 2% sells it; a close between EMA − 2% and the EMA sets a warning low (that day's low), and a later close below the warning low sells it. A close back above the EMA clears the warning.</li>
+          <li><strong>Time exit:</strong> if +1R is not reached within 10 trading days, everything is sold. The hard stop always applies.</li></ul>
+        <details style="margin-top:6px"><summary style="cursor:pointer;font-weight:600">Strategy B flow chart</summary><div style="padding-top:8px">${_strategyFlowSvg(TLMStrategies.find('B', {}), TLMRules.DEFAULT_PARAMS)}</div></details>
+        <p>The broker holds only the hard-stop GTT. The tranche stop and the EMA checks are watched by the engine and sent as orders (Auto modes) or alerts.</p>`)}
+      ${step(31, 'Choose per setup', `<p>${nav('watchlist', 'Watchlist')} → <strong>+ Add</strong> → <em>Trade management strategy</em>. The entry size follows the strategy. You can change it again in <strong>▶ Execute</strong>.</p>`)}
+      ${step(32, 'Change or build', `<p>On an open position: <strong>Change strategy</strong> in its lifecycle panel (adds, partial exits and the stop are kept). To make your own: <strong>+ New strategy</strong>, or <strong>Duplicate</strong> on B. A strategy is copied into a trade when it opens, so later edits never change open trades. Every alert ends with a one-line <em>Reason</em>.</p>`)}
 
       ${part('Tips for getting the most out of the journal')}
       <ul class="gs-tips">
@@ -924,17 +937,81 @@ const settingsModule = (() => {
 
   /** Rule table rows [rule, stage, trigger, action] for a Strategy B / custom strategy (same columns as Strategy A's table). */
   function _strategyRuleRows(sp, p) {
+    sp = TLMStrategies.normalise(sp);
+    const hold = `Price holds above ${'${'}R}R for ${p.targetHoldMin} min`;
+    const at = r => hold.replace('${R}', r);
     const rows = [['LC-01', 'Entry', `Price holds above the trigger for ${p.entryHoldMin} min`, `Buy ${sp.entryPct}% of the planned size; stop = initial stop`]];
-    if (sp.add.on) rows.push(['LC-02', 'Add', `Price holds above ${sp.add.atR}R for ${p.targetHoldMin} min`, `Buy ${sp.add.pct}% of the first qty; stop to initial + ${sp.add.stopToR}R`]);
-    if (sp.partial.on) {
-      rows.push(['ST-01', 'Partial profit', `Price holds above ${sp.partial.atR}R for ${p.targetHoldMin} min`, `Sell ${sp.partial.pct}% of the open qty (once)`]);
-      if (sp.partial.stopAfter === 'cost') rows.push(['ST-04', 'Stop to cost', 'Right after the partial profit', 'Raise the stop to the average cost']);
+    if (sp.add.on) rows.push(['LC-02', 'Add', at(sp.add.atR), `Buy ${sp.add.pct}% of the first qty; stop to initial + ${sp.add.stopToR}R`]);
+    if (sp.stopToCost.on) rows.push(['ST-04', 'Stop to cost', at(sp.stopToCost.atR), 'Raise the hard stop to the average cost (stop GTT revised)']);
+    const pa = sp.partial;
+    if (pa.on && pa.mode === 'trail') {
+      rows.push(['ST-01', 'Tranche set', at(pa.atR), `No sale: ${pa.pct}% of the open qty gets a profit-booking stop = max(today's low, hard stop)`]);
+      rows.push(['LC-10', 'Tranche stop up', 'Each morning, on yesterday\'s candle', `max(yesterday's low, stop); if range > ${pa.largeAtr} × ATR14: max(low + ${pa.largeFrac} × range, stop). Never down.`]);
+      rows.push(['ST-05', 'Tranche sold', `Price stays below the profit-booking stop for ${pa.holdMin} min`, 'Sell the tranche at market']);
+    } else if (pa.on) {
+      rows.push(['ST-01', 'Partial profit', at(pa.atR), `Sell ${pa.pct}% of the open qty (once)`]);
+      if (pa.stopAfter === 'cost') rows.push(['ST-04', 'Stop to cost', 'Right after the partial profit', 'Raise the stop to the average cost']);
     }
-    if (sp.trail.type !== 'none') rows.push(['ST-02', 'Trend exit', (sp.trail.type === 'ema' ? `Daily close below the ${sp.trail.period} EMA less ${sp.trail.bufferPct}%` : `Daily close ${sp.trail.pct}% below the highest close since entry`) + (sp.trail.afterPartial ? ' (after the partial)' : ''), 'Exit the remaining position']);
+    const t = sp.trail, from = t.afterPartial && pa.on ? ` (from ${pa.atR}R)` : '';
+    if (t.type === 'ema' && t.confirm) {
+      rows.push(['ST-02', 'Trend exit', `Daily close below the ${t.period} EMA − ${t.deepPct}%${from}`, 'Sell the trailed shares next morning']);
+      rows.push(['ST-02', 'Trend warning', `Daily close between the ${t.period} EMA − ${t.deepPct}% and the EMA`, 'No sale; that day\'s low becomes the warning low (a close above the EMA clears it)']);
+      rows.push(['ST-02', 'Trend exit', 'A later daily close below the warning low', 'Sell the trailed shares next morning']);
+    } else if (t.type !== 'none') rows.push(['ST-02', 'Trend exit', (t.type === 'ema' ? `Daily close below the ${t.period} EMA less ${t.bufferPct}%` : `Daily close ${t.pct}% below the highest close since entry`) + from, 'Sell the trailed shares']);
     if (sp.timeExit.on) rows.push(['ST-03', 'Time exit', `+${sp.timeExit.minR}R not reached within ${sp.timeExit.days} trading days`, 'Exit the whole position']);
-    rows.push(['LC-10', 'Day start', `${String(Math.floor(p.briefMinute / 60)).padStart(2, '0')}:${String(p.briefMinute % 60).padStart(2, '0')} IST each trading day`, 'Brief: hard stop and today\'s trail level']);
+    rows.push(['LC-10', 'Day start', `${String(Math.floor(p.briefMinute / 60)).padStart(2, '0')}:${String(p.briefMinute % 60).padStart(2, '0')} IST each trading day`, 'Brief: hard stop, profit-booking stop, trend-exit level']);
     rows.push(['LC-09', 'Hard stop', 'Any price below the hard stop', 'Exit the whole position']);
     return rows;
+  }
+
+  /** Flow chart of a rules strategy (Strategy B and custom ones). */
+  function _strategyFlowSvg(sp, p) {
+    sp = TLMStrategies.normalise(sp);
+    const box = (x, y, w, title, sub, kind) => {
+      const fill = { gray: 'var(--bg)', stage: 'rgba(91,106,240,0.08)', red: 'rgba(239,68,68,0.08)', teal: 'rgba(16,185,129,0.10)' }[kind];
+      const stroke = { gray: 'var(--border)', stage: 'var(--primary)', red: '#ef4444', teal: '#10b981' }[kind];
+      return `<g><rect x="${x}" y="${y}" width="${w}" height="52" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="1"/>
+        <text x="${x + w / 2}" y="${y + 20}" text-anchor="middle" font-size="13" font-weight="600" fill="var(--text)">${title}</text>
+        <text x="${x + w / 2}" y="${y + 38}" text-anchor="middle" font-size="11.5" fill="var(--text-muted)">${sub}</text></g>`;
+    };
+    const arrow = d => `<path d="${d}" fill="none" stroke="var(--text-muted)" stroke-width="1" marker-end="url(#stf-arr)"/>`;
+    const out = [], X = 40, W = 300, C = X + W / 2, step = 80;
+    let y = 16;
+    const next = () => { out.push(arrow(`M${C} ${y + 52} V${y + step - 2}`)); y += step; };
+    out.push(box(X, y, W, `Entry confirmed (${p.entryHoldMin} min hold)`, `Buy ${sp.entryPct}% of planned size · stop = initial`, 'stage'));
+    out.push(box(380, 16, 280, 'Hard stop hit', 'Any time: sell all at market', 'red'));
+    if (sp.timeExit.on) out.push(box(380, 96, 280, `Time exit — ${sp.timeExit.days} trading days`, `+${sp.timeExit.minR}R never reached: sell all`, 'red'));
+    if (sp.add.on) { next(); out.push(box(X, y, W, `${sp.add.atR}R — add ${sp.add.pct}%`, `Stop to initial + ${sp.add.stopToR}R`, 'stage')); }
+    if (sp.stopToCost.on) { next(); out.push(box(X, y, W, `${sp.stopToCost.atR}R — stop to cost`, 'Hard stop = average cost; GTT revised', 'stage')); }
+    const t = sp.trail, pa = sp.partial;
+    const trailTitle = t.type === 'ema' ? `${t.period} EMA trail (daily close)` : t.type === 'pct' ? `${t.pct}% trail (daily close)` : 'No trail';
+    const LX = 20, RX = 350, CW = 310, LC = LX + CW / 2, RC = RX + CW / 2;
+    let endY;
+    if (pa.on && pa.mode === 'trail') {
+      next(); out.push(box(X, y, W, `${pa.atR}R — split, no sale`, `${pa.pct}% tranche · the rest on the trail`, 'stage'));
+      const top = y + 52, mid = y + 66; y += step;
+      out.push(arrow(`M${C} ${top} V${mid} H${LC} V${y - 2}`), arrow(`M${C} ${mid} H${RC} V${y - 2}`));
+      out.push(box(LX, y, CW, 'Profit-booking stop', 'Start: max(day low, hard stop)', 'stage'));
+      out.push(box(RX, y, CW, trailTitle, 'Checked at 09:00 on yesterday\'s close', 'stage'));
+      out.push(arrow(`M${LC} ${y + 52} V${y + step - 2}`), arrow(`M${RC} ${y + 52} V${y + step - 2}`)); y += step;
+      out.push(box(LX, y, CW, 'Each morning: raise it', `prev low · >${pa.largeAtr}×ATR day: low + ${pa.largeFrac}×range`, 'stage'));
+      if (t.type === 'ema' && t.confirm) out.push(box(RX, y, CW, `Close in EMA − ${t.deepPct}% … EMA`, 'Warning low = that day\'s low', 'gray'));
+      else out.push(box(RX, y, CW, 'Close below the trail level', 'Sell the trailed shares', 'teal'));
+      out.push(arrow(`M${LC} ${y + 52} V${y + step - 2}`), arrow(`M${RC} ${y + 52} V${y + step - 2}`)); y += step;
+      out.push(box(LX, y, CW, 'Sell the tranche', `${pa.holdMin} min below the profit-booking stop`, 'teal'));
+      out.push(box(RX, y, CW, t.type === 'ema' && t.confirm ? `Close &lt; EMA − ${t.deepPct}% or &lt; warning low` : 'Trailed shares sold', 'Sell the trailed shares next morning', 'teal'));
+      endY = y + step;
+      out.push(arrow(`M${LC} ${y + 52} V${endY + 26} H${190 - 2}`), arrow(`M${RC} ${y + 52} V${endY + 26} H${490 + 2}`));
+      out.push(box(190, endY, 300, 'Closed — open qty = 0', 'Moves to Trades / Paper history', 'teal'));
+    } else {
+      if (pa.on) { next(); out.push(box(X, y, W, `${pa.atR}R — sell ${pa.pct}%`, pa.stopAfter === 'cost' ? 'Then stop to cost' : 'Stop unchanged', 'stage')); }
+      if (t.type !== 'none') { next(); out.push(box(X, y, W, trailTitle, t.type === 'ema' && t.confirm ? `Close &lt; EMA − ${t.deepPct}% or &lt; warning low: sell` : 'Close below the level: sell the rest', 'stage')); }
+      next(); endY = y; out.push(box(X, y, W, 'Closed — open qty = 0', 'Moves to Trades / Paper history', 'teal'));
+    }
+    const H = endY + 68;
+    return `<svg viewBox="0 0 680 ${H}" width="100%" style="max-width:720px;display:block" role="img" aria-label="${String(sp.name).replace(/"/g, '')} flow">
+      <defs><marker id="stf-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="var(--text-muted)" stroke-width="1.5"/></marker></defs>
+      ${out.join('')}</svg>`;
   }
 
   /** One strategy's rules as a table — used on both the Lifecycle & Alerts page and the Strategies page. */
@@ -972,7 +1049,9 @@ const settingsModule = (() => {
       const t = TLMRules.targetPlan(p), on = (k, txt) => (t[k].on ? txt : null);
       return [on('T1', `add ${t.T1.r}R`), on('T2', `lock ${t.T2.r}R`), on('T5', `trail ${t.T5.r}R`), on('T10', `trail ${t.T10.r}R`)].filter(Boolean).join(' · ');
     }
-    return [sp.entryPct < 100 ? `entry ${sp.entryPct}%` : null, sp.add.on ? `add ${sp.add.atR}R` : null, sp.partial.on ? `sell ${sp.partial.pct}% @ ${sp.partial.atR}R` : null,
+    sp = TLMStrategies.normalise(sp);
+    return [sp.entryPct < 100 ? `entry ${sp.entryPct}%` : null, sp.add.on ? `add ${sp.add.atR}R` : null, sp.stopToCost.on ? `cost stop ${sp.stopToCost.atR}R` : null,
+      sp.partial.on ? (sp.partial.mode === 'trail' ? `${sp.partial.pct}% tranche @ ${sp.partial.atR}R` : `sell ${sp.partial.pct}% @ ${sp.partial.atR}R`) : null,
       sp.trail.type === 'ema' ? `${sp.trail.period} EMA trail` : sp.trail.type === 'pct' ? `${sp.trail.pct}% trail` : null,
       sp.timeExit.on ? `time exit ${sp.timeExit.days}d` : null].filter(Boolean).join(' · ');
   }
@@ -992,7 +1071,8 @@ const settingsModule = (() => {
         <div class="st-body">
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${actions}</div>
           ${_strategyRulesTable(sp, p)}
-          ${sp.kind === 'lifecycle' ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Show flow diagram</summary><div style="padding-top:8px">${_tlmFlowSvg(p)}</div></details>` : ''}
+          ${sp.kind === 'rules' ? `<ul style="margin:6px 0 4px 18px;padding:0;font-size:12px;color:var(--text-muted)">${TLMStrategies.describe(sp).map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
+          <details style="margin-top:6px"${sp.kind === 'rules' && sp.id === TLMStrategies.defaultId(settings) ? ' open' : ''}><summary style="cursor:pointer;font-size:12px;color:var(--text-muted)">Show flow diagram</summary><div style="padding-top:8px">${sp.kind === 'lifecycle' ? _tlmFlowSvg(p) : _strategyFlowSvg(sp, p)}</div></details>
         </div></details>`;
     }).join('') + '</div>';
   }
@@ -1093,13 +1173,20 @@ const settingsModule = (() => {
         <tr><td style="width:60px"></td><td><strong>Entry size</strong><div style="font-size:11px;color:var(--text-muted)">Share of the planned full size bought at entry</div></td><td>${num('entryPct', sp.entryPct, 5)} %</td></tr>
         <tr><td>${chk('add-on', sp.add.on)}</td><td><strong>Add</strong><div style="font-size:11px;color:var(--text-muted)">Buy more when price holds above R</div></td>
           <td>at ${num('add-r', sp.add.atR, 0.25, 64)} R · ${num('add-pct', sp.add.pct, 10, 64)} % of first qty · stop to initial + ${num('add-stop', sp.add.stopToR, 0.25, 64)} R</td></tr>
-        <tr><td>${chk('par-on', sp.partial.on)}</td><td><strong>Partial profit</strong><div style="font-size:11px;color:var(--text-muted)">Sell part of the open quantity</div></td>
-          <td>at ${num('par-r', sp.partial.atR, 0.25, 64)} R · sell ${num('par-pct', sp.partial.pct, 5, 64)} % · then stop
-            <select class="form-select" id="st-par-stop" style="width:auto;display:inline-block"><option value="cost"${sp.partial.stopAfter === 'cost' ? ' selected' : ''}>to cost</option><option value="none"${sp.partial.stopAfter === 'none' ? ' selected' : ''}>unchanged</option></select></td></tr>
+        <tr><td>${chk('cost-on', sp.stopToCost.on)}</td><td><strong>Stop to cost</strong><div style="font-size:11px;color:var(--text-muted)">Move the hard stop to your average cost</div></td>
+          <td>at ${num('cost-r', sp.stopToCost.atR, 0.25, 64)} R</td></tr>
+        <tr><td>${chk('par-on', sp.partial.on)}</td><td><strong>Partial profit</strong><div style="font-size:11px;color:var(--text-muted)">Book part of the open quantity</div></td>
+          <td>at ${num('par-r', sp.partial.atR, 0.25, 64)} R · ${num('par-pct', sp.partial.pct, 5, 64)} % ·
+            <select class="form-select" id="st-par-mode" style="width:auto;display:inline-block"><option value="trail"${sp.partial.mode === 'trail' ? ' selected' : ''}>trail it with its own stop</option><option value="sell"${sp.partial.mode === 'sell' ? ' selected' : ''}>sell at once</option></select>
+            <div style="font-size:12px;margin-top:4px">Trailed: sell after ${num('par-hold', sp.partial.holdMin, 1, 56)} min below its stop · large candle &gt; ${num('par-atr', sp.partial.largeAtr, 0.5, 56)} × ATR → low + ${num('par-frac', sp.partial.largeFrac, 0.05, 60)} × range</div>
+            <div style="font-size:12px;margin-top:4px">Sold at once: then stop
+            <select class="form-select" id="st-par-stop" style="width:auto;display:inline-block"><option value="cost"${sp.partial.stopAfter === 'cost' ? ' selected' : ''}>to cost</option><option value="none"${sp.partial.stopAfter === 'none' ? ' selected' : ''}>unchanged</option></select></div></td></tr>
         <tr><td></td><td><strong>Trail (exit on a daily close)</strong><div style="font-size:11px;color:var(--text-muted)">Checked once a day at the start, on the last closed day</div></td>
           <td><select class="form-select" id="st-trail-type" style="width:auto;display:inline-block"><option value="ema"${sp.trail.type === 'ema' ? ' selected' : ''}>Below EMA</option><option value="pct"${sp.trail.type === 'pct' ? ' selected' : ''}>% below highest close</option><option value="none"${sp.trail.type === 'none' ? ' selected' : ''}>No trail</option></select>
-            EMA ${num('trail-period', sp.trail.period, 1, 60)} · buffer ${num('trail-buf', sp.trail.bufferPct, 0.5, 60)} % · or ${num('trail-pct', sp.trail.pct, 1, 60)} %
-            <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-trail-after" ${sp.trail.afterPartial ? 'checked' : ''}> only after the partial profit is booked</label></td></tr>
+            EMA ${num('trail-period', sp.trail.period, 1, 60)} · or ${num('trail-pct', sp.trail.pct, 1, 60)} %
+            <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-trail-confirm" ${sp.trail.confirm ? 'checked' : ''}> Two levels: close &lt; EMA − ${num('trail-deep', sp.trail.deepPct, 0.5, 56)} % sells; a close between that and the EMA sets a warning low, a later close below it sells</label>
+            <div style="font-size:12px;margin-top:4px">Single level instead: close &lt; EMA − ${num('trail-buf', sp.trail.bufferPct, 0.5, 56)} %</div>
+            <label style="display:block;margin-top:4px;font-size:12px"><input type="checkbox" id="st-trail-after" ${sp.trail.afterPartial ? 'checked' : ''}> only from the partial-profit level</label></td></tr>
         <tr><td>${chk('time-on', sp.timeExit.on)}</td><td><strong>Time exit</strong><div style="font-size:11px;color:var(--text-muted)">Exit all if the trade is going nowhere</div></td>
           <td>if +${num('time-r', sp.timeExit.minR, 0.25, 64)} R is not reached within ${num('time-days', sp.timeExit.days, 1, 64)} trading days</td></tr>
       </tbody></table>
@@ -1112,8 +1199,10 @@ const settingsModule = (() => {
         const spec = TLMStrategies.normalise({
           id: id || ('c_' + Date.now().toString(36)), name: g('name').value, entryPct: n('entryPct'),
           add: { on: g('add-on').checked, atR: n('add-r'), pct: n('add-pct'), stopToR: n('add-stop') },
-          partial: { on: g('par-on').checked, atR: n('par-r'), pct: n('par-pct'), stopAfter: g('par-stop').value },
-          trail: { type: g('trail-type').value, period: n('trail-period'), bufferPct: n('trail-buf'), pct: n('trail-pct'), afterPartial: g('trail-after').checked },
+          stopToCost: { on: g('cost-on').checked, atR: n('cost-r') },
+          partial: { on: g('par-on').checked, atR: n('par-r'), pct: n('par-pct'), mode: g('par-mode').value, stopAfter: g('par-stop').value,
+            holdMin: n('par-hold'), largeAtr: n('par-atr'), largeFrac: n('par-frac') },
+          trail: { type: g('trail-type').value, period: n('trail-period'), confirm: g('trail-confirm').checked, deepPct: n('trail-deep'), bufferPct: n('trail-buf'), pct: n('trail-pct'), afterPartial: g('trail-after').checked },
           timeExit: { on: g('time-on').checked, days: n('time-days'), minR: n('time-r') },
         });
         const err = TLMStrategies.validate(spec);

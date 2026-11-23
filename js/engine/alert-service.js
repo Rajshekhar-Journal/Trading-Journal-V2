@@ -23,10 +23,10 @@
           ? `Buy Qty ${qtyFmt(a.qty)} · Set stop loss ${inr(a.stop)}`
           : `Buy Qty ${qtyFmt(a.qty)} · Revise stop loss to ${inr(a.stop)}`;
       case 'STOP':     return `Revise stop loss to ${inr(a.stop)}`;
-      case 'TRAIL':    return `${a.dropped ? 'Cancel previous trail · ' : ''}Trail Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
-      case 'SELL':     return a.rule === RULES.PARTIAL_PROFIT ? `Sell Qty ${qtyFmt(a.qty)} at market price (partial profit)` : `Exit Qty ${qtyFmt(a.qty)} at market price`;
+      case 'TRAIL':    return a.rule === RULES.PARTIAL_PROFIT ? `No sale yet · Profit-booking stop ${inr(a.trail)} for Qty ${qtyFmt(a.qty)}` : `${a.dropped ? 'Cancel previous trail · ' : ''}Trail Qty ${qtyFmt(a.qty)} with stop ${inr(a.trail)}`;
+      case 'SELL':     return [RULES.PARTIAL_PROFIT, RULES.TRANCHE_EXIT].includes(a.rule) ? `Sell Qty ${qtyFmt(a.qty)} at market price (partial profit)` : `Exit Qty ${qtyFmt(a.qty)} at market price`;
       case 'EXIT_ALL': return `Exit Qty ${qtyFmt(a.qty)} (all open) at market price`;
-      case 'BRIEF':    return `Set stop loss ${inr(a.stop)} for Qty ${qtyFmt(a.qty)}` + (a.trail ? ` · Trail stop ${inr(a.trail)} for Qty ${qtyFmt(a.trailQty)}` : '');
+      case 'BRIEF':    return `Set stop loss ${inr(a.stop)} for Qty ${qtyFmt(a.qty)}` + (a.trail ? ` · ${a.rule === RULES.DAY_BRIEF && a.why ? 'Profit-booking' : 'Trail'} stop ${inr(a.trail)} for Qty ${qtyFmt(a.trailQty)}` : '');
       default:         return '';
     }
   }
