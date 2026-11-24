@@ -44,6 +44,14 @@ Deno.serve(async (req) => {
   if (error) { await answer('Could not decide: ' + error.message); return ok(); }
   await admin.from('tg_notices').update({ decided: result }).eq('id', notice.id);
 
+  const { data: it } = await admin.from('order_intents').select('action').eq('id', intentId).maybeSingle();
+  if (it?.action === 'TEST_APPROVAL') {
+    const t = result === 'approved' || result === 'rejected' ? `✅ Test passed ${ist()}: your tap reached the journal and was recorded as ${result.toUpperCase()}. Telegram approvals work. (No order existed.)`
+      : result === 'expired' ? '⌛ Test expired — send a new one from Settings.' : `Already ${result}.`;
+    await answer(t.split(':')[0]);
+    await tg('editMessageText', { chat_id: chatId, message_id: messageId, text: `${cq.message?.text || ''}\n\n${t}` });
+    return ok();
+  }
   const line = result === 'approved' ? `✅ Approved ${ist()} — the gateway sends it within seconds (after its checks).`
     : result === 'rejected' ? `✖ Rejected ${ist()} — nothing will be sent.`
     : result === 'expired' ? '⌛ Too late: the proposal had expired. Nothing was sent.'

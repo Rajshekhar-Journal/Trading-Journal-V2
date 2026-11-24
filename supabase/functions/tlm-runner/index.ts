@@ -83,7 +83,7 @@ function telegramHint(err: string): string {
 G.TLMAlerts.setNotifier((text: string, settings: any) => telegram(settings?.telegramChatId, text));
 
 // Confirm-mode proposals go out with Approve / Reject buttons; a tap is handled by the tg-webhook function.
-G.TLMExecWatch.setProposalSender(async (chatId: string, text: string, intentId: string) => {
+async function sendProposal(chatId: string, text: string, intentId: string): Promise<number | null> {
   if (!BOT_TOKEN || !chatId) return null;
   const secret = await webhookSecret(SERVICE_KEY);
   const btn = async (label: string, verb: string) => ({ text: label, callback_data: `${verb}:${intentId}:${await signButton(secret, verb, intentId)}` });
@@ -93,7 +93,8 @@ G.TLMExecWatch.setProposalSender(async (chatId: string, text: string, intentId: 
   });
   if (!r.ok) { lastTelegramError = `${r.status} ${(await r.json().catch(() => ({})))?.description || ''}`; return null; }
   return (await r.json())?.result?.message_id ?? null;
-});
+}
+G.TLMExecWatch.setProposalSender(sendProposal);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 async function asUser<T>(uid: string, fn: () => Promise<T>): Promise<T> {
@@ -201,6 +202,36 @@ Deno.serve(async (req) => {
     });
     const b = await r.json().catch(() => ({}));
     return b?.ok ? json({ ok: true }) : json({ ok: false, error: `Telegram: ${b?.description || r.status}` }, 502);
+  }
+
+  if (action === 'telegram-test-approval') {
+    // A harmless proposal: action TEST_APPROVAL, route NONE, quantity 0. No executor picks it up; it only proves the round trip.
+    if (!BOT_TOKEN) return json({ ok: false, error: 'TELEGRAM_BOT_TOKEN secret is not set on the server.' }, 400);
+    const settings = await asUser(user.id, () => G.db.getSettings());
+    if (!settings?.telegramChatId) return json({ ok: false, error: 'Add your Telegram Chat ID and save first.' }, 400);
+    if (!settings?.execution?.telegramApprovals) return json({ ok: false, error: 'Tick "Approve from Telegram" and Save first.' }, 400);
+    const now = Date.now(), id = `oi_${now}_test${Math.random().toString(36).slice(2, 6)}`;
+    const { error: e1 } = await admin.from('order_intents').insert({ id, user_id: user.id, intent_key: `TEST:${now}`, mode: 'confirm', status: 'proposed', action: 'TEST_APPROVAL',
+      rule_id: 'TEST', symbol: 'TEST', route: 'NONE', qty: 0, would_send: false, detail: { note: 'Telegram button test — no order' },
+      expires_at: new Date(now + 5 * 60000).toISOString(), created_at: new Date(now).toISOString() });
+    if (e1) return json({ ok: false, error: 'Could not create the test proposal: ' + e1.message }, 500);
+    const msgId = await sendProposal(settings.telegramChatId,
+      '🧪 TEST APPROVAL — no order exists.\nTap Approve or Reject: the message should change within a few seconds to show your choice.\nExpires in 5 minutes.', id);
+    if (!msgId) return json({ ok: false, error: telegramHint(lastTelegramError) }, 502);
+    const { error: e2 } = await admin.from('tg_notices').insert({ id: `tg_${now}_test`, user_id: user.id, intent_id: id, chat_id: String(settings.telegramChatId), message_id: msgId,
+      result_sent_at: new Date(now).toISOString() });
+    if (e2) return json({ ok: false, error: 'Run migration 015 first (' + e2.message + ').' }, 500);
+    return json({ ok: true });
+  }
+
+  if (action === 'telegram-webhook-info') {
+    // Is the bot's button webhook pointing at tg-webhook? (Telegram getWebhookInfo; nothing secret is returned.)
+    if (!BOT_TOKEN) return json({ connected: false, error: 'TELEGRAM_BOT_TOKEN secret is not set on the server.' });
+    const b = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`).then((r) => r.json()).catch(() => ({}));
+    const info = b?.result || {};
+    const want = `${SUPABASE_URL}/functions/v1/tg-webhook`;
+    return json({ connected: info.url === want, otherUrl: info.url && info.url !== want ? true : false,
+      lastError: info.last_error_message || null, lastErrorAt: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : null, pending: info.pending_update_count || 0 });
   }
 
   if (action === 'chartbook-backfill') {

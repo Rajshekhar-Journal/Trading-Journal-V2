@@ -1144,6 +1144,7 @@ const settingsModule = (() => {
           <span><strong>Approve from Telegram</strong> — in Confirm mode (and for buys in Auto-Sell), each proposal arrives with <em>Approve</em> / <em>Reject</em> buttons; the outcome follows as a second message. A tap counts exactly like the journal button; the gateway still re-checks everything. Keep a passcode on Telegram.</span></label>
         <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
           <button class="btn btn-secondary btn-sm" id="al-tg-connect" onclick="settingsModule._connectTelegramButtons()">🔗 Connect the buttons (once)</button>
+          <button class="btn btn-secondary btn-sm" onclick="settingsModule._testTelegramApproval()">🧪 Send test approval</button>
           <span id="al-tg-connect-result" style="font-size:12px;color:var(--text-muted)">Needs migration 015 and the tg-webhook function deployed.</span>
         </div>
       </div>
@@ -1328,9 +1329,39 @@ const settingsModule = (() => {
       if (!ok) { el.textContent = status === 404 ? '⚠ Server runner not deployed yet' : `⚠ Server runner error (${status})`; el.style.color = '#d97706'; return; }
       el.textContent = data.telegramConfigured ? '✅ Set on the server' : '⚠ Not set — run: npx supabase secrets set TELEGRAM_BOT_TOKEN=<token>';
       el.style.color = data.telegramConfigured ? '#059669' : '#d97706';
+      if (data.telegramConfigured) _showTelegramButtonsStatus();
     } catch (e) {
       el.textContent = '⚠ Could not reach the server runner'; el.style.color = '#d97706';
     }
+  }
+
+  /** Send a harmless Approve / Reject message (no order behind it) to prove the round trip. */
+  async function _testTelegramApproval() {
+    const out = document.getElementById('al-tg-connect-result');
+    const show = (m, ok) => { if (out) { out.textContent = m; out.style.color = ok ? '#059669' : '#dc2626'; } };
+    show('Sending a test approval…', true);
+    try {
+      const { ok, status, data } = await _runnerApi('telegram-test-approval');
+      if (ok && data.ok) show('✅ Sent. Tap Approve or Reject in Telegram — the message should change within a few seconds.', true);
+      else show('❌ ' + (data.error || `Server runner error ${status} — deploy the functions first.`), false);
+    } catch (e) { show('❌ ' + e.message, false); }
+  }
+
+  /** Ask Telegram (through the server) whether the Approve / Reject buttons are connected. */
+  async function _showTelegramButtonsStatus() {
+    const out = document.getElementById('al-tg-connect-result');
+    if (!out) return;
+    try {
+      const { ok, data } = await _runnerApi('telegram-webhook-info');
+      if (!ok) { out.textContent = '⚠ Could not check — deploy the functions (npm run deploy:functions).'; out.style.color = '#d97706'; return; }
+      if (data.connected) {
+        out.textContent = '✅ Buttons connected' + (data.lastError ? ` — last Telegram error: ${data.lastError} (${new Date(data.lastErrorAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false })})` : '');
+        out.style.color = data.lastError ? '#d97706' : '#059669';
+      } else {
+        out.textContent = data.error || (data.otherUrl ? '⚠ The bot points somewhere else — click Connect.' : '⚠ Not connected yet — click Connect.');
+        out.style.color = '#d97706';
+      }
+    } catch (_) { out.textContent = '⚠ Could not reach the server runner.'; out.style.color = '#d97706'; }
   }
 
   /** Save the chat ID, then ask the server runner to send a test message. */
@@ -1340,7 +1371,7 @@ const settingsModule = (() => {
     show('Connecting…', true);
     try {
       const { ok, status, data } = await _runnerApi('telegram-webhook');
-      if (ok && data.ok) show('✅ Connected. Tick "Approve from Telegram" and Save.', true);
+      if (ok && data.ok) { show('✅ Connected. Tick "Approve from Telegram" and Save.', true); setTimeout(_showTelegramButtonsStatus, 1500); }
       else show('❌ ' + (data.error || `Server runner error ${status} — deploy the functions first (npm run deploy:functions).`), false);
     } catch (e) { show('❌ ' + e.message, false); }
   }
@@ -1583,7 +1614,8 @@ const settingsModule = (() => {
   async function _pageExecution() {
     const settings = await db.getSettings();
     const ex = settings.execution || {};
-    const [st, drift, intents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 500 }), db.getBrokerSnapshot('protection')]);
+    const [st, drift, allIntents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 500 }), db.getBrokerSnapshot('protection')]);
+    const intents = allIntents.filter(i => i.action !== 'TEST_APPROVAL');   // Telegram button tests are not orders
     const xp = { ...(globalThis.TLMOrders ? TLMOrders.EXEC_DEFAULTS : {}), ...ex };
     const fmt = t => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
     const ageSec = st?.heartbeat_at ? (Date.now() - new Date(st.heartbeat_at).getTime()) / 1000 : Infinity;
@@ -1774,5 +1806,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _connectTelegramButtons, _openLifecycleSettings, _openStrategyEditor, _deleteStrategy, _saveDefaultStrategy, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _connectTelegramButtons, _testTelegramApproval, _openLifecycleSettings, _openStrategyEditor, _deleteStrategy, _saveDefaultStrategy, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();

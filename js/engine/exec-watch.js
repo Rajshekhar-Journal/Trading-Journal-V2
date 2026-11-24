@@ -61,7 +61,7 @@
     const noticed = new Map(notices.map(n => [n.intent_id, n]));
     const autoMode = x.mode === 'auto_sell' || x.mode === 'auto_full';
     for (const i of intents) {
-      if (i.mode !== 'confirm' || i.status !== 'proposed' || noticed.has(i.id)) continue;
+      if (i.mode !== 'confirm' || i.status !== 'proposed' || noticed.has(i.id) || i.action === 'TEST_APPROVAL') continue;
       if (i.expires_at && Date.parse(i.expires_at) < now) continue;
       if (autoMode && i.detail && i.detail.autoEligible) continue;                 // the gateway approves these itself
       const al = i.alert_id ? alerts.find(a => a.id === i.alert_id) : null;
@@ -140,7 +140,7 @@
     const stale = (root.TLMRunner && root.TLMRunner.lastStale && root.TLMRunner.lastStale()) || [];
     if (stale.length && minute >= 560 && minute <= 928) {
       await raise(RULE.STALE, 'Price data stale',
-        `No fresh 1-minute prices for: ${stale.join(', ')}.\nTrails, profit-booking stops and EMA rules for these stocks are not being checked. The stop GTT at Zerodha still protects them.`, 30, stale.slice().sort().join(','));
+        `No fresh 1-minute prices (newer than 5 min) for: ${stale.join(', ')}.\nTrails, profit-booking stops and EMA rules for these stocks are not being checked. The stop GTT at Zerodha still protects them.`, 30, stale.map(x => x.split(' ')[0]).sort().join(','));
     }
     if (root.TLMOrders.isConfirmLike(x.mode) && market && online && loggedIn) {
       const prot = await db.getBrokerSnapshot('protection');

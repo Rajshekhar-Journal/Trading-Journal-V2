@@ -257,7 +257,9 @@
       const market = await root.TLMMarketData.load([...real, ...paper, ...watch].map(x => ({ symbol: x.symbol, exchange: x.exchange })));
       // Open real positions whose newest 1-minute candle is older than 5 minutes (market hours only): exec-watch alerts on these.
       _stale = minute >= p.marketOpenMinute + 5 && minute <= p.marketCloseMinute
-        ? real.filter(t => { const c = market[t.symbol]?.intraday; const last = c && c[c.length - 1]; return !last || now - (last.time + 60) * 1000 > 5 * 60000; }).map(t => t.symbol)
+        ? real.map(t => { const c = market[t.symbol]?.intraday; const last = c && c[c.length - 1]; return { symbol: t.symbol, got: !!market[t.symbol], last: last ? last.time * 1000 : null }; })
+            .filter(x => !x.last || now - x.last - 60000 > 5 * 60000)
+            .map(x => `${x.symbol} (${!x.got ? 'price feed failed' : x.last ? 'last 1-min candle ' + new Date(x.last).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit', minute: '2-digit' }) : 'no candles today'})`)
         : [];
       const ctx = {
         settings, p, now, today, minute, market, force,
