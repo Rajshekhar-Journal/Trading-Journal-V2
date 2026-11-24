@@ -838,7 +838,7 @@ const settingsModule = (() => {
           <tbody>
             <tr><td><strong>Alert only</strong> (default)</td><td>Sends alerts. Reads Zerodha for the two reports. Sends nothing.</td><td>Place every order yourself and record it in Positions.</td><td>Always safe; the starting point.</td></tr>
             <tr><td><strong>Shadow</strong></td><td>For each real alert, also writes down the exact order it <em>would</em> send and the result of every safety check (table <em>Intended orders</em>). Sends nothing.</td><td>Same as Alert only. Compare the intended orders with what you actually did.</td><td>To check the engine's orders against your own for a week or two.</td></tr>
-            <tr><td><strong>Confirm</strong></td><td>Proposes stop-loss GTTs — and partial / full exits if you tick that box. Each waits under <em>Waiting for your approval</em>; an approval is valid for 5 minutes and is sent once. Completed sells are booked into the trade automatically.</td><td>Approve or reject each proposal. Buys: place yourself, or tick <em>Ask me to approve entries and adds</em> to have them proposed too.</td><td>After Shadow looks right, the static IP is set, and the matching switch is on at the gateway.</td></tr>
+            <tr><td><strong>Confirm</strong></td><td>Proposes stop-loss GTTs — and partial / full exits if you tick that box. Each waits under <em>Waiting for your approval</em>; an approval is valid for 5 minutes and is sent once. Completed sells are booked into the trade automatically.</td><td>Approve or reject each proposal in the journal, or from Telegram with the Approve / Reject buttons (Settings → Trade Management &amp; Alerts → Telegram). Buys: place yourself, or tick <em>Ask me to approve entries and adds</em>.</td><td>After Shadow looks right, the static IP is set, and the matching switch is on at the gateway.</td></tr>
             <tr><td><strong>Auto-Sell</strong></td><td>Approves automatically the stop GTT, every stop revision and every exit (partial and full). Buys are still alerts (or proposals, if ticked).</td><td>Place or approve buys. Watch the <em>Intended orders</em> log.</td><td>Only after you have approved and completed at least the required number of stop GTTs / exits yourself in Confirm mode (the database refuses earlier).</td></tr>
             <tr><td><strong>Full Auto</strong></td><td>Buys (entries and adds, limit IOC), places the stop GTT for the filled quantity, revises it, and exits — all approved automatically. Fills are booked into the journal (new trade, pyramid, stop revision).</td><td>Monitor. Use the Kill switch to stop new buys at once.</td><td>Only after the required number of buy orders <em>and</em> sell-side orders were approved by you and completed in Confirm mode.</td></tr>
           </tbody></table>
@@ -850,7 +850,7 @@ const settingsModule = (() => {
       ${step(30, 'Strategy B in short', `<ul>
           <li><strong>Entry:</strong> the full planned size (RPT ÷ risk per share), no add.</li>
           <li><strong>2R:</strong> stop moves to your average cost (stop GTT revised), and a protective trail starts at max(cost, 21 EMA − 2%), raised each morning. If price stays below it for 10 minutes, everything is sold.</li>
-          <li><strong>3R:</strong> no sale. Half becomes a profit-booking tranche with stop = max(today's low, hard stop). Each morning it rises to max(yesterday's low, stop); after a candle wider than 3 × ATR14, to max(low + 0.25 × range, stop). It never moves down. If price stays below it for 10 minutes, the tranche is sold.</li>
+          <li><strong>3R:</strong> no sale. Half becomes a profit-booking tranche with stop = max(today's low, protective trail). Each morning it rises to max(yesterday's low, stop); after a candle wider than 3 × ATR14, to max(low + 0.25 × range, stop). It never moves down. If price stays below it for 10 minutes, the tranche is sold.</li>
           <li><strong>Other half, from 3R</strong> (decided at 15:25, using the 15:25 price as the day's close, and sold at once): below the 21 EMA − 2% sells it; between EMA − 2% and the EMA sets a warning low (that day's low), and a later 15:25 price below the warning low sells it. Back above the EMA clears the warning.</li>
           <li><strong>Time exit:</strong> if +1R is not reached within 10 trading days (checked at 15:25), everything is sold. The hard stop always applies.</li></ul>
         <details style="margin-top:6px"><summary style="cursor:pointer;font-weight:600">Strategy B flow chart</summary><div style="padding-top:8px">${_strategyFlowSvg(TLMStrategies.find('B', {}), TLMRules.DEFAULT_PARAMS)}</div></details>
@@ -955,7 +955,7 @@ const settingsModule = (() => {
     if (c.on && c.trail) rows.push(['ST-06', 'Protective trail hit', `Price stays below the protective trail for ${c.holdMin} min`, 'Sell everything at market']);
     const pa = sp.partial;
     if (pa.on && pa.mode === 'trail') {
-      rows.push(['ST-01', 'Tranche set', at(pa.atR), `No sale: ${pa.pct}% of the open qty gets a profit-booking stop = max(today's low, hard stop)`]);
+      rows.push(['ST-01', 'Tranche set', at(pa.atR), `No sale: ${pa.pct}% of the open qty gets a profit-booking stop = max(today's low, ${sp.stopToCost.on && sp.stopToCost.trail ? 'protective trail' : 'hard stop'})`]);
       rows.push(['LC-10', 'Tranche stop up', 'Each morning, on yesterday\'s candle', `max(yesterday's low, stop); if range > ${pa.largeAtr} × ATR14: max(low + ${pa.largeFrac} × range, stop). Never down.`]);
       rows.push(['ST-05', 'Tranche sold', `Price stays below the profit-booking stop for ${pa.holdMin} min`, 'Sell the tranche at market']);
     } else if (pa.on) {
@@ -1001,7 +1001,7 @@ const settingsModule = (() => {
       next(); out.push(box(X, y, W, `${pa.atR}R — split, no sale`, `${pa.pct}% tranche · the rest on the trail`, 'stage'));
       const top = y + 52, mid = y + 66; y += step;
       out.push(arrow(`M${C} ${top} V${mid} H${LC} V${y - 2}`), arrow(`M${C} ${mid} H${RC} V${y - 2}`));
-      out.push(box(LX, y, CW, 'Profit-booking stop', 'Start: max(day low, hard stop)', 'stage'));
+      out.push(box(LX, y, CW, 'Profit-booking stop', `Start: max(day low, ${sp.stopToCost.on && sp.stopToCost.trail ? 'protective trail' : 'hard stop'})`, 'stage'));
       out.push(box(RX, y, CW, trailTitle, sp.closeMinute ? `Checked at ${String(Math.floor(sp.closeMinute / 60)).padStart(2, '0')}:${String(sp.closeMinute % 60).padStart(2, '0')}; that price = the close` : 'Checked at 09:00 on yesterday\'s close', 'stage'));
       out.push(arrow(`M${LC} ${y + 52} V${y + step - 2}`), arrow(`M${RC} ${y + 52} V${y + step - 2}`)); y += step;
       out.push(box(LX, y, CW, 'Each morning: raise it', `prev low · >${pa.largeAtr}×ATR day: low + ${pa.largeFrac}×range`, 'stage'));
@@ -1139,6 +1139,14 @@ const settingsModule = (() => {
         <button class="btn btn-secondary btn-sm" id="al-telegram-test" onclick="settingsModule._testTelegram()">📨 Send test message</button>
         <span id="al-telegram-result" style="font-size:12px;color:var(--text-muted)">Saves the Chat ID, then the server sends a test message.</span>
       </div>
+      <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="checkbox" id="al-tg-approve" ${settings?.execution?.telegramApprovals ? 'checked' : ''} style="margin-top:3px">
+          <span><strong>Approve from Telegram</strong> — in Confirm mode (and for buys in Auto-Sell), each proposal arrives with <em>Approve</em> / <em>Reject</em> buttons; the outcome follows as a second message. A tap counts exactly like the journal button; the gateway still re-checks everything. Keep a passcode on Telegram.</span></label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+          <button class="btn btn-secondary btn-sm" id="al-tg-connect" onclick="settingsModule._connectTelegramButtons()">🔗 Connect the buttons (once)</button>
+          <span id="al-tg-connect-result" style="font-size:12px;color:var(--text-muted)">Needs migration 015 and the tg-webhook function deployed.</span>
+        </div>
+      </div>
       </div></details>
 
       ${_saveBtn('saveAlerts')}
@@ -1151,6 +1159,8 @@ const settingsModule = (() => {
     settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
     delete settings.telegramBotToken;   // the bot token lives only in the server secret TELEGRAM_BOT_TOKEN
     settings.telegramChatId = (document.getElementById('al-telegram-chat')?.value || '').trim();
+    const tgApprove = document.getElementById('al-tg-approve');
+    if (tgApprove) settings.execution = { ...(settings.execution || {}), telegramApprovals: !!tgApprove.checked };
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Holidays and Telegram settings saved', 'success');
@@ -1324,6 +1334,17 @@ const settingsModule = (() => {
   }
 
   /** Save the chat ID, then ask the server runner to send a test message. */
+  async function _connectTelegramButtons() {
+    const out = document.getElementById('al-tg-connect-result');
+    const show = (m, ok) => { if (out) { out.textContent = m; out.style.color = ok ? '#059669' : '#dc2626'; } };
+    show('Connecting…', true);
+    try {
+      const { ok, status, data } = await _runnerApi('telegram-webhook');
+      if (ok && data.ok) show('✅ Connected. Tick "Approve from Telegram" and Save.', true);
+      else show('❌ ' + (data.error || `Server runner error ${status} — deploy the functions first (npm run deploy:functions).`), false);
+    } catch (e) { show('❌ ' + e.message, false); }
+  }
+
   async function _testTelegram() {
     const chatId = document.getElementById('al-telegram-chat')?.value.trim();
     const out    = document.getElementById('al-telegram-result');
@@ -1753,5 +1774,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _openLifecycleSettings, _openStrategyEditor, _deleteStrategy, _saveDefaultStrategy, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
+  return { init, _goPage, _saveExecution, _decideIntent, _proposeStop, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _testTelegram, _connectTelegramButtons, _openLifecycleSettings, _openStrategyEditor, _deleteStrategy, _saveDefaultStrategy, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange, _umToggle, _umExpandAll, _umCollapseAll };
 })();

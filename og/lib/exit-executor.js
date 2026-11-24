@@ -22,7 +22,15 @@ const tagOf = id => 'TJ' + crypto.createHash('sha1').update(String(id)).digest('
 const istMinute = ms => Math.floor(((ms / 60000) + 330) % 1440);
 
 function createExitExecutor({ broker, store, log = () => {}, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)),
-  exitWindow = [556, 925], fillWaitSec = 20, cancelWaitSec = 10, pollMs = 2000 }) {
+  exitWindow = [556, 928], fillWaitSec = 20, cancelWaitSec = 10, pollMs = 2000, protect = null }) {
+
+  /** After any exit except a completed full exit: make the stop GTT cover exactly what is still held (C2). */
+  async function afterExit(uid, intent, r) {
+    if (!protect || (intent.action === 'EXIT_ALL' && r === 'done') || r === 'skipped' || r === 'expired') return r;
+    try { const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', why: `after ${intent.action} (${r})`, intentId: intent.id }); await audit(uid, intent, 'gtt_checked_after_exit', p); }
+    catch (e) { await audit(uid, intent, 'gtt_check_failed', { reason: e.message }); }
+    return r;
+  }
 
   async function audit(uid, intent, event, detail = {}) {
     try {
@@ -128,7 +136,7 @@ function createExitExecutor({ broker, store, log = () => {}, now = () => Date.no
 
     const sym = normSymbol(intent.symbol), tag = tagOf(intent.id);
     const already = s.orders.find(o => o.tag === tag);                       // defensive: this intent's order exists → never send again
-    if (already) { await audit(uid, intent, 'adopted_existing_order', { orderId: already.order_id }); return conclude(uid, intent, 'sending', already.order_id, await watch(already.order_id)); }
+    if (already) { await audit(uid, intent, 'adopted_existing_order', { orderId: already.order_id }); return afterExit(uid, intent, await conclude(uid, intent, 'sending', already.order_id, await watch(already.order_id))); }
 
     // Partial exit: bring the stop GTT down to what will remain BEFORE selling, so it can never oversell.
     const extra = {};
@@ -156,10 +164,10 @@ function createExitExecutor({ broker, store, log = () => {}, now = () => Date.no
         await move(intent, 'sending', 'unknown', { tag, ...extra, reason: e.message }); await audit(uid, intent, 'unknown', { reason: e.message }); return 'unknown';
       }
       await move(intent, 'sending', 'failed', { ...extra, reason: 'broker refused the sell: ' + e.message }); await audit(uid, intent, 'broker_refused', { reason: e.message });
-      return 'failed';
+      return afterExit(uid, intent, 'failed');                                 // the GTT may already have been cut: put it back to what is held
     }
     await audit(uid, intent, 'sell_placed', { orderId });
-    return conclude(uid, intent, 'sending', orderId, await watch(orderId), extra);
+    return afterExit(uid, intent, await conclude(uid, intent, 'sending', orderId, await watch(orderId), extra));
   }
 
   /** An intent whose outcome was unclear: find its order at the broker by id or tag. Never resend. */
@@ -169,14 +177,14 @@ function createExitExecutor({ broker, store, log = () => {}, now = () => Date.no
     if (!o) {
       await move(intent, 'unknown', 'failed', { reason: 'the sell did not reach the broker; not retried — a new exit must be approved' });
       await audit(uid, intent, 'failed_after_unknown');
-      return 'failed';
+      return afterExit(uid, intent, 'failed');
     }
     if (!FINAL.has(o.status)) {                                               // still open: ask again for the cancel and keep waiting
       const w = await watch(o.order_id);
       if (!w.order || !FINAL.has(w.order.status)) return 'unknown';
-      return conclude(uid, intent, 'unknown', o.order_id, w);
+      return afterExit(uid, intent, await conclude(uid, intent, 'unknown', o.order_id, w));
     }
-    return conclude(uid, intent, 'unknown', o.order_id, { order: o, cancelled: false });
+    return afterExit(uid, intent, await conclude(uid, intent, 'unknown', o.order_id, { order: o, cancelled: false }));
   }
 
   async function runOnce({ enabled }) {

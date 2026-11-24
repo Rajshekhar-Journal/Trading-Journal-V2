@@ -12,6 +12,7 @@
 // Yahoo fetch), notifier (Telegram with the bot token held as a secret).
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { corsHeaders, json, getUser, safeEqual } from '../_shared/http.ts';
+import { webhookSecret, signButton } from '../_shared/tg.ts';
 // The shared files attach themselves to globalThis and use each other at load time. Deno runs
 // them as ES modules, which are evaluated in the order of these import lines.
 import '../_shared/engine/calculations.js';
@@ -80,6 +81,19 @@ function telegramHint(err: string): string {
 }
 // deno-lint-ignore no-explicit-any
 G.TLMAlerts.setNotifier((text: string, settings: any) => telegram(settings?.telegramChatId, text));
+
+// Confirm-mode proposals go out with Approve / Reject buttons; a tap is handled by the tg-webhook function.
+G.TLMExecWatch.setProposalSender(async (chatId: string, text: string, intentId: string) => {
+  if (!BOT_TOKEN || !chatId) return null;
+  const secret = await webhookSecret(SERVICE_KEY);
+  const btn = async (label: string, verb: string) => ({ text: label, callback_data: `${verb}:${intentId}:${await signButton(secret, verb, intentId)}` });
+  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text, reply_markup: { inline_keyboard: [[await btn('✅ Approve', 'a'), await btn('✖ Reject', 'r')]] } }),
+  });
+  if (!r.ok) { lastTelegramError = `${r.status} ${(await r.json().catch(() => ({})))?.description || ''}`; return null; }
+  return (await r.json())?.result?.message_id ?? null;
+});
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 async function asUser<T>(uid: string, fn: () => Promise<T>): Promise<T> {
@@ -176,6 +190,17 @@ Deno.serve(async (req) => {
     const res = await telegram(settings.telegramChatId,
       `✅ Trading Journal test message\nSent by the server rule runner at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST.`);
     return res === 'sent' ? json({ ok: true }) : json({ ok: false, error: telegramHint(lastTelegramError) }, 502);
+  }
+
+  if (action === 'telegram-webhook') {
+    // Connects the bot's buttons to the tg-webhook function (one-time; safe to repeat).
+    if (!BOT_TOKEN) return json({ ok: false, error: 'TELEGRAM_BOT_TOKEN secret is not set on the server.' }, 400);
+    const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: `${SUPABASE_URL}/functions/v1/tg-webhook`, secret_token: await webhookSecret(SERVICE_KEY), allowed_updates: ['callback_query'] }),
+    });
+    const b = await r.json().catch(() => ({}));
+    return b?.ok ? json({ ok: true }) : json({ ok: false, error: `Telegram: ${b?.description || r.status}` }, 502);
   }
 
   if (action === 'chartbook-backfill') {

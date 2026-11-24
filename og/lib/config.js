@@ -13,6 +13,8 @@ const DEFAULTS = Object.freeze({
   expectedStaticIp: '',              // blank = order sending stays off
   gttWritesEnabled: false,           // stop-GTT placement; also needs the static IP to match
   executeSec: 10,
+  autoProtect: true,                 // keep the stop GTT matched to holdings (needs Stop-GTT placement on; never lowers a stop)
+  protectGraceSec: 60,               // a mismatch must last this long before it is fixed (lets bookings settle)
   buyOrdersEnabled: false,           // buy orders (entries, adds) for intents that were approved; also needs the static IP to match
   sellOrdersEnabled: false,          // exits (market sell) for intents you approve; also needs the static IP to match
   entryWindow: [560, 915],           // IST minutes 09:20–15:15

@@ -7,6 +7,13 @@ validity IOC** (fills now or is cancelled) — each only for intents that were a
 automatically in Auto-Sell / Full Auto mode if the database allows it (migration 013). Each kind has its own switch,
 all off by default. It has no code for any other order type, product or short sale.
 
+**Stop GTT always matches holdings** (on while Stop-GTT placement is on; switch "Keep every stop GTT matched…" on the
+gateway page): right after a buy fills the GTT is placed or raised for every share held (a buy is never sent while
+Stop-GTT placement is off); after any partial or failed sell it is set back to exactly what is held; and every pass a
+standing check places a missing GTT, resizes it to the held quantity or raises a trigger below the journal stop (after
+a 60 s grace, never lowering a stop, never while a sell or Emergency Exit is in progress). Each change is read back and
+verified; repeated failures raise a Telegram alert (EX-06).
+
 What it does now:
 
 - Keeps the Kite API key and secret, encrypted, on this machine only.

@@ -127,7 +127,7 @@
     if (sp.stopToCost.on) out.push(`Stop to cost: at ${sp.stopToCost.atR}R the hard stop moves to your average cost` + (sp.stopToCost.trail ? `, and a protective trail starts at max(cost, ${sp.stopToCost.emaPeriod} EMA − ${sp.stopToCost.emaPct}%), raised each morning; ${sp.stopToCost.holdMin} min below it sells everything.` : '.'));
     const p = sp.partial;
     if (!p.on) out.push('No partial profit.');
-    else if (p.mode === 'trail') out.push(`Partial profit: at ${p.atR}R, ${p.pct}% becomes a tranche with its own stop = max(day low, hard stop); each morning max(yesterday's low, stop), or max(low + ${p.largeFrac} × range, stop) after a candle wider than ${p.largeAtr} × ATR; sold after ${p.holdMin} min below the stop.`);
+    else if (p.mode === 'trail') out.push(`Partial profit: at ${p.atR}R, ${p.pct}% becomes a tranche with its own stop = max(day low, ${sp.stopToCost.on && sp.stopToCost.trail ? 'protective trail' : 'hard stop'}); each morning max(yesterday's low, stop), or max(low + ${p.largeFrac} × range, stop) after a candle wider than ${p.largeAtr} × ATR; sold after ${p.holdMin} min below the stop.`);
     else out.push(`Partial profit: sell ${p.pct}% at ${p.atR}R${p.stopAfter === 'cost' ? ', then stop to cost' : ''}.`);
     const t = sp.trail, when = t.afterPartial && p.on ? ` (from ${p.atR}R)` : '';
     out.push(t.type === 'ema' ? (t.confirm
@@ -380,10 +380,11 @@
         if (qty > 0 && qty < open) {
           if (sp.partial.mode === 'trail') {
             const dayLow = Math.min(ltp, ...todays.map(c => c.low));
-            const trail = Math.max(I.roundTick(dayLow), s.hardStop);
-            s.tranches.push({ id: 'P1', rule: RULES.PARTIAL_PROFIT, qty, trail, status: 'active', openedAt: today, why: `max(today's low ${inr(dayLow)}, hard stop ${inr(s.hardStop)})` });
+            const floor = Math.max(s.hardStop, s.protStop || 0), floorName = s.protStop ? 'protective trail' : 'hard stop';
+            const trail = Math.max(I.roundTick(dayLow), floor);
+            s.tranches.push({ id: 'P1', rule: RULES.PARTIAL_PROFIT, qty, trail, status: 'active', openedAt: today, why: `max(today's low ${inr(dayLow)}, ${floorName} ${inr(floor)})` });
             actions.push({ rule: RULES.PARTIAL_PROFIT, kind: 'TRAIL', qty, price: ltp, trail, trancheId: 'P1', r: sp.partial.atR,
-              why: `Price held above ${sp.partial.atR}R (${inr(level)}) for ${p.targetHoldMin} min — no sale yet: ${qty} shares get a profit-booking stop ${inr(trail)} (max of today's low and the hard stop), raised each morning; the rest trails the ${sp.trail.period} EMA.` });
+              why: `Price held above ${sp.partial.atR}R (${inr(level)}) for ${p.targetHoldMin} min — no sale yet: ${qty} shares get a profit-booking stop ${inr(trail)} (max of today's low and the ${s.protStop ? 'protective trail' : 'hard stop'}), raised each morning; the rest trails the ${sp.trail.period} EMA.` });
           } else {
             actions.push({ rule: RULES.PARTIAL_PROFIT, kind: 'SELL', qty, price: ltp, fill: ltp,
               why: `Price held above ${sp.partial.atR}R (${inr(level)}) for ${p.targetHoldMin} min — book ${sp.partial.pct}% (${qty} shares); the rest stays on the trail.` });

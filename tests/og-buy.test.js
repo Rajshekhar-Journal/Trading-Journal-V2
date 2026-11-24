@@ -22,7 +22,7 @@ async function ready({ buyOn = true, ip = IP, exec = {}, window = [0, 1439], pro
   const w = createFakeWorld({ publicIp: IP });
   const gw = createGateway({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'ogb-')), fetchImpl: w.fetch, log: () => {} });
   gw.config.save({ kiteBaseUrl: 'https://kite.test', kiteLoginUrl: 'https://kite.test/connect/login', ipCheckUrl: 'https://ip.test', supabaseUrl: 'https://sb.test',
-    zerodhaClientId: w.clientId, expectedStaticIp: ip, buyOrdersEnabled: buyOn, gttWritesEnabled: false, sellOrdersEnabled: false, entryWindow: window, fillWaitSec: 0.05, orderPollMs: 5 });
+    zerodhaClientId: w.clientId, expectedStaticIp: ip, buyOrdersEnabled: buyOn, gttWritesEnabled: true, sellOrdersEnabled: false, entryWindow: window, fillWaitSec: 0.05, orderPollMs: 5 });
   gw.secrets.set('kiteApiKey', w.apiKey); gw.secrets.set('kiteApiSecret', w.apiSecret); gw.secrets.set('supabaseAnonKey', 'anon'); gw.secrets.set('journalRefreshToken', w.refreshToken);
   w.db.settings.push({ user_id: w.uid, data: { execution: { mode: 'confirm', maxOrderValue: 5000, ...exec } } });
   const t = trade('INFY', 100, 95); t.user_id = w.uid; w.db.trades.push(t);

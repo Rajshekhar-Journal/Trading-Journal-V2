@@ -89,7 +89,7 @@ test('partial exit: the stop GTT is reduced to the remainder BEFORE the sell, an
   const { w, gw } = await ready(); const i = intent(w, { action: 'EXIT_PARTIAL', qty: 30 });
   await gw.tickExecute();
   const order = [...w.gttWrites.map(x => 'gtt:' + x.method), ...sells(w).map(() => 'sell')];
-  assert.deepEqual(events(w, i.id), ['claimed', 'reducing_gtt', 'sending_sell', 'sell_placed', 'done', 'booked']);
+  assert.deepEqual(events(w, i.id), ['claimed', 'reducing_gtt', 'sending_sell', 'sell_placed', 'done', 'gtt_checked_after_exit', 'booked']);
   assert.deepEqual([w.db.trades[0].partial_exits.map(x => x.qty), w.db.trades[0].final_exit, i.booking], [[30], null, 'booked_partial']);
   assert.deepEqual(order, ['gtt:PUT', 'sell']);
   assert.deepEqual([w.gtts[0].orders[0].quantity, w.gtts[0].condition.trigger_values[0], w.gtts[0].orders[0].price], [70, 95, 93.5], 'same stop, smaller quantity');

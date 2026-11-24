@@ -104,3 +104,38 @@ test('outbox: alerts the gateway queued are sent once; old ones are marked skipp
   assert.equal((await W.run({ settings: s, now: now + 60000 })).outbox, 0);
   assert.equal(sent.length, 1);
 });
+
+test('Telegram approvals: each waiting proposal is sent once with buttons; Auto-eligible ones in an Auto mode are not; the outcome follows once', async () => {
+  const now = at('10:00');
+  const s = seed({ state: healthy(now) });
+  s.execution.telegramApprovals = true;
+  const buttons = [];
+  W.setProposalSender(async (chat, text, id) => { buttons.push({ chat, text, id }); return 900 + buttons.length; });
+  const mk = (id, over) => ({ id, user_id: UID, mode: 'confirm', status: 'proposed', symbol: 'INFY', rule_id: 'ST-05', created_at: iso(now - 60000), expires_at: iso(now + 600000), detail: {}, ...over });
+  tables.order_intents = [mk('oi_1', { action: 'EXIT_PARTIAL', qty: 500 }), mk('oi_2', { action: 'STOP_ENSURE', qty: 500, trigger_price: 100, gtt_limit_price: 98.5 }),
+    mk('oi_3', { action: 'ENTRY', status: 'approved', qty: 10 }), mk('oi_4', { action: 'EXIT_ALL', qty: 5, expires_at: iso(now - 1000) })];
+  await W.run({ settings: s, now });
+  assert.deepEqual(buttons.map(b => b.id), ['oi_1', 'oi_2']);
+  assert.match(buttons[0].text, /APPROVE\? INFY · ST-05\nSell 500 at market \(partial\)/);
+  assert.match(buttons[1].text, /Stop GTT for 500 shares · trigger ₹100\.00/);
+  assert.equal(tables.tg_notices.length, 2);
+  await W.run({ settings: s, now: now + 60000 });
+  assert.equal(buttons.length, 2, 'never twice');
+  Object.assign(tables.order_intents[0], { status: 'done', result: { filled: 500, averagePrice: 118.2 } });
+  sent.length = 0;
+  await W.run({ settings: s, now: now + 120000 });
+  assert.ok(sent.some(t => /✅ INFY: sold 500 @ ₹118\.20/.test(t)));
+  sent.length = 0;
+  await W.run({ settings: s, now: now + 180000 });
+  assert.ok(!sent.some(t => /sold 500/.test(t)), 'outcome sent once');
+  // Auto mode: auto-eligible proposals are left to the gateway
+  const a = seed({ mode: 'auto_sell', state: healthy(now) }); a.execution.telegramApprovals = true; buttons.length = 0;
+  tables.order_intents = [mk('oi_5', { action: 'STOP_ENSURE', qty: 5, detail: { autoEligible: true } }), mk('oi_6', { action: 'ENTRY', qty: 5, limit_price: 101, stop_price: 95 })];
+  await W.run({ settings: a, now });
+  assert.deepEqual(buttons.map(b => b.id), ['oi_6']);
+  // switched off → nothing
+  const off = seed({ state: healthy(now) }); buttons.length = 0;
+  tables.order_intents = [mk('oi_7', { action: 'EXIT_ALL', qty: 5 })];
+  await W.run({ settings: off, now });
+  assert.equal(buttons.length, 0);
+});

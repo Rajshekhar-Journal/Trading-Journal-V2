@@ -21,6 +21,7 @@ const { checkPublicIp } = require('./lib/ip-check.js');
 const { createSync, VERSION } = require('./lib/sync.js');
 const { createExecutor } = require('./lib/executor.js');
 const { createAutoApprover } = require('./lib/auto-approve.js');
+const { createProtector } = require('./lib/protect.js');
 const { createEntryExecutor } = require('./lib/entry-executor.js');
 const { createExitExecutor } = require('./lib/exit-executor.js');
 const { createEmergencyExit } = require('./lib/emergency-exit.js');
@@ -87,6 +88,7 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
     return state.ip;
   }
   const emergencySeen = new Map();          // condition → first time seen (grace periods)
+  const protectSeen = new Map(), protectFails = new Map();   // protection keeper: first time a mismatch was seen, repeated failures
   let executing = false;
   async function tickExecute() {
     if (executing || !journalLinked()) return null;
@@ -97,6 +99,9 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
       const logger = (k, v) => log(`[og] ${k}`, JSON.stringify(v));
       const cfg = config.load();
       const sellBroker = () => kite({ allowGttWrites: true, allowSellOrders: true });
+      // Protection (C1–C3): only with Stop-GTT placement on. Places / resizes / raises the stop GTT; never lowers it, never sells.
+      const protector = gttSending() ? createProtector({ broker: kite({ allowGttWrites: true }), store: store(), log: logger, graceSec: cfg.protectGraceSec ?? 60, seen: protectSeen, fails: protectFails }) : null;
+      const protect = protector ? (uid, a) => protector.ensure(uid, a) : null;
       // Automatic approvals (Auto-Sell / Full Auto): the DATABASE decides whether each one is allowed; only kinds that could be sent right now are asked for.
       try {
         const a = await createAutoApprover({ store: store(), log: logger }).runOnce({ sending: { stop: gttSending(), exit: sellSending(), buy: buySending() } });
@@ -112,15 +117,17 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
         add(await em.runOnce({ enabled: true }));
       }
       // Then ordinary exits (they remove risk), then stop GTTs.
-      if (sellSending()) add(await createExitExecutor({ broker: kite({ allowGttWrites: true, allowSellOrders: true }), store: store(), log: logger,
+      if (sellSending()) add(await createExitExecutor({ broker: kite({ allowGttWrites: true, allowSellOrders: true }), store: store(), log: logger, protect,
         exitWindow: cfg.exitWindow, fillWaitSec: cfg.fillWaitSec, cancelWaitSec: cfg.cancelWaitSec, pollMs: cfg.orderPollMs }).runOnce({ enabled: true }));
       if (gttSending()) add(await createExecutor({ broker: kite({ allowGttWrites: true }), store: store(), log: logger }).runOnce({ enabled: true }));
+      // Standing check: every held position's stop GTT covers exactly what is held (C3).
+      if (protector && cfg.autoProtect !== false) { try { const k = await protector.keep(); if (k.fixed) out.protected = k.fixed; } catch (e) { log('[og] protection pass failed:', e.message); } }
       // Buys last: they add risk, so everything that removes risk goes first.
-      if (buySending()) add(await createEntryExecutor({ broker: kite({ allowBuyOrders: true }), store: store(), log: logger,
+      if (buySending()) add(await createEntryExecutor({ broker: kite({ allowBuyOrders: true }), store: store(), log: logger, protect,
         entryWindow: cfg.entryWindow, fillWaitSec: Math.min(cfg.fillWaitSec, 30), pollMs: cfg.orderPollMs }).runOnce({ enabled: true }));
       // Write completed sells into the journal (also retries any booking that could not be written earlier).
       if (cfg.bookFills) { try { out.booked = (await createBooking({ store: store(), log: logger }).bookPending()).booked; } catch (e) { log('[og] booking pass failed:', e.message); } }
-      if (out.done || out.failed || out.unknown || out.booked) await tickSync();     // refresh the protection and reconcile reports straight away
+      if (out.done || out.failed || out.unknown || out.booked || out.protected) await tickSync();     // refresh the protection and reconcile reports straight away
       return out;
     } catch (e) {
       if (e.tokenInvalid) _dropToken();
@@ -183,7 +190,7 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
       lastSync: state.lastSync ? new Date(state.lastSync.at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST' : null,
       lastSyncError: state.lastSyncError, driftCount: state.lastSync ? state.lastSync.drift : 0, driftHigh: state.lastSync ? state.lastSync.driftHigh : 0,
       callbackUrl: `http://${req.headers.host}/kite/callback`,
-      gttWritesEnabled: !!cfg.gttWritesEnabled, sellOrdersEnabled: !!cfg.sellOrdersEnabled, buyOrdersEnabled: !!cfg.buyOrdersEnabled, buySending: buySending(), orderSending: gttSending(), sellSending: sellSending(), emergencyExit: cfg.emergencyExit, bookGttFills: !!cfg.bookGttFills,
+      gttWritesEnabled: !!cfg.gttWritesEnabled, sellOrdersEnabled: !!cfg.sellOrdersEnabled, buyOrdersEnabled: !!cfg.buyOrdersEnabled, buySending: buySending(), autoProtect: cfg.autoProtect !== false, orderSending: gttSending(), sellSending: sellSending(), emergencyExit: cfg.emergencyExit, bookGttFills: !!cfg.bookGttFills,
     };
   }
   /** What /status.json may show. No secret, no token, no IP address. */
@@ -299,7 +306,7 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
         if ((gttOn || sellOn || buyOn) && !(state.ip && state.ip.ok)) return flash(res, '/', 'bad', 'Sending can be switched on only after the static IP is entered and matches.');
         const em = ['confirm', 'auto'].includes(f.emergencyExit) ? f.emergencyExit : 'off';
         if (em !== 'off' && !sellOn) return flash(res, '/', 'bad', 'The Emergency Exit needs "Allow exits" switched on.');
-        config.save({ gttWritesEnabled: gttOn, sellOrdersEnabled: sellOn, buyOrdersEnabled: buyOn, emergencyExit: em, bookGttFills: f.bookGttFills === 'on' });
+        config.save({ gttWritesEnabled: gttOn, sellOrdersEnabled: sellOn, buyOrdersEnabled: buyOn, autoProtect: f.autoProtect === 'on', emergencyExit: em, bookGttFills: f.bookGttFills === 'on' });
         await tickHeartbeat();
         return flash(res, '/', 'ok', `Stop-GTT placement is ${gttOn ? 'ON' : 'off'}; exits (market sell) are ${sellOn ? 'ON' : 'off'}; buy orders are ${buyOn ? 'ON' : 'off'}; Emergency Exit is ${em}.`);
       }

@@ -715,6 +715,26 @@ const db = (() => {
     return data;
   }
 
+  /** Telegram approval messages (migration 015). */
+  async function getTgNotices(opts = {}) {
+    const uid = _uid(); if (!uid) return [];
+    let q = _sb().from('tg_notices').select('*').eq('user_id', uid);
+    if (opts.since) q = q.gte('sent_at', opts.since);
+    const { data, error } = await q.limit(500);
+    return error ? [] : (data || []);
+  }
+  async function insertTgNotice(n) {
+    const uid = _uid(); if (!uid) return null;
+    const row = { id: _generateId('tg'), user_id: uid, sent_at: new Date().toISOString(), ...n };
+    const { error } = await _sb().from('tg_notices').insert(row);
+    if (error) throw new Error(error.message);
+    return row;
+  }
+  async function updateTgNotice(id, patch) {
+    const { error } = await _sb().from('tg_notices').update(patch).eq('id', id).eq('user_id', _uid());
+    if (error) throw new Error(error.message);
+  }
+
   /** Mark a buy / stop intent as written into the journal (migration 013). */
   async function markIntentBooked(id, booking) {
     const { data, error } = await _sb().rpc('exec_mark_booked', { p_intent_id: id, p_booking: booking });
@@ -747,7 +767,7 @@ const db = (() => {
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
     // Auto Trade Engine (read only)
-    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent, markIntentBooked,
+    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent, markIntentBooked, getTgNotices, insertTgNotice, updateTgNotice,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility

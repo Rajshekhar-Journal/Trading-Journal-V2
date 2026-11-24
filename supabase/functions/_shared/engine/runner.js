@@ -21,6 +21,7 @@
 
   let _timer = null;
   let _running = false;
+  let _stale = [];
   let _lastRun = null;
   const isServer = () => root.TLM_HOST === 'server';
   const SERVER_FRESH_MS = 3 * 60 * 1000;
@@ -254,6 +255,10 @@
       const today = I.istDate(now);
       const minute = I.istMinutes(now);
       const market = await root.TLMMarketData.load([...real, ...paper, ...watch].map(x => ({ symbol: x.symbol, exchange: x.exchange })));
+      // Open real positions whose newest 1-minute candle is older than 5 minutes (market hours only): exec-watch alerts on these.
+      _stale = minute >= p.marketOpenMinute + 5 && minute <= p.marketCloseMinute
+        ? real.filter(t => { const c = market[t.symbol]?.intraday; const last = c && c[c.length - 1]; return !last || now - (last.time + 60) * 1000 > 5 * 60000; }).map(t => t.symbol)
+        : [];
       const ctx = {
         settings, p, now, today, minute, market, force,
         rpt: await _defaultRpt(settings),
@@ -294,7 +299,7 @@
 
   function stop() { clearInterval(_timer); _timer = null; }
 
-  const api = { start, stop, runCycle, captureCharts, paramsFrom, cachedParams: () => _cachedParams, defaultRpt: _defaultRpt,
+  const api = { lastStale: () => _stale.slice(), start, stop, runCycle, captureCharts, paramsFrom, cachedParams: () => _cachedParams, defaultRpt: _defaultRpt,
     lastRun: () => _lastRun, isRunning: () => _running, lastErrors: () => _errors, host: () => _host, serverStatus: () => _serverStatus, serverActive };
   root.TLMRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

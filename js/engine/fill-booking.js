@@ -65,6 +65,8 @@
     const date = dateOf(i.result.at || i.updated_at || new Date(now).toISOString(), I);
     const next = { ...t, pyramids: [...(t.pyramids || []), { id: pid, date, price, qty, charges: charges(qty, price, i.exchange, settings),
       actionSource: 'Auto', notes: `Auto Trade Engine add (order ${i.result.orderId || i.broker_ref || ''})` }] };
+    const newStop = Number(i.stop_price), cur = Number(t.currentStop ?? t.initialStop ?? 0);
+    if (newStop > cur) { next.currentStop = newStop; next.stopRevisions = [...(t.stopRevisions || []), { id: 'sr_ax_' + i.id, date, oldStop: cur, newStop, actionSource: 'Auto', notes: 'Stop raised with the add (stop GTT placed by the gateway)' }]; }
     await db.saveTrade(next);
     return 'booked_add';
   }

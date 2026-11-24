@@ -20,7 +20,15 @@ const BUYS = new Set(['ENTRY', 'ADD']);
 const istMinute = ms => Math.floor(((ms / 60000) + 330) % 1440);
 
 function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.now(), sleep = ms => new Promise(r => setTimeout(r, ms)),
-  entryWindow = [560, 915], fillWaitSec = 20, pollMs = 1000, fundsUtilisationPct = 98 }) {
+  entryWindow = [560, 915], fillWaitSec = 20, pollMs = 1000, fundsUtilisationPct = 98, protect = null }) {
+
+  /** Right after a fill: the stop GTT must cover every share now held (C1). */
+  async function afterBuy(uid, intent, r) {
+    if (r !== 'done' || !protect) return r;
+    try { const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', trigger: Number(intent.stop_price) || null, why: `after ${intent.action} fill`, intentId: intent.id }); await audit(uid, intent, 'gtt_after_buy', p); }
+    catch (e) { await audit(uid, intent, 'gtt_after_buy_failed', { reason: e.message }); }
+    return r;
+  }
 
   async function audit(uid, intent, event, detail = {}) {
     try {
@@ -45,6 +53,8 @@ function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.n
   function refuse(intent, s) {
     const sym = normSymbol(intent.symbol), pos = s.journal[sym];
     if (!BUYS.has(intent.action)) return 'not a buy';
+    if (!protect) return 'stop-GTT placement is off at the gateway — a buy is never sent without its stop';
+    if (!(Number(intent.stop_price) > 0)) return 'no stop price on the buy — a buy is never sent without its stop';
     if (!Number.isInteger(intent.qty) || intent.qty <= 0) return 'quantity is not a positive whole number';
     if (!(Number(intent.limit_price) > 0)) return 'limit price missing';
     if (s.x.killSwitch) return 'the kill switch is on';
@@ -110,7 +120,7 @@ function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.n
 
     const sym = normSymbol(intent.symbol), tag = tagOf(intent.id);
     const already = s.orders.find(o => o.tag === tag);                        // this intent's order exists → never send again
-    if (already) { await audit(uid, intent, 'adopted_existing_order', { orderId: already.order_id }); return conclude(uid, intent, 'sending', already.order_id, await watch(already.order_id)); }
+    if (already) { await audit(uid, intent, 'adopted_existing_order', { orderId: already.order_id }); return afterBuy(uid, intent, await conclude(uid, intent, 'sending', already.order_id, await watch(already.order_id))); }
 
     await audit(uid, intent, 'sending_buy', { symbol: sym, qty: intent.qty, limit: Number(intent.limit_price), tag });
     let orderId;
@@ -123,7 +133,7 @@ function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.n
       return 'failed';
     }
     await audit(uid, intent, 'buy_placed', { orderId });
-    return conclude(uid, intent, 'sending', orderId, await watch(orderId));
+    return afterBuy(uid, intent, await conclude(uid, intent, 'sending', orderId, await watch(orderId)));
   }
 
   /** An intent whose outcome was unclear: find its order at the broker by id or tag. Never resend. */
@@ -135,8 +145,8 @@ function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.n
       await audit(uid, intent, 'failed_after_unknown');
       return 'failed';
     }
-    if (!FINAL.has(o.status)) { const w = await watch(o.order_id); if (!w || !FINAL.has(w.status)) return 'unknown'; return conclude(uid, intent, 'unknown', o.order_id, w); }
-    return conclude(uid, intent, 'unknown', o.order_id, o);
+    if (!FINAL.has(o.status)) { const w = await watch(o.order_id); if (!w || !FINAL.has(w.status)) return 'unknown'; return afterBuy(uid, intent, await conclude(uid, intent, 'unknown', o.order_id, w)); }
+    return afterBuy(uid, intent, await conclude(uid, intent, 'unknown', o.order_id, o));
   }
 
   async function runOnce({ enabled }) {
