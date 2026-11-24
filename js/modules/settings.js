@@ -1614,7 +1614,8 @@ const settingsModule = (() => {
   async function _pageExecution() {
     const settings = await db.getSettings();
     const ex = settings.execution || {};
-    const [st, drift, allIntents, prot] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 500 }), db.getBrokerSnapshot('protection')]);
+    const [st, drift, allIntents, prot, audit] = await Promise.all([db.getExecState(), db.getOpenDrift(), db.getOrderIntents({ limit: 500 }), db.getBrokerSnapshot('protection'),
+      db.getOrderAudit({ since: new Date(Date.now() - 7 * 86400000).toISOString(), limit: 150 }).catch(() => [])]);
     const intents = allIntents.filter(i => i.action !== 'TEST_APPROVAL');   // Telegram button tests are not orders
     const xp = { ...(globalThis.TLMOrders ? TLMOrders.EXEC_DEFAULTS : {}), ...ex };
     const fmt = t => t ? new Date(t).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -1697,6 +1698,7 @@ const settingsModule = (() => {
       + (others.length ? section('Journal vs broker — differences' + (high ? ' (' + high + ' need attention)' : ''), diffBlock) : '<p style="margin:14px 0 0">' + diffBlock.replace('margin:0', 'margin:0') + '</p>')
       + fold('Automation settings — mode: ' + _escX(modeText.split(' — ')[0]), settingsForm, false)
       + fold(logTitle, _intentTable(intents, fmt, col), !!waiting)
+      + fold('Recent gateway actions — last 7 days (' + audit.length + ')', _auditTable(audit, allIntents, col), false)
       + '</div>';
   }
 
@@ -1756,6 +1758,49 @@ const settingsModule = (() => {
 
   const _INTENT_ACTION = { ENTRY: 'Entry buy', ADD: 'Add buy', STOP_ENSURE: 'Stop GTT', TRAIL_TRACK: 'Trail (tracked)', EXIT_PARTIAL: 'Partial exit', EXIT_ALL: 'Exit all', EMERGENCY_EXIT: 'Emergency exit', GTT_STOP_FILL: 'Stop GTT filled' };
   const _INTENT_ROUTE = { LIMIT_IOC: 'Limit IOC', GTT: 'GTT', MARKET: 'Market', NONE: '—' };
+  /** What the gateway did, step by step (order_audit), in plain words. */
+  function _auditTable(audit, intents, col) {
+    if (!audit.length) return '<div class="no-data">No gateway actions in the last 7 days.</div>';
+    const byId = new Map((intents || []).map(i => [i.id, i]));
+    const inr = v => (v == null || isNaN(v)) ? '' : '₹' + Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+    const t = iso => new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const g = x => (x && typeof x === 'object' ? x : {});
+    const WHAT = {
+      claimed: ['Picked up the approved order', null], refused: ['Refused at the last check', false], failed: ['Failed', false], done: ['Completed', true],
+      unknown: ['Outcome unclear — will look again, never resends', null], broker_refused: ['Zerodha refused it', false], already_in_place: ['Already in place at Zerodha', true],
+      sending_place: ['Placing stop GTT', null], sending_modify: ['Changing stop GTT', null], unverified: ['Sent, not yet seen at Zerodha', false],
+      reducing_gtt: ['Reducing the stop GTT before the sell', null], gtt_reduce_failed: ['Could not reduce the GTT — nothing sold', false],
+      sending_sell: ['Sending sell', null], sell_placed: ['Sell placed', null], sending_buy: ['Sending buy', null], buy_placed: ['Buy placed', null],
+      cancel_not_confirmed: ['Cancel not confirmed — waiting', false], cancelling: ['Cancelling open sell', null], cancel_confirmed: ['Cancel confirmed', null],
+      gtt_deleted: ['Stop GTT deleted after full exit', true], gtt_delete_failed: ['Could not delete the stop GTT', false], adopted_existing_order: ['Found its own order at Zerodha', null],
+      protect_place: ['Auto-check: placing missing stop GTT', null], protect_modify: ['Auto-check: correcting stop GTT', null],
+      protect_verified: ['Auto-check: stop GTT verified', true], protect_unverified: ['Auto-check: change not seen at Zerodha', false],
+      protect_failed: ['Auto-check: could not fix the GTT', false], protect_refused: ['Auto-check: refused', false], protect_unavailable: ['Auto-check: stop-GTT placement is off', false],
+      gtt_after_buy: ['Stop GTT after the buy', null], gtt_checked_after_exit: ['Stop GTT checked after the sell', null],
+      auto_approved: ['Approved automatically (Auto mode)', true], auto_approval_refused: ['Automatic approval refused', null],
+      booked: ['Written into the journal', true], no_price: ['No price from Zerodha — nothing sold', false], sell_rejected: ['Sell rejected by Zerodha', false],
+    };
+    const detailText = a => {
+      const d = g(a.detail), s = g(d.spec), f = g(d.from);
+      if (a.event === 'protect_modify') return `${f.qty ?? '?'} sh @ ${inr(f.trigger)} → ${s.qty} sh @ ${inr(s.trigger)}${d.why ? ' · ' + d.why : ''}`;
+      if (a.event === 'protect_place') return `${s.qty} sh @ ${inr(s.trigger)}${d.why ? ' · ' + d.why : ''}`;
+      if (a.event === 'protect_verified') return `${d.qty} sh @ ${inr(d.trigger)} (held ${d.held ?? '?'}, journal ${d.journalQty ?? '?'})`;
+      if (a.event === 'sending_place' || a.event === 'sending_modify') return `${s.qty} sh @ ${inr(s.trigger)}, limit ${inr(s.limit)}`;
+      if (a.event === 'gtt_after_buy' || a.event === 'gtt_checked_after_exit') return `${d.action || ''}${d.qty ? ` · ${d.qty} sh @ ${inr(d.trigger)}` : ''}${d.reason ? ' · ' + d.reason : ''}`;
+      if (a.event === 'sending_sell' || a.event === 'sending_buy') return `${d.qty} sh${d.limit ? ' · limit ' + inr(d.limit) : ''}${d.cmp ? ' · CMP ' + inr(d.cmp) : ''}`;
+      if (a.event === 'done' && d.filled != null) return `filled ${d.filled}${d.averagePrice ? ' @ ' + inr(d.averagePrice) : ''}`;
+      return d.reason || d.note || d.result || (d.orderId ? 'order ' + d.orderId : '');
+    };
+    const rows = audit.map(a => {
+      const w = WHAT[a.event] || [a.event, null], i = byId.get(a.intent_id);
+      const what = i ? `${i.action}${i.rule_id ? ' · ' + i.rule_id : ''}` : (String(a.intent_id).startsWith('protect:') ? 'Auto-check' : '');
+      return `<tr><td style="white-space:nowrap">${_escX(t(a.at))}</td><td><strong>${_escX(a.symbol || '')}</strong></td><td style="color:var(--text-muted);font-size:11.5px">${_escX(what)}</td>`
+        + `<td style="color:${w[1] === null ? 'inherit' : col(w[1])}">${_escX(w[0])}</td><td style="font-size:11.5px;color:var(--text-muted)">${_escX(String(detailText(a) || '').slice(0, 160))}</td></tr>`;
+    }).join('');
+    return '<div style="overflow-x:auto;max-height:420px;overflow-y:auto"><table class="data-table" style="font-size:12px"><thead><tr><th>Time (IST)</th><th>Symbol</th><th>Order</th><th>What happened</th><th>Detail</th></tr></thead><tbody>'
+      + rows + '</tbody></table></div><p style="color:var(--text-muted);font-size:12px">Every step the Order Gateway took, newest first. Green = completed or verified, red = refused or failed.</p>';
+  }
+
   function _intentTable(intents, fmt, col) {
     if (!intents.length) return `<div class="no-data">No intended orders yet. In Shadow or Confirm mode one is recorded each time a real alert is raised.</div>`;
     const price = i => i.route === 'GTT' ? `trigger ${i.trigger_price} / limit ${i.gtt_limit_price}` : i.route === 'LIMIT_IOC' ? `limit ${i.limit_price}` : i.route === 'MARKET' ? 'market, auto protection' : i.route === 'LIMIT' ? 'limit 1% below the price when sent' : (i.stop_price ? `trail ${i.stop_price}` : '—');

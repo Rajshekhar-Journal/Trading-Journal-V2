@@ -715,6 +715,15 @@ const db = (() => {
     return data;
   }
 
+  /** The gateway's step-by-step log (order_audit, migration 011). Newest first. */
+  async function getOrderAudit(opts = {}) {
+    const uid = _uid(); if (!uid) return [];
+    let q = _sb().from('order_audit').select('*').eq('user_id', uid);
+    if (opts.since) q = q.gte('at', opts.since);
+    const { data, error } = await q.order('at', { ascending: false }).limit(opts.limit || 100);
+    return error ? [] : (data || []);
+  }
+
   /** Telegram approval messages (migration 015). */
   async function getTgNotices(opts = {}) {
     const uid = _uid(); if (!uid) return [];
@@ -767,7 +776,7 @@ const db = (() => {
     // Rule runner
     getRunnerStatus, tryRunnerLock, releaseRunnerLock,
     // Auto Trade Engine (read only)
-    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent, markIntentBooked, getTgNotices, insertTgNotice, updateTgNotice,
+    getExecState, getOpenDrift, getBrokerSnapshot, getBrokerGtts, getOrderIntents, insertOrderIntent, decideIntent, markIntentBooked, getOrderAudit, getTgNotices, insertTgNotice, updateTgNotice,
     // Paper Trades
     getPaperTrades, getOpenPaperTrades, getPaperTradeById, savePaperTrade, deletePaperTrade,
     // Compatibility
