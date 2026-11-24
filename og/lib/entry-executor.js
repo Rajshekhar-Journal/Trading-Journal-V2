@@ -25,7 +25,8 @@ function createEntryExecutor({ broker, store, log = () => {}, now = () => Date.n
   /** Right after a fill: the stop GTT must cover every share now held (C1). */
   async function afterBuy(uid, intent, r) {
     if (r !== 'done' || !protect) return r;
-    try { const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', trigger: Number(intent.stop_price) || null, why: `after ${intent.action} fill`, intentId: intent.id }); await audit(uid, intent, 'gtt_after_buy', p); }
+    try { const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', trigger: Number(intent.stop_price) || null, why: `after ${intent.action} fill`, intentId: intent.id,
+      journalDelta: Number(((await store.select('order_intents', `select=result&id=eq.${intent.id}`))[0] || {}).result?.filled) || 0 }); await audit(uid, intent, 'gtt_after_buy', p); }
     catch (e) { await audit(uid, intent, 'gtt_after_buy_failed', { reason: e.message }); }
     return r;
   }

@@ -27,7 +27,8 @@ function createExitExecutor({ broker, store, log = () => {}, now = () => Date.no
   /** After any exit except a completed full exit: make the stop GTT cover exactly what is still held (C2). */
   async function afterExit(uid, intent, r) {
     if (!protect || (intent.action === 'EXIT_ALL' && r === 'done') || r === 'skipped' || r === 'expired') return r;
-    try { const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', why: `after ${intent.action} (${r})`, intentId: intent.id }); await audit(uid, intent, 'gtt_checked_after_exit', p); }
+    try { const filled = Number(((await store.select('order_intents', `select=result&id=eq.${intent.id}`))[0] || {}).result?.filled) || 0;   // sold but not yet booked in the journal
+      const p = await protect(uid, { symbol: intent.symbol, exchange: intent.exchange || 'NSE', why: `after ${intent.action} (${r})`, intentId: intent.id, journalDelta: -filled }); await audit(uid, intent, 'gtt_checked_after_exit', p); }
     catch (e) { await audit(uid, intent, 'gtt_check_failed', { reason: e.message }); }
     return r;
   }

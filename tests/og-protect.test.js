@@ -127,3 +127,15 @@ test('C3: repeated failure raises one Telegram alert', async () => {
   assert.equal(al.length, 1);
   assert.equal(al[0].telegram_status, 'pending');
 });
+
+test('shares held outside the journal are never put under the trade stop (journal 100, broker 250)', async () => {
+  const { w, gw } = await ready({ grace: 0 });
+  w.holdings[0].quantity = 250;                                  // 150 extra shares outside the journal
+  w.gtts = [];
+  await gw.tickExecute();
+  assert.deepEqual(g(w, 'INFY').map(shape), [[100, 95]], 'GTT covers the journal position only');
+  const b = await ready();
+  b.w.holdings[0].quantity = 250;                                // GTT 100 = journal 100 → nothing to change
+  await b.gw.tickExecute();
+  assert.deepEqual(g(b.w, 'INFY').map(shape), [[100, 95]]);
+});

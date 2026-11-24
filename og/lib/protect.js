@@ -2,7 +2,8 @@
  * og/lib/protect.js — keeps the hard-stop GTT matched to what Zerodha holds.
  *
  * Rule: for every stock held at the broker that has an open journal position, one active sell GTT covers
- * exactly the held quantity, at a trigger no lower than the journal stop (and never lower than the GTT already has).
+ * the journal position's shares — min(held at the broker, journal quantity) — so shares you hold outside the journal
+ * (e.g. a long-term holding of the same stock) are never put under the trade's stop; at a trigger no lower than the journal stop (and never lower than the GTT already has).
  *
  *   ensure()  one stock, now: used right after a buy fills (C1) and after any partial or failed sell (C2).
  *   keep()    every gateway pass (C3): finds positions whose GTT is missing, has the wrong quantity, or a trigger
@@ -43,9 +44,11 @@ function createProtector({ broker, store, log = () => {}, now = () => Date.now()
   }
 
   /** Read what the broker shows for one stock. */
-  async function view(sym) {
-    const [gtts, holdings, positions, orders] = await Promise.all([broker.gtts(), broker.holdings(), broker.positions(), broker.orders()]);
-    return { gtts: gtts || [], held: brokerPositions(holdings, positions)[sym] || 0, last: lastPrices(holdings, positions)[sym] || null,
+  async function view(uid, sym) {
+    const [gtts, holdings, positions, orders, trades] = await Promise.all([broker.gtts(), broker.holdings(), broker.positions(), broker.orders(),
+      store.select('trades', `select=id,symbol,direction,entries,pyramids,partial_exits,final_exit,current_stop,initial_stop,closed_at&user_id=eq.${uid}&closed_at=is.null`)]);
+    const jp = journalPositions(trades)[sym];
+    return { gtts: gtts || [], held: brokerPositions(holdings, positions)[sym] || 0, journalQty: jp ? jp.qty : 0, last: lastPrices(holdings, positions)[sym] || null,
       list: activeSellGtts(gtts)[sym] || [], liveSell: (orders || []).find(o => normSymbol(o.tradingsymbol) === sym && o.transaction_type === 'SELL' && !FINAL.has(o.status)) };
   }
 
@@ -53,20 +56,22 @@ function createProtector({ broker, store, log = () => {}, now = () => Date.now()
    * Make one stock's GTT cover the held quantity at max(trigger, existing trigger).
    * @returns { action: 'none'|'placed'|'modified'|'skipped'|'failed', reason?, qty?, trigger? }
    */
-  async function ensure(uid, { symbol, exchange = 'NSE', trigger, why, intentId }) {
+  /** @param journalDelta shares not yet booked in the journal: + a buy just filled, − a sell just filled. */
+  async function ensure(uid, { symbol, exchange = 'NSE', trigger, why, intentId, journalDelta = 0 }) {
     const sym = normSymbol(symbol);
     if (!canWrite()) { await audit(uid, sym, 'protect_unavailable', { why }, intentId); return { action: 'failed', reason: 'stop-GTT placement is switched off at the gateway' }; }
     let v;
-    try { v = await view(sym); } catch (e) { return { action: 'failed', reason: 'could not read the broker: ' + e.message }; }
-    if (!v.held) return { action: 'none', reason: 'no shares held' };
+    try { v = await view(uid, sym); } catch (e) { return { action: 'failed', reason: 'could not read the broker: ' + e.message }; }
+    const want = Math.min(v.held, Math.max(0, v.journalQty + (Number(journalDelta) || 0)));
+    if (!want) return { action: 'none', reason: v.held ? 'no journal position to protect' : 'no shares held' };
     if (v.liveSell) return { action: 'skipped', reason: `a sell order is live (${v.liveSell.order_id})` };
     if (v.list.length > 1) { await audit(uid, sym, 'protect_refused', { reason: 'more than one sell GTT', why }, intentId); return { action: 'failed', reason: 'more than one sell GTT exists — remove the extra ones on Kite' }; }
     const cur = v.list[0], curTrig = cur ? Math.min(...cur.triggers) : 0;
     const trig = r2(Math.max(Number(trigger) || 0, curTrig));
     if (!(trig > 0)) return { action: 'failed', reason: 'no stop level known' };
     if (v.last && trig >= v.last) { await audit(uid, sym, 'protect_refused', { reason: 'stop at or above the price', trig, last: v.last, why }, intentId); return { action: 'failed', reason: `stop ${trig} is at or above the price ${v.last}` }; }
-    if (cur && cur.qty === v.held && Math.abs(curTrig - trig) < TICK) return { action: 'none', qty: v.held, trigger: trig };
-    const spec = { symbol: sym, exchange, trigger: trig, limit: r2(floorTick(trig * (1 - (await bufferPct(uid)) / 100))), qty: v.held, lastPrice: v.last };
+    if (cur && cur.qty === want && Math.abs(curTrig - trig) < TICK) return { action: 'none', qty: want, trigger: trig };
+    const spec = { symbol: sym, exchange, trigger: trig, limit: r2(floorTick(trig * (1 - (await bufferPct(uid)) / 100))), qty: want, lastPrice: v.last };
     const verb = cur ? 'modified' : 'placed';
     await audit(uid, sym, 'protect_' + (cur ? 'modify' : 'place'), { spec, from: cur ? { qty: cur.qty, trigger: curTrig, id: cur.id } : null, why }, intentId);
     try { if (cur) await broker.modifyStopGtt(cur.id, spec); else await broker.placeStopGtt(spec); }
@@ -74,9 +79,9 @@ function createProtector({ broker, store, log = () => {}, now = () => Date.now()
     // Verify by reading it back.
     let after;
     try { after = activeSellGtts(await broker.gtts())[sym] || []; } catch (_) { after = []; }
-    const ok = after.length === 1 && after[0].qty === v.held && after[0].triggers.some(t => Math.abs(t - trig) < TICK);
-    await audit(uid, sym, ok ? 'protect_verified' : 'protect_unverified', { qty: v.held, trigger: trig, seen: after.map(g => ({ id: g.id, qty: g.qty, triggers: g.triggers })) }, intentId);
-    return ok ? { action: verb, qty: v.held, trigger: trig } : { action: 'failed', reason: 'GTT change sent but not seen at the broker' };
+    const ok = after.length === 1 && after[0].qty === want && after[0].triggers.some(t => Math.abs(t - trig) < TICK);
+    await audit(uid, sym, ok ? 'protect_verified' : 'protect_unverified', { qty: want, held: v.held, journalQty: v.journalQty, trigger: trig, seen: after.map(g => ({ id: g.id, qty: g.qty, triggers: g.triggers })) }, intentId);
+    return ok ? { action: verb, qty: want, trigger: trig } : { action: 'failed', reason: 'GTT change sent but not seen at the broker' };
   }
 
   /** Every pass: fix GTTs that do not match holdings. @returns { checked, fixed, failed, waiting } */
@@ -90,7 +95,7 @@ function createProtector({ broker, store, log = () => {}, now = () => Date.now()
     const j = journalPositions(trades), b = brokerPositions(holdings, positions), g = activeSellGtts(gtts), today = istDate(now());
     const t = now();
     for (const sym of Object.keys(j)) {
-      const held = b[sym] || 0;
+      const held = Math.min(b[sym] || 0, j[sym].qty);                     // shares of THIS position at the broker
       if (!held) { seen.delete(sym); continue; }
       out.checked++;
       const list = g[sym] || [], cur = list[0], curTrig = cur ? Math.min(...cur.triggers) : 0, stop = Number(j[sym].stop) || 0;
@@ -102,7 +107,7 @@ function createProtector({ broker, store, log = () => {}, now = () => Date.now()
       if (live || fired || inFlight || list.length > 1) { out.waiting++; continue; }         // an exit / Emergency Exit / approved order owns this stock now
       if (!seen.has(sym)) seen.set(sym, t);
       if (t - seen.get(sym) < graceSec * 1000) { out.waiting++; continue; }                // let bookings and syncs settle first
-      const r = await ensure(uid, { symbol: sym, trigger: stop, why: !cur ? 'no stop GTT' : cur.qty !== held ? `GTT covers ${cur.qty}, broker holds ${held}` : `GTT trigger ${curTrig} is below the journal stop ${stop}` });
+      const r = await ensure(uid, { symbol: sym, trigger: stop, why: !cur ? 'no stop GTT' : cur.qty !== held ? `GTT covers ${cur.qty}, the position has ${held} at the broker` : `GTT trigger ${curTrig} is below the journal stop ${stop}` });
       log('protect', { symbol: sym, result: r.action, reason: r.reason || null });
       if (r.action === 'placed' || r.action === 'modified' || r.action === 'none') { out.fixed += r.action === 'none' ? 0 : 1; seen.delete(sym); fails.delete(sym); continue; }
       out.failed++;
