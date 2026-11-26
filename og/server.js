@@ -58,10 +58,18 @@ function createGateway({ dataDir = process.env.OG_DATA_DIR || path.join(__dirnam
   const gttSending = () => orderSending() && !!config.load().gttWritesEnabled;
   const sellSending = () => { orderSending(); return state.sellSending; };
   const buySending = () => { orderSending(); return state.buySending; };
+  // ONE journal client for the whole gateway, so its sign-in (session) is reused until it expires.
+  // A new client per call signed in again every time — dozens of times a minute — and hit Supabase's rate limit.
+  let _store = null, _storeKey = '';
   function store() {
-    const cfg = config.load();
-    return createSupabase({ url: cfg.supabaseUrl, anonKey: secrets.get('supabaseAnonKey') || '', fetchImpl,
-      getRefreshToken: () => secrets.get('journalRefreshToken'), setRefreshToken: t => secrets.set('journalRefreshToken', t) });
+    const cfg = config.load(), anon = secrets.get('supabaseAnonKey') || '', rt = secrets.has('journalRefreshToken');
+    const key = `${cfg.supabaseUrl}|${anon}|${rt}`;
+    if (!_store || _storeKey !== key) {
+      _storeKey = key;
+      _store = createSupabase({ url: cfg.supabaseUrl, anonKey: anon, fetchImpl,
+        getRefreshToken: () => secrets.get('journalRefreshToken'), setRefreshToken: t => secrets.set('journalRefreshToken', t) });
+    }
+    return _store;
   }
   const kiteConfigured = () => secrets.has('kiteApiKey') && secrets.has('kiteApiSecret');
   const journalLinked = () => secrets.has('journalRefreshToken') && secrets.has('supabaseAnonKey') && !!config.load().supabaseUrl;

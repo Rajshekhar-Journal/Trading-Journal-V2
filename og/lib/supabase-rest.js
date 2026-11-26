@@ -24,11 +24,17 @@ function createSupabase({ url, anonKey, getRefreshToken, setRefreshToken, fetchI
   /** One-time link from the setup page. The password is used once and not stored. */
   const signInWithPassword = (email, password) => _auth('password', { email, password });
 
+  let _pending = null, _pauseUntil = 0, _pauseReason = '';
   async function _session() {
     if (session && session.expiresAt - Date.now() > 60000) return session;
+    if (_pending) return _pending;                                  // one refresh at a time; everyone waits for it
+    if (Date.now() < _pauseUntil) throw new Error(`Journal sign-in paused for ${Math.ceil((_pauseUntil - Date.now()) / 1000)} s after: ${_pauseReason}`);
     const rt = getRefreshToken();
     if (!rt) throw new Error('Journal account is not linked');
-    return _auth('refresh_token', { refresh_token: rt });
+    _pending = _auth('refresh_token', { refresh_token: rt })
+      .catch(e => { if (/rate limit|429/i.test(e.message)) { _pauseUntil = Date.now() + 120000; _pauseReason = e.message; } throw e; })
+      .finally(() => { _pending = null; });
+    return _pending;
   }
 
   async function _rest(method, pathAndQuery, { body, prefer } = {}) {

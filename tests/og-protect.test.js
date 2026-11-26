@@ -139,3 +139,18 @@ test('shares held outside the journal are never put under the trade stop (journa
   await b.gw.tickExecute();
   assert.deepEqual(g(b.w, 'INFY').map(shape), [[100, 95]]);
 });
+
+test('the gateway signs in to the journal once and reuses the session (no sign-in per call)', async () => {
+  const w = createFakeWorld({ publicIp: IP });
+  let signIns = 0;
+  const f = w.fetch;
+  const counting = async (input, init) => { if (String(input).includes('/auth/v1/token')) signIns++; return f(input, init); };
+  const gw = createGateway({ dataDir: fs.mkdtempSync(path.join(os.tmpdir(), 'ogs-')), fetchImpl: counting, log: () => {} });
+  gw.config.save({ kiteBaseUrl: 'https://kite.test', kiteLoginUrl: 'https://kite.test/connect/login', ipCheckUrl: 'https://ip.test', supabaseUrl: 'https://sb.test',
+    zerodhaClientId: w.clientId, expectedStaticIp: IP, gttWritesEnabled: true, sellOrdersEnabled: true, buyOrdersEnabled: true, autoProtect: true, protectGraceSec: 0 });
+  gw.secrets.set('kiteApiKey', w.apiKey); gw.secrets.set('kiteApiSecret', w.apiSecret); gw.secrets.set('supabaseAnonKey', 'anon'); gw.secrets.set('journalRefreshToken', w.refreshToken);
+  w.db.settings.push({ user_id: w.uid, data: { execution: { mode: 'confirm' } } });
+  await gw.completeKiteLogin('req1'); await gw.tickIp();
+  for (let k = 0; k < 5; k++) { await gw.tickExecute(); await gw.tickSync(); await gw.tickHeartbeat(); }
+  assert.ok(signIns <= 1, `signed in ${signIns} times`);
+});
