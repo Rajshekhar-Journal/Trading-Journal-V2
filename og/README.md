@@ -138,6 +138,13 @@ The alert is also sent to Telegram by the backend runner, normally within a minu
 | `secrets.enc` | API key, API secret, day's access token, journal refresh token, password hash — AES-256-GCM |
 | `master.key` | Random key that opens `secrets.enc`. Anyone with both files can read the secrets: keep this machine's disk and backups private. |
 | `config.json` | Non-secret settings (port, addresses, expected static IP, client ID, URLs) |
+| `logs/og-YYYY-MM-DD.log` | The gateway's log, one file per IST day, one JSON line per entry (IST + UTC time, level, machine name, version, event, message). Kept `logRetentionDays` (90). Tokens, keys and passwords are blanked before writing. Download from the gateway page → Logs. |
+| `audit-pending.jsonl` | `order_audit` rows that could not reach the journal yet (rate limit, network). Sent on the next heartbeat, oldest first; the page shows how many are waiting. |
+
+### Audit trail
+* Every order step is a row in the journal table `order_audit` (time stored in UTC, shown in IST). Each row's `detail` carries `host` (machine name) and `og` (gateway version).
+* Gateway-level actions are rows with `intent_id = 'gateway'`: start/stop, Kite login / refused / cleared, Kite details changed (values never logged), switches changed (before → after), all sending switched off, network changed (IP shown as a.b.c.x), static IP match/mismatch, clock drift, journal linked, gateway password changed.
+* Every hour the machine's clock is compared with the journal server's. Off by more than `clockMaxDriftSec` (30 s) → WARN in the log, an audit row and a daily EX-07 alert. Fix: Windows Settings → Time & language → Sync now.
 
 The journal database receives status only: no key, no token and not the IP address itself.
 

@@ -5,7 +5,7 @@
 'use strict';
 const { reconcile, protection } = require('./reconcile.js');
 
-const VERSION = 'og-0.4.0-p4';
+const VERSION = 'og-0.5.0';
 
 function createSync({ broker, store, getState, log = () => {} }) {
   /** Gateway health row the journal reads. Contains status only — no secret, no IP address. */

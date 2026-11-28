@@ -19,6 +19,7 @@ input{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--b)
 button{margin-top:12px;padding:7px 14px;border:1px solid var(--b);border-radius:6px;font:inherit;cursor:pointer}
 button.p{background:#0969da;color:#fff;border-color:#0969da}.msg{padding:9px 12px;border-radius:6px;border:1px solid var(--b);margin:12px 0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}form.inline{display:inline}small{color:var(--m)}
+table{border-collapse:collapse;margin:6px 0}td,th{padding:4px 12px 4px 0;text-align:left;font-size:13px}
 </style></head><body>${body}</body></html>`;
 
 const msgBox = m => m ? `<div class="msg ${esc(m.type || '')}">${esc(m.text)}</div>` : '';
@@ -38,6 +39,11 @@ function loginPage(m) {
 <input type="password" name="password" required autocomplete="current-password" autofocus><button class="p">Sign in</button></form>`);
 }
 
+function clockText(c) {
+  if (!c || c.offsetSec == null) return c && c.lastError ? 'Could not check' : 'Not checked yet';
+  const off = Math.abs(c.offsetSec) <= 1 ? 'correct (±1 s)' : `${Math.abs(c.offsetSec)} s ${c.offsetSec > 0 ? 'ahead' : 'behind'}`;
+  return c.ok ? `Correct — ${off}` : `OFF — ${off}. Sync the Windows clock.`;
+}
 function tile(label, text, cls) { return `<div class="tile"><b>${esc(label)}</b><span class="${cls || ''}">${esc(text)}</span></div>`; }
 
 function dashboardPage({ csrf, cfg, view, m }) {
@@ -58,6 +64,8 @@ ${tile('Stop-GTT placement', view.orderSending ? 'ON — approved intents only' 
 ${tile('Exits (market sell)', view.sellSending ? 'ON — approved intents only' : (view.sellOrdersEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.sellSending ? 'ok' : 'warn')}
 ${tile('Buy orders', view.buySending ? 'ON — approved intents only' : (view.buyOrdersEnabled ? 'Switched on, waiting for IP match / login' : 'Off'), view.buySending ? 'ok' : 'warn')}
 ${tile('Emergency Exit', view.sellSending ? ({ off: 'Off', confirm: 'On — asks you first', auto: 'On — automatic' }[view.emergencyExit] || 'Off') : 'Off', view.sellSending && view.emergencyExit !== 'off' ? 'ok' : 'warn')}
+${tile('Clock', clockText(view.clock), view.clock && view.clock.ok === false ? 'bad' : (view.clock && view.clock.ok ? 'ok' : 'warn'))}
+${tile('Audit rows waiting', view.auditPending ? `${view.auditPending} — kept here, sent when the journal is reachable` : 'None', view.auditPending ? 'warn' : 'ok')}
 </div>${view.lastSyncError ? `<div class="msg bad">Last sync error: ${esc(view.lastSyncError)}</div>` : ''}
 
 <h2>Daily Kite login</h2>
@@ -102,6 +110,10 @@ ${tile('Emergency Exit', view.sellSending ? ({ off: 'Off', confirm: 'On — asks
 <label>Journal login email</label><input name="journalEmail" value="${esc(cfg.journalEmail)}" autocomplete="off">
 <label>Journal password <small>(used once to link; not stored)</small></label><input type="password" name="journalPassword" autocomplete="new-password">
 <button>Link journal account</button></form>
+
+<h2>Logs</h2>
+<p class="sub">One file per day (IST) in og\\data\\logs, one JSON line per entry with the IST and UTC time, machine name and version. Order steps are also in the journal (Broker Link → Recent gateway actions).</p>
+${(view.logFiles || []).length ? `<table><tr><th>Day (IST)</th><th>Size</th><th></th></tr>${view.logFiles.map(f => `<tr><td>${esc(f.date)}</td><td>${esc((f.bytes / 1024).toFixed(1))} KB</td><td><a href="/logs/${esc(f.name)}">Download</a></td></tr>`).join('')}</table>` : '<p class="sub">No log files yet.</p>'}
 
 <h2>Gateway password</h2><form method="post" action="/change-password">${c}
 <label>Current password</label><input type="password" name="current" autocomplete="current-password">

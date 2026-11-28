@@ -38,6 +38,10 @@ const DEFAULTS = Object.freeze({
   brokerSyncSec: 60,
   ipCheckSec: 600,
   sessionMinutes: 30,
+  logRetentionDays: 90,              // daily log files in og/data/logs older than this are removed
+  clockCheckSec: 3600,               // compare this machine's clock with the journal server's every hour
+  clockMaxDriftSec: 30,              // warn (and alert EX-07) when the clock is off by more than this
+  clockCheckUrl: '',                 // blank = the journal (Supabase) address
 });
 
 /** Names kept in the encrypted secret store, never in config.json. */

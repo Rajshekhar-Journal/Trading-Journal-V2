@@ -1779,6 +1779,13 @@ const settingsModule = (() => {
       gtt_after_buy: ['Stop GTT after the buy', null], gtt_checked_after_exit: ['Stop GTT checked after the sell', null],
       auto_approved: ['Approved automatically (Auto mode)', true], auto_approval_refused: ['Automatic approval refused', null],
       booked: ['Written into the journal', true], no_price: ['No price from Zerodha — nothing sold', false], sell_rejected: ['Sell rejected by Zerodha', false],
+      // Gateway-level events (intent_id 'gateway')
+      gateway_started: ['Gateway started', true], gateway_stopped: ['Gateway stopped', null], kite_login: ['Kite login', true], kite_login_refused: ['Kite login refused (other account)', false],
+      kite_token_dropped: ['Kite login cleared', false], kite_details_changed: ['Kite API details changed', null], journal_linked: ['Journal account linked', true],
+      switches_changed: ['Switches changed', null], sending_switched_off: ['All sending switched off', false], network_changed: ['Network settings changed', null],
+      ip_match: ['Static IP matches', true], ip_mismatch: ['Static IP does NOT match', false], ip_not_configured: ['Static IP not set', false], ip_lookup_failed: ['Could not check the IP', null],
+      ip_expected_ip_invalid: ['Saved static IP invalid', false], clock_drift: ['Gateway clock is off', false], clock_ok: ['Gateway clock correct again', true],
+      admin_password_changed: ['Gateway password changed', null],
     };
     const detailText = a => {
       const d = g(a.detail), s = g(d.spec), f = g(d.from);
@@ -1789,11 +1796,13 @@ const settingsModule = (() => {
       if (a.event === 'gtt_after_buy' || a.event === 'gtt_checked_after_exit') return `${d.action || ''}${d.qty ? ` · ${d.qty} sh @ ${inr(d.trigger)}` : ''}${d.reason ? ' · ' + d.reason : ''}`;
       if (a.event === 'sending_sell' || a.event === 'sending_buy') return `${d.qty} sh${d.limit ? ' · limit ' + inr(d.limit) : ''}${d.cmp ? ' · CMP ' + inr(d.cmp) : ''}`;
       if (a.event === 'done' && d.filled != null) return `filled ${d.filled}${d.averagePrice ? ' @ ' + inr(d.averagePrice) : ''}`;
+      if (a.intent_id === 'gateway') return d.msg || '';
       return d.reason || d.note || d.result || (d.orderId ? 'order ' + d.orderId : '');
     };
     const rows = audit.map(a => {
       const w = WHAT[a.event] || [a.event, null], i = byId.get(a.intent_id);
-      const what = i ? `${i.action}${i.rule_id ? ' · ' + i.rule_id : ''}` : (String(a.intent_id).startsWith('protect:') ? 'Auto-check' : '');
+      const host = g(a.detail).host;
+      const what = (i ? `${i.action}${i.rule_id ? ' · ' + i.rule_id : ''}` : (String(a.intent_id).startsWith('protect:') ? 'Auto-check' : (a.intent_id === 'gateway' ? 'Gateway' : ''))) + (host ? ` · ${host}` : '');
       return `<tr><td style="white-space:nowrap">${_escX(t(a.at))}</td><td><strong>${_escX(a.symbol || '')}</strong></td><td style="color:var(--text-muted);font-size:11.5px">${_escX(what)}</td>`
         + `<td style="color:${w[1] === null ? 'inherit' : col(w[1])}">${_escX(w[0])}</td><td style="font-size:11.5px;color:var(--text-muted)">${_escX(String(detailText(a) || '').slice(0, 160))}</td></tr>`;
     }).join('');
